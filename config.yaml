@@ -54,7 +54,7 @@ modules:
 web:
   enabled: true
   name: "nova.hattena.com"
-  public_url: "https://nova.hattena.com"
+  public_url: "http://nova.hattena.com:25979"
   host: "0.0.0.0"
   port: 8000
-  cors_origins: ["https://nova.hattena.com"]
+  cors_origins: ["https://ader3.titanspeakermen027.workers.dev"]
