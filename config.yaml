@@ -1,0 +1,60 @@
+# Ader Ultimate configuration
+bot:
+  token: "${DISCORD_BOT_TOKEN}"
+  # Prefix commands can be invoked with A (for example: A @user or A @user 500).
+  # Keep / and ! as compatibility prefixes for existing text commands.
+  prefix:
+    - "A"
+    - "/"
+    - "!"
+  status: "online"
+  activity: "Managing your community"
+  activity_type: "watching"
+
+database:
+  sqlite_path: "data/ader.sqlite3"
+
+logging:
+  level: "INFO"
+  file: "logs/bot.log"
+  format: "[%(asctime)s] [%(levelname)s] %(name)s: %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+
+modules:
+  verification:
+    enabled: true
+  moderation:
+    enabled: true
+    auto_mod:
+      spam_detection: true
+      max_mentions: 5
+      max_emojis: 10
+  roles:
+    enabled: true
+    self_assign: true
+  leveling:
+    enabled: true
+    xp_per_message: 10
+    xp_cooldown: 60
+  economy:
+    enabled: true
+    currency_name: "ANORIS"
+    currency_symbol: "🪙"
+    starting_balance: 0
+    # Daily reward: 30 ANORIS.
+    daily_reward: 30
+    daily_cooldown: 86400
+  tickets:
+    enabled: true
+  analytics:
+    enabled: true
+  games:
+    enabled: true
+
+web:
+  enabled: true
+  name: "nova.hattena.com"
+  public_url: "https://nova.hattena.com"
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins: ["https://nova.hattena.com"]
