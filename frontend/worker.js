@@ -49,32 +49,37 @@ export default {
     });
 
     const responseHeaders = new Headers(response.headers);
-    const location = response.headers.get("location");
+
+    // Rewrite ONLY redirects that point back to the backend.
+    // Never rewrite external redirects such as Discord OAuth.
+    const location = response.headers.get("Location");
 
     if (location) {
       try {
         const redirectUrl = new URL(location, backend);
         const backendUrl = new URL(backend);
 
-        // Rewrite only redirects that target our backend.
-        if (redirectUrl.origin === backendUrl.origin) {
+        if (redirectUrl.hostname === backendUrl.hostname) {
           redirectUrl.protocol = url.protocol;
-          redirectUrl.host = url.host;
-          responseHeaders.set("location", redirectUrl.toString());
+          redirectUrl.hostname = url.hostname;
+          redirectUrl.port = "";
+
+          responseHeaders.set("Location", redirectUrl.toString());
         }
       } catch {}
     }
 
     // Cloudflare Workers can collapse Set-Cookie when copied through Headers.
     // Re-append every cookie individually so the OAuth session survives.
-    responseHeaders.delete("set-cookie");
-    const setCookies =
+    responseHeaders.delete("Set-Cookie");
+
+    const cookies =
       typeof response.headers.getSetCookie === "function"
         ? response.headers.getSetCookie()
         : [];
 
-    for (const cookie of setCookies) {
-      responseHeaders.append("set-cookie", cookie);
+    for (const cookie of cookies) {
+      responseHeaders.append("Set-Cookie", cookie);
     }
 
     return new Response(response.body, {
