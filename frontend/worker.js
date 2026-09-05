@@ -3,7 +3,7 @@ export default {
     const url = new URL(request.url);
 
     const backend =
-      env.BACKEND_URL || "http://nova.hattena.com:25979";
+      env.BACKEND_URL || "http://nova.hatenna.com:25979";
 
     // Health check / diagnostic
     if (url.pathname === "/healthz") {
