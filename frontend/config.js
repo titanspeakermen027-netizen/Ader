@@ -1,5 +1,7 @@
 window.ADER_CONFIG = {
-  API_BASE: "https://ader3.titanspeakermen027.workers.dev",
+  // Dashboard and API are served through the same Cloudflare Worker.
+  // Keeping this relative avoids cross-origin cookies/CORS during OAuth.
+  API_BASE: "",
   DEFAULT_LANGUAGE: "ar",
   DEFAULT_THEME: "discord"
 };
