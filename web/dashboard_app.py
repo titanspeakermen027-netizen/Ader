@@ -24,7 +24,6 @@ from starlette.middleware.sessions import SessionMiddleware
 MANAGE_GUILD = 0x20
 ADMINISTRATOR = 0x8
 
-# Process-local state avoids putting the entire Discord guild list in the browser cookie.
 _SESSIONS: dict[str, dict[str, Any]] = {}
 _OAUTH_STATES: dict[str, float] = {}
 
@@ -47,12 +46,26 @@ def _configured_public_url(cfg: dict[str, Any]) -> str:
 
 
 def _redirect_uri(request: Request, cfg: dict[str, Any]) -> str:
+    """Build the OAuth callback URI for the public origin.
+
+    When Ader is behind the Cloudflare Worker, the ASGI app receives the
+    request on the private/backend origin. The Worker forwards the public
+    Host/Proto so Discord OAuth always returns to the public dashboard host.
+    An explicit DASHBOARD_REDIRECT_URI still has highest priority.
+    """
     explicit = os.getenv("DASHBOARD_REDIRECT_URI", "").strip()
     if explicit:
         return explicit.rstrip("/")
+
     public_url = _configured_public_url(cfg)
     if public_url:
         return f"{public_url}/callback"
+
+    forwarded_host = request.headers.get("x-forwarded-host", "").strip()
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").strip() or "https"
+    if forwarded_host:
+        return f"{forwarded_proto}://{forwarded_host}/callback"
+
     return f"{str(request.base_url).rstrip('/')}/callback"
 
 
@@ -146,8 +159,6 @@ def create_app(bot) -> FastAPI:
         SessionMiddleware,
         secret_key=session_secret,
         same_site="lax",
-        # Do not force Secure based solely on a possibly stale public_url value.
-        # The reverse proxy already terminates HTTPS in the normal deployment.
         https_only=False,
         max_age=86400,
     )
@@ -181,13 +192,7 @@ def create_app(bot) -> FastAPI:
 
     @app.get("/healthz")
     async def healthz():
-        return {
-            "ok": True,
-            "bot_ready": bool(getattr(bot, "is_ready", lambda: False)()),
-            "guilds": len(getattr(bot, "guilds", ())),
-            "database": bool(getattr(bot.db, "is_connected", False)),
-            "time": int(time.time()),
-        }
+        return {"ok": True, "bot_ready": bool(getattr(bot, "is_ready", lambda: False)()), "guilds": len(getattr(bot, "guilds", ())), "database": bool(getattr(bot.db, "is_connected", False)), "time": int(time.time())}
 
     @app.get("/", response_class=HTMLResponse)
     async def home(request: Request):
@@ -223,13 +228,7 @@ def create_app(bot) -> FastAPI:
             return HTMLResponse(_error_html("فشل تسجيل الدخول", "رابط OAuth غير صالح أو انتهت صلاحيته. عاود تسجيل الدخول من زر Discord."), status_code=400)
         _OAUTH_STATES.pop(state, None)
         redirect_uri = _redirect_uri(request, cfg)
-        data = {
-            "client_id": os.environ["DISCORD_CLIENT_ID"],
-            "client_secret": os.environ["DISCORD_CLIENT_SECRET"],
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": redirect_uri,
-        }
+        data = {"client_id": os.environ["DISCORD_CLIENT_ID"], "client_secret": os.environ["DISCORD_CLIENT_SECRET"], "grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri}
         try:
             timeout = aiohttp.ClientTimeout(total=15)
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -263,27 +262,10 @@ def create_app(bot) -> FastAPI:
                 permissions = int(item.get("permissions", 0) or 0)
             except (KeyError, TypeError, ValueError):
                 continue
-            managed[str(guild_id)] = {
-                "id": guild_id,
-                "name": str(item.get("name") or "Unknown Server"),
-                "icon": item.get("icon"),
-                "permissions": permissions,
-                "administrator": bool(permissions & ADMINISTRATOR),
-                "manage_guild": bool(permissions & MANAGE_GUILD),
-            }
+            managed[str(guild_id)] = {"id": guild_id, "name": str(item.get("name") or "Unknown Server"), "icon": item.get("icon"), "permissions": permissions, "administrator": bool(permissions & ADMINISTRATOR), "manage_guild": bool(permissions & MANAGE_GUILD)}
 
         sid = secrets.token_urlsafe(32)
-        _SESSIONS[sid] = {
-            "expires_at": time.time() + 86400,
-            "access_token": access_token,
-            "discord_user": {
-                "id": int(user["id"]),
-                "username": str(user.get("username") or "Discord User"),
-                "global_name": str(user.get("global_name") or user.get("username") or "Discord User"),
-                "avatar": user.get("avatar"),
-            },
-            "managed_guilds": managed,
-        }
+        _SESSIONS[sid] = {"expires_at": time.time() + 86400, "access_token": access_token, "discord_user": {"id": int(user["id"]), "username": str(user.get("username") or "Discord User"), "global_name": str(user.get("global_name") or user.get("username") or "Discord User"), "avatar": user.get("avatar")}, "managed_guilds": managed}
         request.session.clear()
         request.session["sid"] = sid
         return RedirectResponse("/", status_code=302)
@@ -318,25 +300,12 @@ def create_app(bot) -> FastAPI:
             commands = len(_tree_commands(bot))
         except Exception:
             commands = 0
-        return {
-            "id": guild.id,
-            "name": guild.name,
-            "icon": str(guild.icon.url) if guild.icon else None,
-            "members": guild.member_count or len(getattr(guild, "members", ())),
-            "channels": len(getattr(guild, "channels", ())),
-            "roles": max(0, len(getattr(guild, "roles", ())) - 1),
-            "open_tickets": tickets,
-            "commands": commands,
-            "bot_latency_ms": round(float(getattr(bot, "latency", 0.0)) * 1000, 1),
-        }
+        return {"id": guild.id, "name": guild.name, "icon": str(guild.icon.url) if guild.icon else None, "members": guild.member_count or len(getattr(guild, "members", ())), "channels": len(getattr(guild, "channels", ())), "roles": max(0, len(getattr(guild, "roles", ())) - 1), "open_tickets": tickets, "commands": commands, "bot_latency_ms": round(float(getattr(bot, "latency", 0.0)) * 1000, 1)}
 
     @app.get("/api/guilds/{guild_id}/resources")
     async def resources(request: Request, guild_id: int):
         guild, _ = await require_guild(request, guild_id)
-        return {
-            "roles": [{"id": r.id, "name": r.name, "position": r.position, "managed": r.managed} for r in guild.roles if not r.is_default()],
-            "channels": [{"id": c.id, "name": c.name, "type": str(c.type), "position": getattr(c, "position", 0)} for c in guild.channels if hasattr(c, "name")],
-        }
+        return {"roles": [{"id": r.id, "name": r.name, "position": r.position, "managed": r.managed} for r in guild.roles if not r.is_default()], "channels": [{"id": c.id, "name": c.name, "type": str(c.type), "position": getattr(c, "position", 0)} for c in guild.channels if hasattr(c, "name")]}
 
     @app.get("/api/guilds/{guild_id}/commands")
     async def commands_list(request: Request, guild_id: int):
@@ -349,14 +318,7 @@ def create_app(bot) -> FastAPI:
         output = []
         for command in _tree_commands(bot):
             row = settings.get(command["name"])
-            output.append({
-                **command,
-                "enabled": bool(row["enabled"]) if row else True,
-                "allowed_roles": _loads_ids(row["allowed_roles"]) if row else [],
-                "denied_roles": _loads_ids(row["denied_roles"]) if row else [],
-                "allowed_channels": _loads_ids(row["allowed_channels"]) if row else [],
-                "denied_channels": _loads_ids(row["denied_channels"]) if row else [],
-            })
+            output.append({**command, "enabled": bool(row["enabled"]) if row else True, "allowed_roles": _loads_ids(row["allowed_roles"]) if row else [], "denied_roles": _loads_ids(row["denied_roles"]) if row else [], "allowed_channels": _loads_ids(row["allowed_channels"]) if row else [], "denied_channels": _loads_ids(row["denied_channels"]) if row else []})
         return {"commands": output}
 
     @app.put("/api/guilds/{guild_id}/commands/{command_name:path}")
@@ -366,11 +328,7 @@ def create_app(bot) -> FastAPI:
         valid = {command["name"] for command in _tree_commands(bot)}
         if command_name not in valid:
             raise HTTPException(status_code=404, detail="الأمر غير موجود")
-        await bot.db.execute(
-            """INSERT INTO dashboard_command_settings(guild_id,command_name,enabled,allowed_roles,denied_roles,allowed_channels,denied_channels,updated_at)
-            VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(guild_id,command_name) DO UPDATE SET enabled=excluded.enabled,allowed_roles=excluded.allowed_roles,denied_roles=excluded.denied_roles,allowed_channels=excluded.allowed_channels,denied_channels=excluded.denied_channels,updated_at=excluded.updated_at""",
-            (guild_id, command_name, 1 if data.get("enabled", True) else 0, _json_ids(data.get("allowed_roles")), _json_ids(data.get("denied_roles")), _json_ids(data.get("allowed_channels")), _json_ids(data.get("denied_channels")), time.time()),
-        )
+        await bot.db.execute("""INSERT INTO dashboard_command_settings(guild_id,command_name,enabled,allowed_roles,denied_roles,allowed_channels,denied_channels,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(guild_id,command_name) DO UPDATE SET enabled=excluded.enabled,allowed_roles=excluded.allowed_roles,denied_roles=excluded.denied_roles,allowed_channels=excluded.allowed_channels,denied_channels=excluded.denied_channels,updated_at=excluded.updated_at""", (guild_id, command_name, 1 if data.get("enabled", True) else 0, _json_ids(data.get("allowed_roles")), _json_ids(data.get("denied_roles")), _json_ids(data.get("allowed_channels")), _json_ids(data.get("denied_channels")), time.time()))
         return {"ok": True}
 
     @app.get("/api/guilds/{guild_id}/shortcuts")
@@ -382,19 +340,7 @@ def create_app(bot) -> FastAPI:
             DEFAULT_ALIASES, SHORTCUTS = {}, {}
         rows = await bot.db.fetchall("SELECT * FROM dashboard_shortcut_settings WHERE guild_id=?", (guild_id,))
         settings = {str(row["shortcut_name"]): dict(row) for row in rows}
-        return {"shortcuts": [
-            {
-                "name": key,
-                "label": label,
-                "alias": (settings.get(key, {}).get("alias") or DEFAULT_ALIASES.get(key, "")),
-                "enabled": bool(settings.get(key, {}).get("enabled", 1)),
-                "allowed_roles": _loads_ids(settings.get(key, {}).get("allowed_roles")) if key in settings else [],
-                "denied_roles": _loads_ids(settings.get(key, {}).get("denied_roles")) if key in settings else [],
-                "allowed_channels": _loads_ids(settings.get(key, {}).get("allowed_channels")) if key in settings else [],
-                "denied_channels": _loads_ids(settings.get(key, {}).get("denied_channels")) if key in settings else [],
-            }
-            for key, label in SHORTCUTS.items()
-        ]}
+        return {"shortcuts": [{"name": key, "label": label, "alias": (settings.get(key, {}).get("alias") or DEFAULT_ALIASES.get(key, "")), "enabled": bool(settings.get(key, {}).get("enabled", 1)), "allowed_roles": _loads_ids(settings.get(key, {}).get("allowed_roles")) if key in settings else [], "denied_roles": _loads_ids(settings.get(key, {}).get("denied_roles")) if key in settings else [], "allowed_channels": _loads_ids(settings.get(key, {}).get("allowed_channels")) if key in settings else [], "denied_channels": _loads_ids(settings.get(key, {}).get("denied_channels")) if key in settings else []} for key, label in SHORTCUTS.items()]}
 
     return app
 
