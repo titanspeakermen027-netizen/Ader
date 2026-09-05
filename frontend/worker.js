@@ -1,118 +1,80 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const backend = (env.BACKEND_URL || "http://nova.hatenna.com:25979").replace(/\/$/, "");
 
-    const backend =
-      env.BACKEND_URL || "http://nova.hatenna.com:25979";
-
-    // Health check
     if (url.pathname === "/healthz") {
       try {
         const r = await fetch(`${backend}/healthz`);
-
-        return new Response(
-          JSON.stringify({
-            worker: "ok",
-            backend_status: r.status,
-            backend_ok: r.ok
-          }),
-          {
-            status: r.ok ? 200 : 502,
-            headers: {
-              "content-type": "application/json"
-            }
-          }
-        );
-      } catch (e) {
-        return new Response(
-          JSON.stringify({
-            worker: "ok",
-            backend: "unreachable",
-            error: String(e)
-          }),
-          {
-            status: 502,
-            headers: {
-              "content-type": "application/json"
-            }
-          }
-        );
+        return new Response(JSON.stringify({
+          worker: "ok",
+          backend_status: r.status,
+          backend_ok: r.ok
+        }), {
+          status: r.ok ? 200 : 502,
+          headers: { "content-type": "application/json" }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          worker: "ok",
+          backend: "unreachable",
+          error: String(error)
+        }), {
+          status: 502,
+          headers: { "content-type": "application/json" }
+        });
       }
     }
 
-    // Routes handled by the backend
     const isBackendRoute =
       url.pathname === "/login" ||
       url.pathname === "/callback" ||
       url.pathname === "/logout" ||
       url.pathname.startsWith("/api/");
 
-    // Everything else is frontend
-    if (!isBackendRoute) {
-      return env.ASSETS.fetch(request);
-    }
+    if (!isBackendRoute) return env.ASSETS.fetch(request);
 
-    // Build backend URL
-    const target = new URL(
-      url.pathname + url.search,
-      backend
-    );
-
-    // Forward request headers
+    const target = new URL(url.pathname + url.search, backend);
     const headers = new Headers(request.headers);
-
     headers.set("X-Forwarded-Host", url.host);
-    headers.set(
-      "X-Forwarded-Proto",
-      url.protocol.replace(":", "")
-    );
+    headers.set("X-Forwarded-Proto", "https");
 
-    // Send request to backend
-    const response = await fetch(
-      new Request(target, {
-        method: request.method,
-        headers,
-        body:
-          request.method === "GET" ||
-          request.method === "HEAD"
-            ? undefined
-            : request.body,
-        redirect: "manual"
-      })
-    );
+    const response = await fetch(target, {
+      method: request.method,
+      headers,
+      body: request.method === "GET" || request.method === "HEAD"
+        ? undefined
+        : request.body,
+      redirect: "manual"
+    });
 
-    // Copy response headers
     const responseHeaders = new Headers(response.headers);
+    const location = response.headers.get("location");
 
-    // Rewrite ONLY redirects that point back to the backend.
-// Never rewrite external redirects such as Discord OAuth.
-const location = response.headers.get("Location");
+    if (location) {
+      try {
+        const redirectUrl = new URL(location, backend);
+        const backendUrl = new URL(backend);
 
-if (location) {
-  try {
-    const redirectUrl = new URL(location, backend);
-    const backendUrl = new URL(backend);
-
-    if (redirectUrl.hostname === backendUrl.hostname) {
-      redirectUrl.protocol = url.protocol;
-      redirectUrl.hostname = url.hostname;
-      redirectUrl.port = "";
-
-      responseHeaders.set("Location", redirectUrl.toString());
+        // Rewrite only redirects that target our backend.
+        if (redirectUrl.origin === backendUrl.origin) {
+          redirectUrl.protocol = url.protocol;
+          redirectUrl.host = url.host;
+          responseHeaders.set("location", redirectUrl.toString());
+        }
+      } catch {}
     }
-  } catch {}
-          }
 
-    // Preserve session cookies
-    responseHeaders.delete("Set-Cookie");
-
-    const cookies =
+    // Cloudflare Workers can collapse Set-Cookie when copied through Headers.
+    // Re-append every cookie individually so the OAuth session survives.
+    responseHeaders.delete("set-cookie");
+    const setCookies =
       typeof response.headers.getSetCookie === "function"
         ? response.headers.getSetCookie()
         : [];
 
-    for (const cookie of cookies) {
-      responseHeaders.append("Set-Cookie", cookie);
+    for (const cookie of setCookies) {
+      responseHeaders.append("set-cookie", cookie);
     }
 
     return new Response(response.body, {
