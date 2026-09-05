@@ -84,20 +84,24 @@ export default {
     // Copy response headers
     const responseHeaders = new Headers(response.headers);
 
-    // Rewrite backend redirects to the public Worker domain
-    const location = response.headers.get("Location");
+    // Rewrite ONLY redirects that point back to the backend.
+// Never rewrite external redirects such as Discord OAuth.
+const location = response.headers.get("Location");
 
-    if (location) {
-      try {
-        const redirectUrl = new URL(location, backend);
+if (location) {
+  try {
+    const redirectUrl = new URL(location, backend);
+    const backendUrl = new URL(backend);
 
-        redirectUrl.protocol = url.protocol;
-        redirectUrl.hostname = url.hostname;
-        redirectUrl.port = "";
+    if (redirectUrl.hostname === backendUrl.hostname) {
+      redirectUrl.protocol = url.protocol;
+      redirectUrl.hostname = url.hostname;
+      redirectUrl.port = "";
 
-        responseHeaders.set("Location", redirectUrl.toString());
-      } catch {}
+      responseHeaders.set("Location", redirectUrl.toString());
     }
+  } catch {}
+          }
 
     // Preserve session cookies
     responseHeaders.delete("Set-Cookie");
