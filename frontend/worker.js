@@ -1,4 +1,4 @@
-export default {
+Copy default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
@@ -82,39 +82,38 @@ export default {
     );
 
     // Copy response headers
-    const responseHeaders = new Headers(
-      response.headers
-    );
+const responseHeaders = new Headers(response.headers);
 
-    // Rewrite redirects to Cloudflare domain
-    const location = responseHeaders.get("Location");
+// Rewrite redirects to Cloudflare domain
+const location = response.headers.get("Location");
 
-    if (location) {
-      try {
-        const redirectUrl = new URL(
-          location,
-          backend
-        );
+if (location) {
+  try {
+    const redirectUrl = new URL(location, backend);
 
-        redirectUrl.protocol = url.protocol;
-        redirectUrl.hostname = url.hostname;
-        redirectUrl.port = "";
+    redirectUrl.protocol = url.protocol;
+    redirectUrl.hostname = url.hostname;
+    redirectUrl.port = "";
 
-        responseHeaders.set(
-          "Location",
-          redirectUrl.toString()
-        );
-      } catch {}
-    }
+    responseHeaders.set("Location", redirectUrl.toString());
+  } catch {}
+}
 
-    // Return backend response
-    return new Response(
-      response.body,
-      {
-        status: response.status,
-        statusText: response.statusText,
-        headers: responseHeaders
-      }
-    );
-  }
-};
+// IMPORTANT: preserve every Set-Cookie header separately
+responseHeaders.delete("Set-Cookie");
+
+const cookies =
+  typeof response.headers.getSetCookie === "function"
+    ? response.headers.getSetCookie()
+    : [];
+
+for (const cookie of cookies) {
+  responseHeaders.append("Set-Cookie", cookie);
+}
+
+// Return backend response
+return new Response(response.body, {
+  status: response.status,
+  statusText: response.statusText,
+  headers: responseHeaders
+});
