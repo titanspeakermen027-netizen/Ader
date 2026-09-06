@@ -46,13 +46,12 @@ def _configured_public_url(cfg: dict[str, Any]) -> str:
 
 
 def _redirect_uri(request: Request, cfg: dict[str, Any]) -> str:
-    """Build the OAuth callback URI for the public origin.
+    """Build the OAuth callback URI for the actual public request origin."""
+    forwarded_host = request.headers.get("x-forwarded-host", "").strip()
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").strip() or "https"
+    if forwarded_host:
+        return f"{forwarded_proto}://{forwarded_host}/callback"
 
-    When Ader is behind the Cloudflare Worker, the ASGI app receives the
-    request on the private/backend origin. The Worker forwards the public
-    Host/Proto so Discord OAuth always returns to the public dashboard host.
-    An explicit DASHBOARD_REDIRECT_URI still has highest priority.
-    """
     explicit = os.getenv("DASHBOARD_REDIRECT_URI", "").strip()
     if explicit:
         return explicit.rstrip("/")
@@ -60,11 +59,6 @@ def _redirect_uri(request: Request, cfg: dict[str, Any]) -> str:
     public_url = _configured_public_url(cfg)
     if public_url:
         return f"{public_url}/callback"
-
-    forwarded_host = request.headers.get("x-forwarded-host", "").strip()
-    forwarded_proto = request.headers.get("x-forwarded-proto", "").strip() or "https"
-    if forwarded_host:
-        return f"{forwarded_proto}://{forwarded_host}/callback"
 
     return f"{str(request.base_url).rstrip('/')}/callback"
 
@@ -159,7 +153,7 @@ def create_app(bot) -> FastAPI:
         SessionMiddleware,
         secret_key=session_secret,
         same_site="lax",
-        https_only=False,
+        https_only=True,
         max_age=86400,
     )
     app.add_middleware(
@@ -300,7 +294,8 @@ def create_app(bot) -> FastAPI:
             commands = len(_tree_commands(bot))
         except Exception:
             commands = 0
-        return {"id": guild.id, "name": guild.name, "icon": str(guild.icon.url) if guild.icon else None, "members": guild.member_count or len(getattr(guild, "members", ())), "channels": len(getattr(guild, "channels", ())), "roles": max(0, len(getattr(guild, "roles", ())) - 1), "open_tickets": tickets, "commands": commands, "bot_latency_ms": round(float(getattr(bot, "latency", 0.0)) * 1000, 1)}
+        premium = await bot.db.get_server_premium(guild_id) if hasattr(bot.db, "get_server_premium") else None
+        return {"id": guild.id, "name": guild.name, "icon": str(guild.icon.url) if guild.icon else None, "members": guild.member_count or len(getattr(guild, "members", ())), "channels": len(getattr(guild, "channels", ())), "roles": max(0, len(getattr(guild, "roles", ())) - 1), "open_tickets": tickets, "commands": commands, "bot_latency_ms": round(float(getattr(bot, "latency", 0.0)) * 1000, 1), "premium": {"active": bool(premium), "expires_at": premium.get("expires_at") if premium else None}}
 
     @app.get("/api/guilds/{guild_id}/resources")
     async def resources(request: Request, guild_id: int):
@@ -355,7 +350,7 @@ def _dashboard_html() -> str:
 const $=s=>document.querySelector(s);let current=null;
 async function api(u,o){const r=await fetch(u,o);if(r.status===401){location.href='/';return null;}if(!r.ok){const t=await r.text();throw new Error(t||('HTTP '+r.status));}return r.json();}
 async function loadGuilds(){const d=await api('/api/guilds');if(!d)return;const root=$('#guilds');root.innerHTML='';for(const g of d.guilds){const b=document.createElement('button');b.className='guild';b.textContent=g.name;b.onclick=()=>selectGuild(g.id,g.name);root.appendChild(b);}if(!d.guilds.length)root.innerHTML='<div class="muted">ما عندك حتى سيرفر متاح للإدارة أو البوت ما داخلش فيه.</div>';}
-async function selectGuild(id,name){current=id;$('#overview').textContent='جاري التحميل...';$('#commands').textContent='جاري التحميل...';const [o,c]=await Promise.all([api(`/api/guilds/${id}/overview`),api(`/api/guilds/${id}/commands`)]);$('#overview').innerHTML=`<div class="card"><b>${escapeHtml(o.name)}</b><span>${o.members} أعضاء</span></div><div class="card"><b>${o.channels}</b><span>رومات</span></div><div class="card"><b>${o.roles}</b><span>رتب</span></div><div class="card"><b>${o.open_tickets}</b><span>تذاكر مفتوحة</span></div>`;$('#commands').innerHTML=c.commands.map(x=>`<div class="cmd"><b>/${escapeHtml(x.name)}</b><span>${escapeHtml(x.description)}</span></div>`).join('');}
+async function selectGuild(id,name){current=id;$('#overview').textContent='جاري التحميل...';$('#commands').textContent='جاري التحميل...';const [o,c]=await Promise.all([api(`/api/guilds/${id}/overview`),api(`/api/guilds/${id}/commands`)]);const premium=o.premium&&o.premium.active?`<div class="card"><b>⭐ Premium</b><span>صالح حتى ${new Date(o.premium.expires_at*1000).toLocaleString()}</span></div>`:`<div class="card"><b>☆ Premium</b><span>غير مفعل</span></div>`;$('#overview').innerHTML=premium+`<div class="card"><b>${escapeHtml(o.name)}</b><span>${o.members} أعضاء</span></div><div class="card"><b>${o.channels}</b><span>رومات</span></div><div class="card"><b>${o.roles}</b><span>رتب</span></div><div class="card"><b>${o.open_tickets}</b><span>تذاكر مفتوحة</span></div>`;$('#commands').innerHTML=c.commands.map(x=>`<div class="cmd"><b>/${escapeHtml(x.name)}</b><span>${escapeHtml(x.description)}</span></div>`).join('');}
 function escapeHtml(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 loadGuilds().catch(e=>{$('#guilds').textContent='❌ '+e.message;});
 </script></body></html>"""
