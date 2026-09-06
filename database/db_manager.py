@@ -187,6 +187,15 @@ class DatabaseManager:
             """INSERT OR IGNORE INTO global_balances(user_id, balance, created_at)
                SELECT user_id, 0, MIN(created_at) FROM users GROUP BY user_id"""
         )
+        await self.connection.execute("""CREATE TABLE IF NOT EXISTS server_premium (
+            guild_id INTEGER PRIMARY KEY,
+            owner_id INTEGER NOT NULL,
+            started_at REAL NOT NULL,
+            expires_at REAL NOT NULL,
+            granted_by INTEGER NOT NULL,
+            updated_at REAL NOT NULL
+        )""")
+        await self.connection.execute("CREATE INDEX IF NOT EXISTS idx_server_premium_expiry ON server_premium(expires_at)")
         await self.connection.commit()
         logger.info("SQLite migration completed successfully")
 
