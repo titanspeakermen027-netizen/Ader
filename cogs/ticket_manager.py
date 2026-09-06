@@ -469,7 +469,10 @@ class TicketManager(commands.Cog):
 
     async def create_ticket_from_panel(self, interaction: discord.Interaction, panel_id: int, option_index: int):
         if not interaction.guild:
+
             return await interaction.response.send_message("❌ التذاكر خدامة غير داخل السيرفر.", ephemeral=True)
+        if not await self.db.is_server_premium(interaction.guild.id):
+            return await interaction.response.send_message("⭐ نظام التذاكر الاحترافي حصري لسيرفرات Ader Premium.", ephemeral=True)
         panel = await self.db.get_ticket_panel(panel_id)
         if not panel or int(panel["guild_id"]) != interaction.guild.id:
             return await interaction.response.send_message("❌ Panel غير صالح.", ephemeral=True)
@@ -603,6 +606,9 @@ class TicketManager(commands.Cog):
     @app_commands.command(name="ticket", description="Open the Ader Ticket Tool manager")
     @is_admin()
     async def ticket_cmd(self, interaction: discord.Interaction):
+        if not await self.db.is_server_premium(interaction.guild.id):
+            await interaction.response.send_message("⭐ نظام Ader Ticket الاحترافي متوفر حصرياً لسيرفرات Premium.", ephemeral=True)
+            return
         embed = discord.Embed(
             title="🎫 Ader Ticket Tool",
             description="استعمل **Create a Panel** لإنشاء Panel أو **Manage Panels** لتعديل/حذف Panels.",
