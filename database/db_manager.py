@@ -331,6 +331,35 @@ class DatabaseManager:
     async def record_analytics(self, guild_id: int | None, event_type: str, data: Dict[str, Any] | None = None) -> None:
         await self.execute("INSERT INTO analytics(guild_id,type,timestamp,data) VALUES(?,?,?,?)", (guild_id, event_type, time.time(), json.dumps(data or {}, ensure_ascii=False)))
 
+    async def get_server_premium(self, guild_id: int):
+        row = await self.fetchone("SELECT * FROM server_premium WHERE guild_id=?", (int(guild_id),))
+        if not row:
+            return None
+        data = dict(row)
+        if float(data["expires_at"]) <= time.time():
+            await self.remove_server_premium(guild_id)
+            return None
+        return data
+
+    async def is_server_premium(self, guild_id: int) -> bool:
+        return await self.get_server_premium(guild_id) is not None
+
+    async def set_server_premium(self, guild_id: int, owner_id: int, started_at: float, expires_at: float, granted_by: int):
+        await self.execute(
+            """INSERT INTO server_premium(guild_id,owner_id,started_at,expires_at,granted_by,updated_at)
+               VALUES(?,?,?,?,?,?)
+               ON CONFLICT(guild_id) DO UPDATE SET
+               owner_id=excluded.owner_id,
+               started_at=excluded.started_at,
+               expires_at=excluded.expires_at,
+               granted_by=excluded.granted_by,
+               updated_at=excluded.updated_at""",
+            (int(guild_id), int(owner_id), float(started_at), float(expires_at), int(granted_by), time.time()),
+        )
+
+    async def remove_server_premium(self, guild_id: int):
+        await self.execute("DELETE FROM server_premium WHERE guild_id=?", (int(guild_id),))
+
     async def execute(self, sql: str, params: tuple = ()):
         cur = await self.connection.execute(sql, params)
         await self.connection.commit()
