@@ -167,7 +167,7 @@ class Ader(commands.Bot):
             "cogs.moderation", "cogs.roles", "cogs.ticket_manager", "cogs.utility",
             "cogs.verification", "cogs.games", "cogs.teams_v2",
             "cogs.temp_voice", "cogs.dashboard_config", "cogs.dashboard_server",
-            "cogs.owner_currency", "cogs.member_currency_reset",
+            "cogs.owner_currency", "cogs.member_currency_reset", "cogs.server_premium",
         )
         loaded, failed = [], []
         for extension in extensions:
