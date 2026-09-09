@@ -219,7 +219,7 @@ class Ader(commands.Bot):
         if len(mentions) == 0:
             if len(parts) == 1:
                 balance = await self.db.get_balance(message.author.id)
-                await message.reply(f"🪙  | **{message.author.display_name}, your ANORIS balance is `${balance:,}`.**", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+                await message.reply(f"🪙  | **{message.author.name}, your ANORIS balance is `${balance:,}`.**", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             else:
                 await message.reply("❌ الاستعمال: `A` أو `A @العضو` أو `A @العضو المبلغ`", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
@@ -234,7 +234,7 @@ class Ader(commands.Bot):
                 return True
         if amount is None:
             balance = await self.db.get_balance(member.id)
-            await message.reply(f"💳  | **{member.display_name} ANORIS account balance is `${balance:,}`.**", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+            await message.reply(f"💳  | **{member.name} ANORIS account balance is `${balance:,}`.**", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
         if amount <= 0 or member.bot or member.id == message.author.id:
             await message.reply("❌ يجب تحديد مبلغ موجب وعضو آخر غير البوتات.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
