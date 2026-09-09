@@ -98,17 +98,13 @@ class AutoReply(commands.Cog):
                 allowed_mentions=discord.AllowedMentions.none(),
             )
 
+    @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        # The bot must be able to answer other bots when explicitly enabled,
-        # but never answer itself.
+        # The bot can answer another bot when explicitly enabled, but never itself.
         if self.bot.user and message.author.id == self.bot.user.id:
             return
         if message.guild is None or not message.content.strip():
             return
-        if message.webhook_id is not None and message.author.bot and not message.author.system:
-            # Webhook messages are treated as bot-like only through the explicit flag.
-            pass
-
         rows = await self.db.fetchall(
             "SELECT * FROM autoreplies WHERE guild_id=? AND enabled=1 ORDER BY id ASC",
             (message.guild.id,),
@@ -244,10 +240,20 @@ class AutoReply(commands.Cog):
         for row in rows[:25]:
             role_text = f"<@&{row['role_id']}>" if row["role_id"] else "الجميع"
             bots = "🤖" if row["reply_to_bots"] else ""
-            lines.append(f"**#{row['id']}** `{row['trigger']}` → {row['response'][:80]} | {MAPPING if False else MATCHING_TYPES.get(row['matching_type'], row['matching_type'])} | {role_text} {bots}")
+            lines.append(f"**#{row['id']}** `{row['trigger']}` → {row['response'][:80]} | {MATCHING_TYPES.get(row['matching_type'], row['matching_type'])} | {role_text} {bots}")
         embed = discord.Embed(title="🤖 الردود التلقائية", description="\n".join(lines), colour=discord.Colour.blurple())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(AutoReply(bot))
+    if bot.get_cog("TicketPurchase") is None:
+        try:
+            await bot.load_extension("cogs.ticket_purchase")
+        except commands.ExtensionAlreadyLoaded:
+            pass
+    if bot.get_cog("TicketPurchaseRuntime") is None:
+        try:
+            await bot.load_extension("cogs.ticket_purchase_runtime")
+        except commands.ExtensionAlreadyLoaded:
+            pass
