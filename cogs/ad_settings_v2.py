@@ -25,9 +25,15 @@ class AdSettingsV2(commands.Cog):
                 giveaway_duration INTEGER NOT NULL DEFAULT 3600,
                 giveaway_sponsor_id INTEGER,
                 image_path TEXT,
+                required_guild_id INTEGER,
                 updated_at REAL NOT NULL DEFAULT 0
             )"""
         )
+        # Upgrade databases created by older releases.
+        columns = await self.db.fetchall("PRAGMA table_info(ad_settings_v2)")
+        names = {str(row['name']) for row in columns}
+        if 'required_guild_id' not in names:
+            await self.db.execute("ALTER TABLE ad_settings_v2 ADD COLUMN required_guild_id INTEGER")
 
 
 async def setup(bot):
