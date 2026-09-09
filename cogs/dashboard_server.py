@@ -48,7 +48,7 @@ class DashboardServer(commands.Cog):
     def _resolve_port(cfg: dict) -> int:
         for value in (
             os.getenv("DASHBOARD_PORT"), os.getenv("SERVER_PORT"),
-            os.getenv("PORT"), cfg.get("port"), 3000,
+            cfg.get("port"), 8000,
         ):
             try:
                 port = int(str(value).strip())
