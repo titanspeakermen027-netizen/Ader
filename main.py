@@ -278,9 +278,9 @@ class Ader(commands.Bot):
     async def on_message(self, message: discord.Message):
         if message.author.bot:
             return
-        if not await self._claim_message_once(message.id):
-            return
         if await self._handle_a_message(message):
+            return
+        if not await self._claim_message_once(message.id):
             return
         await self.process_commands(message)
 
