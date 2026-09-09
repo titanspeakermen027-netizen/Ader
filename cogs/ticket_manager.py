@@ -37,6 +37,7 @@ class TicketControls(discord.ui.View):
     def __init__(self, cog: "TicketManager", channel_id: int):
         super().__init__(timeout=None)
         self.add_item(TicketClaimButton(cog, channel_id))
+        self.add_item(TicketPurchaseButton(cog, channel_id))
         self.add_item(TicketCloseButton(cog, channel_id))
         self.add_item(TicketDeleteButton(cog, channel_id))
 
@@ -62,6 +63,19 @@ class TicketClaimButton(discord.ui.Button):
         if cur.rowcount != 1:
             return await interaction.response.send_message("❌ شي Staff آخر تكفّل بها.", ephemeral=True)
         await interaction.response.send_message(f"🙋 {interaction.user.mention} تكفّل بالتذكرة.")
+
+
+class TicketPurchaseButton(discord.ui.Button):
+    def __init__(self, cog: "TicketManager", channel_id: int):
+        super().__init__(label="شراء", emoji="🛒", style=discord.ButtonStyle.primary,
+                         custom_id=f"ader:ticket:purchase:{channel_id}")
+        self.cog, self.channel_id = cog, channel_id
+
+    async def callback(self, interaction: discord.Interaction):
+        purchase = self.cog.bot.get_cog("TicketPurchase")
+        if purchase is None:
+            return await interaction.response.send_message("❌ نظام الشراء داخل التذكرة غير متوفر حالياً.", ephemeral=True)
+        await purchase.open_purchase(interaction, self.channel_id)
 
 
 class TicketCloseButton(discord.ui.Button):
@@ -469,7 +483,6 @@ class TicketManager(commands.Cog):
 
     async def create_ticket_from_panel(self, interaction: discord.Interaction, panel_id: int, option_index: int):
         if not interaction.guild:
-
             return await interaction.response.send_message("❌ التذاكر خدامة غير داخل السيرفر.", ephemeral=True)
         if not await self.db.is_server_premium(interaction.guild.id):
             return await interaction.response.send_message("⭐ نظام التذاكر الاحترافي حصري لسيرفرات Ader Premium.", ephemeral=True)
