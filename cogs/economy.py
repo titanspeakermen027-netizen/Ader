@@ -145,10 +145,10 @@ class Economy(commands.Cog):
     async def credits(self, interaction: discord.Interaction, user: discord.Member | None = None, amount: int | None = None):
         if user is None and amount is None:
             balance = await self.db.get_balance(interaction.user.id)
-            return await interaction.response.send_message(f"🪙  | **{interaction.user.display_name}, your ANORIS balance is `${balance:,}`.**", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+            return await interaction.response.send_message(f"🪙  | **{interaction.user.name}, your ANORIS balance is `${balance:,}`.**", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         if user is not None and amount is None:
             balance = await self.db.get_balance(user.id)
-            return await interaction.response.send_message(f"💳  | **{user.display_name} ANORIS account balance is `${balance:,}`.**", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+            return await interaction.response.send_message(f"💳  | **{user.name} ANORIS account balance is `${balance:,}`.**", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         if user is None or amount is None:
             return await interaction.response.send_message(embed=EmbedFactory.error("استعمال غير صحيح", "حدد العضو والمبلغ معاً للتحويل."), ephemeral=True)
         await self._transfer_interaction(interaction, user, amount)
