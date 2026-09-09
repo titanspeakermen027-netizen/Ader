@@ -138,7 +138,7 @@ class Ader(commands.Bot):
 
     async def load_cogs(self):
         extensions = (
-            "cogs.admin", "cogs.analytics", "cogs.economy", "cogs.credit_message_patch", "cogs.shop",
+            "cogs.admin", "cogs.analytics", "cogs.economy", "cogs.shop",
             "cogs.ad_settings_v2", "cogs.advertising_shop", "cogs.ad_room_command",
             "cogs.ad_customization", "cogs.shortcuts", "cogs.autoreply",
             "cogs.moderation", "cogs.roles", "cogs.ticket_manager", "cogs.utility",
