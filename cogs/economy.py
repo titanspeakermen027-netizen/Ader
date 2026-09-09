@@ -113,17 +113,16 @@ class Economy(commands.Cog):
     async def _transfer_amount(self, guild: discord.Guild, sender: discord.Member, recipient: discord.Member, amount: int) -> tuple[bool, str]:
         if amount <= 0 or recipient.bot or recipient.id == sender.id:
             return False, "❌ حدد مبلغاً موجباً وعضواً آخر غير البوتات."
-
-        # Keep the existing economy tax for transfers.
         fee = max(1, math.ceil(amount * TRANSFER_TAX))
         total_cost = amount + fee
         balance = await self.db.get_balance(sender.id)
         if balance < total_cost:
             return False, f"❌ رصيدك غير كافٍ. تحتاج **{total_cost:,} {self.currency_name}** (المبلغ + ضريبة 5%) ورصيدك الحالي **{balance:,} {self.currency_name}**."
-
         if not await self.db.remove_balance(sender.id, guild.id, total_cost):
             return False, "❌ تعذر خصم المبلغ من رصيدك. لم يتم التحويل."
-        await self.db.add_balance(recipient.id, guild.id, amount)
+        if not await self.db.add_balance(recipient.id, guild.id, amount):
+            await self.db.add_balance(sender.id, guild.id, total_cost)
+            return False, "❌ تعذر إضافة المبلغ للمستلم؛ تمت إعادة الرصيد."
         new_balance = await self.db.get_balance(sender.id)
         await self._send_transfer_dm(recipient, amount, sender)
         return True, f"✅ تم تحويل **{amount:,} {self.currency_name}** إلى {recipient.mention}.\nالضريبة: **{fee:,} {self.currency_name} (5%)**\nرصيدك الجديد: **{new_balance:,} {self.currency_name}**."
@@ -167,40 +166,16 @@ class Economy(commands.Cog):
             return await ctx.send(f"🪙 رصيد {member.mention} الحالي هو **{balance:,} {self.currency_name}**.")
         if amount <= 0 or member.bot or member.id == ctx.author.id:
             return await ctx.send("❌ يجب تحديد مبلغ موجب وعضو آخر غير البوتات.", delete_after=8)
-
         balance = await self.db.get_balance(ctx.author.id)
         fee = max(1, math.ceil(amount * TRANSFER_TAX))
         total = amount + fee
         if balance < total:
             return await ctx.send(f"❌ رصيدك غير كافٍ. تحتاج **{total:,} {self.currency_name}** ورصيدك الحالي **{balance:,} {self.currency_name}**.", delete_after=10)
-
         confirmed = await self._confirm(ctx.channel, ctx.author, ctx.guild.id, "التحويل")
         if not confirmed:
             return
         ok, text = await self._transfer_amount(ctx.guild, ctx.author, member, amount)
         await ctx.send(text)
-
-    @app_commands.command(name="daily", description="Claim your daily ANOCoin reward")
-    async def daily(self, interaction: discord.Interaction):
-        user_data = await self.db.get_user(interaction.user.id, interaction.guild.id) or await self.db.create_user(interaction.user.id, interaction.guild.id)
-        last_daily = user_data.get("last_daily", 0)
-        now = datetime.utcnow().timestamp()
-        cooldown = self.module_config.get("daily_cooldown", 86400)
-        if now - last_daily < cooldown:
-            left = cooldown - (now - last_daily)
-            return await interaction.response.send_message(embed=EmbedFactory.warning("Cooldown", f"باقي **{int(left // 3600)}h {int((left % 3600) // 60)}m**."), ephemeral=True)
-        amount = int(self.module_config.get("daily_reward", 100))
-        await interaction.response.defer(ephemeral=True)
-        if not await self._confirm(interaction.channel, interaction.user, interaction.guild.id, "المكافأة اليومية"):
-            return await interaction.followup.send("❌ لم يتم جمع المكافأة اليومية.", ephemeral=True)
-        user_data = await self.db.get_user(interaction.user.id, interaction.guild.id) or await self.db.create_user(interaction.user.id, interaction.guild.id)
-        now = datetime.utcnow().timestamp()
-        if now - user_data.get("last_daily", 0) < cooldown:
-            return await interaction.followup.send(embed=EmbedFactory.warning("Cooldown", "تم جمع المكافأة اليومية بالفعل."), ephemeral=True)
-        await self.db.add_balance(interaction.user.id, interaction.guild.id, amount)
-        await self.db.update_user(interaction.user.id, interaction.guild.id, {"last_daily": now})
-        balance = await self.db.get_balance(interaction.user.id)
-        await interaction.followup.send(embed=EmbedFactory.success("🎁 Daily", f"ربحت **{amount:,} {self.currency_name}**.\nرصيدك: **{balance:,} {self.currency_name}**"), ephemeral=True)
 
     @app_commands.command(name="give", description="Give ANOCoin from your own balance")
     @app_commands.describe(user="User to give to", amount="Amount to give")
