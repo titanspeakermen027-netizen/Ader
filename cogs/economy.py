@@ -32,6 +32,38 @@ class Economy(commands.Cog):
         self.currency_name = self.module_config.get("currency_name", "ANOCoin")
         self._pending_confirmations: set[tuple[int, int]] = set()
 
+    async def cog_load(self):
+        await self.db.execute("""CREATE TABLE IF NOT EXISTS balance_language_preferences (
+            user_id INTEGER PRIMARY KEY,
+            language TEXT NOT NULL DEFAULT 'ar'
+        )""")
+
+    async def get_balance_language(self, user_id: int) -> str:
+        row = await self.db.fetchone("SELECT language FROM balance_language_preferences WHERE user_id=?", (int(user_id),))
+        return str(row["language"]) if row and row["language"] in {"ar", "en"} else "ar"
+
+    async def format_balance_message(self, viewer_id: int, username: str, balance: int, *, own_balance: bool) -> str:
+        language = await self.get_balance_language(viewer_id)
+        if language == "en":
+            return (f"🪙  | **{username}, your ANORIS balance is `${balance:,}`.**" if own_balance
+                    else f"💳  | **{username} ANORIS account balance is `${balance:,}`.**")
+        return (f"**ـ {username} رصيد حسابك في ANORIS هو `${balance:,}`.** | 🪙" if own_balance
+                else f"**رصيد {username} في ANORIS هو `${balance:,}`.** 💳")
+
+    @app_commands.command(name="balance-language", description="اختيار لغة رسائل رصيد ANORIS")
+    @app_commands.describe(language="لغة رسائل الرصيد")
+    @app_commands.choices(language=[
+        app_commands.Choice(name="العربية", value="ar"),
+        app_commands.Choice(name="English", value="en"),
+    ])
+    async def balance_language(self, interaction: discord.Interaction, language: app_commands.Choice[str]):
+        await self.db.execute(
+            "INSERT INTO balance_language_preferences(user_id, language) VALUES(?, ?) ON CONFLICT(user_id) DO UPDATE SET language=excluded.language",
+            (interaction.user.id, language.value),
+        )
+        text = "✅ تم تغيير لغة رسائل الرصيد إلى العربية." if language.value == "ar" else "✅ Balance messages language changed to English."
+        await interaction.response.send_message(text, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
     @staticmethod
     def _font(size: int, bold: bool = False):
         paths = [
@@ -145,10 +177,12 @@ class Economy(commands.Cog):
     async def credits(self, interaction: discord.Interaction, user: discord.Member | None = None, amount: int | None = None):
         if user is None and amount is None:
             balance = await self.db.get_balance(interaction.user.id)
-            return await interaction.response.send_message(f"🪙  | **{interaction.user.name}, your ANORIS balance is `${balance:,}`.**", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+            text = await self.format_balance_message(interaction.user.id, interaction.user.name, balance, own_balance=True)
+            return await interaction.response.send_message(text, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         if user is not None and amount is None:
             balance = await self.db.get_balance(user.id)
-            return await interaction.response.send_message(f"💳  | **{user.name} ANORIS account balance is `${balance:,}`.**", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+            text = await self.format_balance_message(interaction.user.id, user.name, balance, own_balance=False)
+            return await interaction.response.send_message(text, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         if user is None or amount is None:
             return await interaction.response.send_message(embed=EmbedFactory.error("استعمال غير صحيح", "حدد العضو والمبلغ معاً للتحويل."), ephemeral=True)
         await self._transfer_interaction(interaction, user, amount)
