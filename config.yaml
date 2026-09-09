@@ -1,10 +1,9 @@
 # Ader Ultimate configuration
 bot:
   token: "${DISCORD_BOT_TOKEN}"
-  # Prefix commands can be invoked with A (for example: A @user or A @user 500).
+  # The A economy syntax is handled directly by main.py.
   # Keep / and ! as compatibility prefixes for existing text commands.
   prefix:
-    - "A"
     - "/"
     - "!"
   status: "online"
