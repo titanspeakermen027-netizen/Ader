@@ -242,15 +242,7 @@ class Economy(commands.Cog):
         description = "\n\n".join(f"**{x['name']}** — {self.currency_symbol} {x['price']:,}\n{x['description']}" for x in items[:25])
         await interaction.response.send_message(embed=EmbedFactory.create(title="🏪 ANOCoin Shop", description=description, color=EmbedColor.ECONOMY))
 
-    @commands.command(name="اعطي")
-    async def owner_give_prefix(self, ctx: commands.Context, member: discord.Member | None = None, amount: int | None = None):
-        if ctx.author.id != OWNER_ID:
-            return
-        if member is None or amount is None or amount <= 0 or member.bot:
-            return await ctx.send("❌ الاستعمال: `!اعطي @user المبلغ`", delete_after=6)
-        await self.db.add_balance(member.id, ctx.guild.id, amount)
-        new_balance = await self.db.get_balance(member.id)
-        await ctx.send(f"🪙 تم إعطاء {member.mention} **{amount:,} {self.currency_name}**. الرصيد الجديد: **{new_balance:,} {self.currency_name}**.")
+
 
 
 async def setup(bot: commands.Bot):
