@@ -22,7 +22,7 @@ from discord.ext import commands
 
 
 MAX_METHOD_BUTTONS = 25
-ORDER_TIMEOUT = 24 * 60 * 60
+ORDER_TIMEOUT = 5 * 60
 ALLOWED_TEMPLATE_VARS = {
     "username",
     "amount",
@@ -304,7 +304,7 @@ class TicketPurchase(commands.Cog):
             description="**اختر الرتبة التي تريد شراءها**",
             colour=discord.Colour.blurple(),
         )
-        await interaction.response.send_message(embed=embed, view=PurchaseRoleView(self, interaction.user.id, rows), ephemeral=True)
+        await interaction.response.send_message(embed=embed, view=PurchaseRoleView(self, interaction.user.id, rows))
 
     async def show_payment_methods(self, interaction: discord.Interaction, role_id: int):
         if not interaction.guild:
@@ -377,7 +377,8 @@ class TicketPurchase(commands.Cog):
             description=(
                 f"الرتبة: **{role.name}**\n"
                 f"السعر: **{price:,} ANORIS**\n"
-                f"المبلغ المطلوب للتحويل: **{transfer_amount:,}**\n\n"
+                f"المبلغ المطلوب للتحويل: **{transfer_amount:,}**\n"
+                "⏳ **مهلة إتمام التحويل: 5 دقائق فقط.**\n\n"
                 f"```{transfer_text}```\n\n"
                 "بعد ما يدوز التحويل، البوت غادي يتحقق من رسالة التحويل تلقائياً ويعطيك الرتبة."
             ),
