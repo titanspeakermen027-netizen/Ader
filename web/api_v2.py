@@ -202,11 +202,16 @@ def create_app(bot) -> FastAPI:
             teams = await bot.db.fetchone("SELECT COUNT(*) FROM verified_teams WHERE guild_id=? AND active=1", (guild_id,))
         except Exception:
             teams = (0,)
+        latency = getattr(bot, "latency", 0.0)
         return {
             "id": guild.id, "name": guild.name, "members": guild.member_count or len(getattr(guild, "members", ())),
-            "channels": len(guild.channels), "open_tickets": int(open_tickets[0]) if open_tickets else 0,
+            "channels": len(guild.channels), "roles": max(0, len(guild.roles) - 1),
+            "open_tickets": int(open_tickets[0]) if open_tickets else 0,
             "verified_teams": int(teams[0]) if teams else 0,
             "commands": len(_tree_commands(bot)),
+            "bot_ready": bool(getattr(bot, "is_ready", lambda: False)()),
+            "database": bool(getattr(bot.db, "is_connected", False)),
+            "bot_latency_ms": round(float(latency) * 1000, 1) if latency else 0,
         }
 
     @app.get("/api/guilds/{guild_id}/resources")
