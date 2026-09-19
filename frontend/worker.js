@@ -72,15 +72,15 @@ export default {
     // Cloudflare Workers can collapse Set-Cookie when copied through Headers.
     // Re-append every cookie individually so the OAuth session survives.
     responseHeaders.delete("Set-Cookie");
-
-    const cookies =
-      typeof response.headers.getSetCookie === "function"
-        ? response.headers.getSetCookie()
-        : [];
-
-    for (const cookie of cookies) {
-      responseHeaders.append("Set-Cookie", cookie);
+    let cookies = [];
+    if (typeof response.headers.getSetCookie === "function") {
+      cookies = response.headers.getSetCookie();
+    } else {
+      const cookie = response.headers.get("Set-Cookie");
+      if (cookie) cookies = [cookie];
     }
+    for (const cookie of cookies) responseHeaders.append("Set-Cookie", cookie);
+    if (isBackendRoute) responseHeaders.set("Cache-Control", "no-store");
 
     return new Response(response.body, {
       status: response.status,
