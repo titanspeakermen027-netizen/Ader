@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import time
 from typing import Any
 
@@ -47,7 +48,7 @@ def create_app(bot) -> FastAPI:
     secret = os.getenv("DASHBOARD_SESSION_SECRET", "") or str(cfg.get("session_secret", ""))
     if not secret:
         secret = os.getenv("DISCORD_BOT_TOKEN", "nova-aro-change-this")
-    app.add_middleware(SessionMiddleware, secret_key=secret, same_site="lax", https_only=False, max_age=86400)
+    app.add_middleware(SessionMiddleware, secret_key=secret, same_site="lax", https_only=True, max_age=86400, path="/")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cfg.get("cors_origins", ["*"]),
@@ -106,19 +107,27 @@ def create_app(bot) -> FastAPI:
             return HTMLResponse(_oauth_error_html("إعدادات Discord OAuth2 ناقصة", "أضف DISCORD_CLIENT_ID و DISCORD_CLIENT_SECRET في متغيرات البيئة ثم أعد تشغيل Ader."), status_code=503)
         from urllib.parse import quote
         redirect_uri = get_redirect_uri(request)
+        state = secrets.token_urlsafe(32)
+        request.session["oauth_state"] = state
         url = (
             "https://discord.com/oauth2/authorize?client_id=" + os.environ["DISCORD_CLIENT_ID"]
             + "&response_type=code&redirect_uri=" + quote(redirect_uri, safe="")
             + "&scope=identify%20guilds"
+            + "&state=" + quote(state, safe="")
         )
-        return RedirectResponse(url)
+        return RedirectResponse(url, headers={"Cache-Control": "no-store"})
 
     @app.get("/callback")
-    async def callback(request: Request, code: str = "", error: str = "", error_description: str = ""):
+    async def callback(request: Request, code: str = "", state: str = "", error: str = "", error_description: str = ""):
         if error:
-            return HTMLResponse(_oauth_error_html("تم إلغاء تسجيل الدخول", error_description or error), status_code=400)
+            request.session.pop("oauth_state", None)
+            return HTMLResponse(_oauth_error_html("تم إلغاء تسجيل الدخول", error_description or error), status_code=400, headers={"Cache-Control": "no-store"})
         if not oauth_ready() or not code:
-            return RedirectResponse("/")
+            return RedirectResponse("/", headers={"Cache-Control": "no-store"})
+        expected_state = request.session.pop("oauth_state", None)
+        if not expected_state or not state or not secrets.compare_digest(str(expected_state), str(state)):
+            request.session.clear()
+            return HTMLResponse(_oauth_error_html("فشل التحقق من تسجيل الدخول", "انتهت جلسة OAuth أو كان طلب تسجيل الدخول غير صالح. عاود المحاولة من جديد."), status_code=400, headers={"Cache-Control": "no-store"})
         redirect_uri = get_redirect_uri(request)
         data = {
             "client_id": os.environ["DISCORD_CLIENT_ID"],
@@ -166,12 +175,12 @@ def create_app(bot) -> FastAPI:
         request.session.clear()
         request.session["discord_user"] = {"id": int(user["id"]), "username": user.get("username", "")}
         request.session["managed_guilds"] = managed
-        return RedirectResponse("/")
+        return RedirectResponse("/", headers={"Cache-Control": "no-store"})
 
     @app.get("/logout")
     async def logout(request: Request):
         request.session.clear()
-        return RedirectResponse("/")
+        return RedirectResponse("/", headers={"Cache-Control": "no-store"})
 
     @app.get("/api/me")
     async def me(request: Request):
@@ -343,6 +352,195 @@ def create_app(bot) -> FastAPI:
             item = dict(r); item["players"] = int(c[0]) if c else 0
             result.append(item)
         return {"teams": result}
+
+    def _base_module(name: str) -> dict:
+        modules = bot.config.get("modules", {}) or {}
+        return json.loads(json.dumps(modules.get(name, {}) or {}))
+
+    async def _dashboard_modules(guild_id: int) -> dict:
+        current = await bot.db.get_guild(guild_id)
+        stored = (current or {}).get("modules", {}) if current else {}
+        return stored.get("_dashboard_modules", {}) if isinstance(stored, dict) else {}
+
+    async def _effective_module(guild_id: int, name: str) -> dict:
+        base = _base_module(name)
+        overrides = (await _dashboard_modules(guild_id)).get(name, {})
+        def merge(a, b):
+            for k, v in b.items():
+                if isinstance(v, dict) and isinstance(a.get(k), dict):
+                    merge(a[k], v)
+                else:
+                    a[k] = v
+        if isinstance(overrides, dict):
+            merge(base, overrides)
+        return base
+
+    async def _set_module(guild_id: int, name: str, patch: dict) -> dict:
+        current = await bot.db.get_guild(guild_id)
+        stored = (current or {}).get("modules", {}) if current else {}
+        all_overrides = stored.get("_dashboard_modules", {}) if isinstance(stored, dict) else {}
+        if not isinstance(all_overrides, dict):
+            all_overrides = {}
+        old = all_overrides.get(name, {})
+        if not isinstance(old, dict):
+            old = {}
+        allowed = {"enabled","xp_per_message","xp_cooldown","currency_name","currency_symbol","starting_balance","daily_reward","daily_cooldown","auto_mod"}
+        clean = {}
+        for key, value in (patch or {}).items():
+            if key not in allowed:
+                continue
+            if key == "auto_mod" and isinstance(value, dict):
+                clean[key] = {}
+                for k, v in value.items():
+                    if k in {"spam_detection","toxicity_filter"}:
+                        clean[key][k] = bool(v)
+                    elif k == "max_mentions":
+                        clean[key][k] = max(0, min(int(v), 50))
+            elif key == "enabled":
+                clean[key] = bool(value)
+            elif key in {"xp_per_message","xp_cooldown","starting_balance","daily_reward","daily_cooldown"}:
+                clean[key] = max(0, int(value))
+            elif key in {"currency_name","currency_symbol"}:
+                clean[key] = str(value).strip()[:50]
+        old.update(clean)
+        all_overrides[name] = old
+        stored["_dashboard_modules"] = all_overrides
+        await bot.db.update_guild(guild_id, stored)
+        merged = await _effective_module(guild_id, name)
+        bot.config.setdefault("modules", {})[name] = merged
+        candidates = {"moderation":"Moderation","verification":"Verification","analytics":"Analytics","economy":"Economy","leveling":"Leveling","roles":"Roles","tickets":"TicketManager","games":"Games"}
+        cog = bot.get_cog(candidates.get(name, ""))
+        if cog is not None and hasattr(cog, "module_config"):
+            cog.module_config = merged
+            if name == "economy":
+                if hasattr(cog, "currency_name"): cog.currency_name = merged.get("currency_name", cog.currency_name)
+                if hasattr(cog, "currency_symbol"): cog.currency_symbol = merged.get("currency_symbol", cog.currency_symbol)
+            if name == "moderation" and hasattr(cog, "toxicity_filter_enabled"):
+                cog.toxicity_filter_enabled = merged.get("auto_mod", {}).get("toxicity_filter", True)
+        return merged
+
+    async def _require_admin(request: Request, guild_id: int):
+        return await authorized_guild(request, guild_id)
+
+    @app.get("/api/health")
+    async def dashboard_health():
+        return {"ok": True, "bot_ready": bool(getattr(bot, "is_ready", lambda: False)()), "database": bool(getattr(bot.db, "is_connected", False)), "guilds": len(getattr(bot, "guilds", []))}
+
+    @app.get("/api/guilds/{guild_id}/analytics")
+    async def analytics_data(request: Request, guild_id: int, days: int = 7):
+        await _require_admin(request, guild_id)
+        days = max(1, min(int(days), 90))
+        start = time.time() - days * 86400
+        rows = [r for r in await bot.db.get_analytics(guild_id, limit=1000) if float(r.get("timestamp", 0)) >= start]
+        counts, daily = {}, {}
+        for row in rows:
+            typ = str(row.get("type", "unknown"))
+            counts[typ] = counts.get(typ, 0) + 1
+            day = time.strftime("%Y-%m-%d", time.localtime(float(row.get("timestamp", time.time()))))
+            daily.setdefault(day, {})
+            daily[day][typ] = daily[day].get(typ, 0) + 1
+        return {"days": days, "total": len(rows), "counts": counts, "daily": daily}
+
+    @app.get("/api/guilds/{guild_id}/logs")
+    async def dashboard_logs(request: Request, guild_id: int, limit: int = 50):
+        await _require_admin(request, guild_id)
+        limit = max(10, min(int(limit), 100))
+        analytics = await bot.db.get_analytics(guild_id, limit=limit)
+        warnings = await bot.db.fetchall("SELECT id,user_id,moderator_id,reason,created_at FROM warnings WHERE guild_id=? ORDER BY id DESC LIMIT ?", (guild_id, limit))
+        result = [{"kind":"analytics","type":r["type"],"timestamp":r["timestamp"],"data":r.get("data") or {}} for r in analytics]
+        result += [{"kind":"warning","type":"warning","timestamp":r["created_at"],"data":dict(r)} for r in warnings]
+        result.sort(key=lambda x: float(x.get("timestamp", 0)), reverse=True)
+        return {"logs": result[:limit]}
+
+    @app.get("/api/guilds/{guild_id}/levels")
+    async def levels_data(request: Request, guild_id: int, limit: int = 10):
+        await _require_admin(request, guild_id)
+        limit = max(1, min(int(limit), 50))
+        rows = await bot.db.fetchall("SELECT user_id,xp,level,created_at FROM users WHERE guild_id=? ORDER BY xp DESC LIMIT ?", (guild_id, limit))
+        return {"users":[dict(r) for r in rows], "config":await _effective_module(guild_id,"leveling")}
+
+    @app.get("/api/guilds/{guild_id}/economy")
+    async def economy_data(request: Request, guild_id: int, limit: int = 10):
+        await _require_admin(request, guild_id)
+        cfg = await _effective_module(guild_id, "economy")
+        limit = max(1, min(int(limit), 50))
+        rows = await bot.db.fetchall("SELECT user_id,level FROM users WHERE guild_id=? LIMIT 100", (guild_id,))
+        balances = [{"user_id":int(r["user_id"]),"balance":await bot.db.get_balance(int(r["user_id"])),"level":int(r["level"] or 0)} for r in rows]
+        balances.sort(key=lambda x:x["balance"], reverse=True)
+        return {"config":cfg,"leaderboard":balances[:limit]}
+
+    @app.get("/api/guilds/{guild_id}/moderation")
+    async def moderation_data(request: Request, guild_id: int):
+        await _require_admin(request, guild_id)
+        cfg = await _effective_module(guild_id, "moderation")
+        recent = await bot.db.fetchall("SELECT id,user_id,moderator_id,reason,created_at FROM warnings WHERE guild_id=? ORDER BY id DESC LIMIT 20", (guild_id,))
+        total = await bot.db.fetchone("SELECT COUNT(*) AS count FROM warnings WHERE guild_id=? AND active=1", (guild_id,))
+        return {"config":cfg,"warnings":[dict(r) for r in recent],"warning_count":int(total["count"]) if total else 0}
+
+    @app.get("/api/guilds/{guild_id}/welcome")
+    async def welcome_data(request: Request, guild_id: int):
+        await _require_admin(request, guild_id)
+        return {"module":await _effective_module(guild_id,"verification"),"config":await bot.db.get_guild(guild_id) or {}}
+
+    @app.put("/api/guilds/{guild_id}/modules/{module_name}")
+    async def module_update(request: Request, guild_id: int, module_name: str):
+        await _require_admin(request, guild_id)
+        allowed = {"moderation","verification","analytics","economy","leveling","roles","tickets","games"}
+        if module_name not in allowed: raise HTTPException(status_code=404, detail="النظام غير موجود")
+        return {"ok":True,"module":module_name,"config":await _set_module(guild_id,module_name,await request.json())}
+
+    @app.get("/api/guilds/{guild_id}/settings")
+    async def settings_get(request: Request, guild_id: int):
+        await _require_admin(request, guild_id)
+        return {"modules":{n:await _effective_module(guild_id,n) for n in ("moderation","verification","analytics","economy","leveling","roles","tickets","games")}, "guild":await bot.db.get_guild(guild_id) or {}}
+
+    @app.put("/api/guilds/{guild_id}/settings")
+    async def settings_update(request: Request, guild_id: int):
+        await _require_admin(request, guild_id)
+        data = await request.json()
+        if not isinstance(data, dict): raise HTTPException(status_code=400, detail="إعدادات غير صالحة")
+        for name, patch in (data.get("modules") or {}).items():
+            if name in {"moderation","verification","analytics","economy","leveling","roles","tickets","games"} and isinstance(patch, dict):
+                await _set_module(guild_id,name,patch)
+        verification = data.get("verification")
+        if isinstance(verification, dict):
+            clean={}
+            for key in ("verified_role","welcome_channel","verify_channel","verification_type","verification_method","welcome_message"):
+                if key not in verification: continue
+                value=verification[key]
+                if key.endswith("_role") or key.endswith("_channel"):
+                    value=int(value) if value not in (None,"",0,"0") else None
+                elif key in {"verification_type","verification_method"}: value=str(value)[:30]
+                else: value=str(value)[:2000]
+                clean[key]=value
+            if clean: await bot.db.update_guild(guild_id,clean)
+        return await settings_get(request,guild_id)
+
+    @app.get("/api/guilds/{guild_id}/teams/settings")
+    async def team_settings_get(request: Request, guild_id: int):
+        await _require_admin(request, guild_id)
+        row=await bot.db.fetchone("SELECT * FROM team_settings WHERE guild_id=?",(guild_id,))
+        return {"settings":dict(row) if row else {"max_players":15,"coach_role_id":None,"list_channel_id":None,"list_message_id":None}}
+
+    @app.put("/api/guilds/{guild_id}/teams/settings")
+    async def team_settings_update(request: Request, guild_id: int):
+        await _require_admin(request, guild_id)
+        data=await request.json()
+        cog=bot.get_cog("TeamsV2")
+        if cog is None: raise HTTPException(status_code=503,detail="نظام الفرق غير محمّل")
+        await cog.cfg(guild_id)
+        if "coach_role_id" in data:
+            await cog.set_coach(guild_id,int(data["coach_role_id"]) if data["coach_role_id"] not in (None,"",0,"0") else None)
+        if "max_players" in data: await cog.set_limit(guild_id,max(1,min(int(data["max_players"]),200)))
+        return await team_settings_get(request,guild_id)
+
+    @app.delete("/api/guilds/{guild_id}/tickets/panels/{panel_id}")
+    async def ticket_panel_delete(request: Request, guild_id: int, panel_id: int):
+        await _require_admin(request,guild_id)
+        panel=await bot.db.get_ticket_panel(panel_id)
+        if not panel or int(panel.get("guild_id"))!=guild_id: raise HTTPException(status_code=404,detail="لوحة التذاكر غير موجودة")
+        await bot.db.delete_ticket_panel(panel_id)
+        return {"ok":True}
 
     return app
 
