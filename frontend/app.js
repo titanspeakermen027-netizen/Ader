@@ -75,7 +75,7 @@ function ticketForm(panel){
   const p=panel||{};
   const ts=p.settings||{};
   return '<div class="ticket-builder">'+
-    '<div class="ticket-builder-top"><div><h2>'+((p.id?'تعديل لوحة التذاكر #'+p.id:'إنشاء لوحة تذاكر جديدة'))+'</h2><p>اضبط كل شيء من مكان واحد، ثم احفظ أو احفظ وانشر مباشرة.</p></div><div class="ticket-actions"><button class="action" id="ticket-new">لوحة جديدة</button><button class="action" id="ticket-save">حفظ</button><button class="primary smallbtn" id="ticket-publish">حفظ ونشر</button></div></div>'+
+    '<div class="ticket-builder-top"><div><h2>'+((p.id?'تعديل لوحة التذاكر #'+p.id:'إنشاء لوحة تذاكر جديدة'))+'</h2><p>اضبط كل شيء من مكان واحد، ثم احفظ أو احفظ وانشر مباشرة.</p></div><div class="ticket-actions"><button class="action" id="ticket-new">لوحة جديدة</button><button class="action" id="ticket-save">حفظ</button><button class="primary smallbtn" id="ticket-publish">حفظ ونشر</button>${p.id?'<button class="action danger" id="ticket-delete">حذف اللوحة</button>':''}</div></div>'+
     '<div class="cards">'+
       card('مظهر اللوحة',
         '<div class="form-grid">'+
@@ -177,6 +177,7 @@ function bindTicketEditor(){
     warn(publish?"تم حفظ اللوحة ونشرها بنجاح.":"تم حفظ التغييرات بنجاح.");setTimeout(()=>$("#apiWarning").classList.add("hidden"),1800);
     await tickets();
   }
+  document.getElementById("ticket-delete")?.addEventListener("click",async()=>{if(!confirm("هل أنت متأكد من حذف لوحة التذاكر؟"))return;try{await api("/api/guilds/"+s.guild.id+"/tickets/panels/"+ticketEditor.panelId,{method:"DELETE"});ticketEditor.panelId=null;await tickets();}catch(e){warn(e.message)}});
   document.getElementById("ticket-save")?.addEventListener("click",()=>persist(false).catch(e=>warn(e.message)));
   document.getElementById("ticket-publish")?.addEventListener("click",()=>persist(true).catch(e=>warn(e.message)));
 }
