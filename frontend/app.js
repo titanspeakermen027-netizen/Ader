@@ -25,7 +25,158 @@ async function analytics(){const d=await api("/api/guilds/"+s.guild.id+"/analyti
 async function moderation(){const d=await api("/api/guilds/"+s.guild.id+"/moderation"),m=d.config||{},a=m.auto_mod||{};$("#root").innerHTML=head(titles[s.page],desc[s.page])+'<div class="cards">'+card("Module",'<label class="toggleline">Enabled <input type="checkbox" id="mod-enabled" '+(m.enabled!==false?"checked":"")+'></label>')+card("AutoMod",'<label>Spam Detection<input type="checkbox" id="spam" '+(a.spam_detection!==false?"checked":"")+'></label><label>Max Mentions<input id="mentions" type="number" min="0" max="50" value="'+(a.max_mentions??5)+'"></label><label>Toxicity Filter<input type="checkbox" id="tox" '+(a.toxicity_filter!==false?"checked":"")+'></label><button class="primary smallbtn" id="save-mod">حفظ</button>')+card("Warnings",'<div class="big-number">'+(d.warning_count||0)+'</div>'+(d.warnings||[]).slice(0,10).map(w=>'<div class="logline"><b>User '+w.user_id+'</b><small>'+esc(w.reason)+'</small></div>').join(""))+'</div>';$("#save-mod").onclick=async()=>{await api("/api/guilds/"+s.guild.id+"/modules/moderation",{method:"PUT",body:JSON.stringify({enabled:$("#mod-enabled").checked,auto_mod:{spam_detection:$("#spam").checked,max_mentions:Number($("#mentions").value),toxicity_filter:$("#tox").checked}})});await loadGuild();await moderation()}}
 async function economy(){const d=await api("/api/guilds/"+s.guild.id+"/economy"),c=d.config||{};$("#root").innerHTML=head("ANORIS Economy",desc.economy)+'<div class="cards">'+card("Currency",'<label>الاسم<input id="cur-name" value="'+esc(c.currency_name||"ANORIS")+'"></label><label>الرمز<input id="cur-symbol" value="'+esc(c.currency_symbol||"🪙")+'"></label><label>Daily Reward<input id="daily" type="number" min="0" value="'+(c.daily_reward??30)+'"></label><button class="primary smallbtn" id="save-econ">حفظ</button>')+card("Leaderboard",'<div class="list">'+(d.leaderboard||[]).map((x,i)=>'<div><b>#'+(i+1)+' · User '+x.user_id+'</b><span>'+Number(x.balance||0).toLocaleString()+' '+esc(c.currency_name||"ANORIS")+'</span></div>').join("")+'</div>')+'</div>';$("#save-econ").onclick=async()=>{await api("/api/guilds/"+s.guild.id+"/modules/economy",{method:"PUT",body:JSON.stringify({currency_name:$("#cur-name").value,currency_symbol:$("#cur-symbol").value,daily_reward:Number($("#daily").value)})});await economy()}}
 async function levels(){const d=await api("/api/guilds/"+s.guild.id+"/levels");$("#root").innerHTML=head("Levels",desc.levels)+card("XP Leaderboard",'<div class="list">'+(d.users||[]).map((x,i)=>'<div><b>#'+(i+1)+' · User '+x.user_id+'</b><small>Level '+x.level+' · '+Number(x.xp||0).toLocaleString()+' XP</small></div>').join("")+'</div>')}
-async function tickets(){const d=await api("/api/guilds/"+s.guild.id+"/tickets");$("#root").innerHTML=head("Tickets",desc.tickets)+'<div class="cards">'+card("Panels",'<div class="list">'+(d.panels||[]).map(x=>'<div><b>'+esc(x.title||"Ticket Panel")+'</b><button class="action danger" data-delete-panel="'+x.id+'">حذف</button></div>').join("")+'</div>')+card("Tickets",'<div class="list">'+(d.tickets||[]).slice(0,30).map(x=>'<div><b>#'+x.id+' · '+esc(x.status)+'</b><small>channel '+esc(x.channel_id||"—")+' · user '+esc(x.user_id||"—")+'</small></div>').join("")+'</div>')+'</div>';document.querySelectorAll("[data-delete-panel]").forEach(b=>b.onclick=async()=>{if(confirm("تحذف اللوحة؟")){await api("/api/guilds/"+s.guild.id+"/tickets/panels/"+b.dataset.deletePanel,{method:"DELETE"});await tickets()}})}
+let ticketEditor={panelId:null,panels:[],settings:{},options:[]};
+
+function resourceOptions(items, value, empty){
+  return '<option value="">'+esc(empty)+'</option>'+(items||[]).map(x=>'<option value="'+x.id+'" '+(String(value||'')===String(x.id)?'selected':'')+'>'+esc(x.name)+'</option>').join('');
+}
+function ticketTypeCard(x,i){
+  x=x||{};
+  return '<div class="ticket-type-card" data-ticket-type="'+i+'">'+
+    '<div class="ticket-type-head"><b>النوع '+(i+1)+'</b><button class="action danger" data-remove-type="'+i+'">حذف النوع</button></div>'+
+    '<div class="form-grid">'+
+      '<label>اسم النوع<input data-tf="name" value="'+esc(x.name||'الدعم العام')+'"></label>'+
+      '<label>الرمز التعبيري<input data-tf="emoji" value="'+esc(x.emoji||'🎫')+'"></label>'+
+      '<label>نمط زر النوع<select data-tf="button_style"><option value="primary" '+(x.button_style==='primary'?'selected':'')+'>أساسي</option><option value="secondary" '+(x.button_style==='secondary'?'selected':'')+'>ثانوي</option><option value="success" '+(x.button_style==='success'?'selected':'')+'>نجاح</option><option value="danger" '+(x.button_style==='danger'?'selected':'')+'>تحذير</option></select></label>'+
+      '<label>الأولوية<select data-tf="priority"><option value="low" '+(x.priority==='low'?'selected':'')+'>منخفضة</option><option value="normal" '+(!x.priority||x.priority==='normal'?'selected':'')+'>عادية</option><option value="high" '+(x.priority==='high'?'selected':'')+'>مرتفعة</option><option value="urgent" '+(x.priority==='urgent'?'selected':'')+'>عاجلة</option></select></label>'+
+    '</div>'+
+    '<div class="form-grid">'+
+      '<label>وصف النوع<input data-tf="description" value="'+esc(x.description||'افتح تذكرة للحصول على المساعدة.')+'"></label>'+
+      '<label>اسم القناة<input data-tf="ticket_name" value="'+esc(x.ticket_name||'ticket-{number}-{user}')+'"></label>'+
+      '<label>فئة التذاكر<select data-tf="category_id">'+resourceOptions(s.resources.channels.filter(a=>a.type==='category'),x.category_id,'استخدم الفئة العامة')+'</select></label>'+
+      '<label>رتبة الدعم<select data-tf="support_role_id">'+resourceOptions(s.resources.roles,x.support_role_id,'استخدم رتبة الدعم العامة')+'</select></label>'+
+    '</div>'+
+    '<div class="form-grid">'+
+      '<label>اللون<input data-tf="color" type="color" value="'+esc(x.color||'#5865F2')+'"></label>'+
+      '<label>الصورة داخل التذكرة<input data-tf="image_url" value="'+esc(x.image_url||'')+'"></label>'+
+      '<label>النص السفلي<input data-tf="footer" value="'+esc(x.footer||'Ader Support')+'"></label>'+
+      '<label>الحد الأقصى المفتوح<input data-tf="max_open" type="number" min="1" max="10" value="'+(Number(x.max_open)||1)+'"></label>'+
+    '</div>'+
+    '<label class="inline-check"><input data-tf="enabled" type="checkbox" '+(x.enabled!==false?'checked':'')+'><span>تفعيل هذا النوع</span></label>'+
+  '</div>';
+}
+function readTicketTypes(){
+  const rows=[...document.querySelectorAll('[data-ticket-type]')];
+  return rows.map(row=>{
+    const get=k=>row.querySelector('[data-tf="'+k+'"]');
+    return {
+      name:get('name')?.value||'الدعم العام',emoji:get('emoji')?.value||'🎫',
+      button_style:get('button_style')?.value||'primary',priority:get('priority')?.value||'normal',
+      description:get('description')?.value||'افتح تذكرة للحصول على المساعدة.',
+      ticket_name:get('ticket_name')?.value||'ticket-{number}-{user}',
+      category_id:get('category_id')?.value||null,support_role_id:get('support_role_id')?.value||null,
+      color:get('color')?.value||'#5865F2',image_url:get('image_url')?.value||null,
+      footer:get('footer')?.value||'Ader Support',max_open:Number(get('max_open')?.value||1),
+      enabled:Boolean(get('enabled')?.checked)
+    };
+  });
+}
+function ticketForm(panel){
+  const p=panel||{};
+  const ts=p.settings||{};
+  return '<div class="ticket-builder">'+
+    '<div class="ticket-builder-top"><div><h2>'+((p.id?'تعديل لوحة التذاكر #'+p.id:'إنشاء لوحة تذاكر جديدة'))+'</h2><p>اضبط كل شيء من مكان واحد، ثم احفظ أو احفظ وانشر مباشرة.</p></div><div class="ticket-actions"><button class="action" id="ticket-new">لوحة جديدة</button><button class="action" id="ticket-save">حفظ</button><button class="primary smallbtn" id="ticket-publish">حفظ ونشر</button></div></div>'+
+    '<div class="cards">'+
+      card('مظهر اللوحة',
+        '<div class="form-grid">'+
+          '<label>العنوان<input id="tp-title" value="'+esc(p.title||'الدعم الفني')+'"></label>'+
+          '<label>اللون<input id="tp-color" type="color" value="'+esc(ts.color||'#5865F2')+'"></label>'+
+          '<label>قناة النشر<select id="tp-channel">'+resourceOptions(s.resources.channels.filter(a=>a.type==='text'||a.type==='news'),p.channel_id,'اختر القناة')+'</select></label>'+
+          '<label>فئة التذاكر الافتراضية<select id="tp-category">'+resourceOptions(s.resources.channels.filter(a=>a.type==='category'),p.category_id,'اختر الفئة')+'</select></label>'+
+        '</div>'+
+        '<label>الوصف<textarea id="tp-description" rows="4">'+esc(p.description||'اختر نوع الطلب لفتح تذكرة.')+'</textarea></label>'+
+        '<div class="form-grid">'+
+          '<label>الصورة<input id="tp-image" value="'+esc(p.image_url||'')+'"></label>'+
+          '<label>الصورة المصغرة<input id="tp-thumb" value="'+esc(ts.thumbnail_url||'')+'"></label>'+
+          '<label>التذييل<input id="tp-footer" value="'+esc(ts.footer||'Ader Support')+'"></label>'+
+          '<label>نمط العرض<select id="tp-mode"><option value="buttons" '+(p.mode!=='select'?'selected':'')+'>أزرار</option><option value="select" '+(p.mode==='select'?'selected':'')+'>قائمة اختيار</option></select></label>'+
+        '</div>'+
+        '<label>وصف التذكرة الافتراضي<textarea id="tp-ticket-desc" rows="3">'+esc(p.ticket_description||'يرجى شرح المشكلة بالتفصيل.')+'</textarea></label>'+
+      '')+
+      card('إعدادات التشغيل',
+        '<div class="form-grid">'+
+          '<label>رتبة الدعم العامة<select id="ts-role">'+resourceOptions(s.resources.roles,ticketEditor.settings.default_support_role_id,'بدون رتبة محددة')+'</select></label>'+
+          '<label>فئة التذاكر العامة<select id="ts-category">'+resourceOptions(s.resources.channels.filter(a=>a.type==='category'),ticketEditor.settings.default_category_id,'بدون فئة محددة')+'</select></label>'+
+          '<label>قناة السجلات<select id="ts-log">'+resourceOptions(s.resources.channels.filter(a=>a.type==='text'||a.type==='news'),ticketEditor.settings.log_channel_id,'بدون سجل')+'</select></label>'+
+          '<label>قناة السجلات النصية<select id="ts-transcript">'+resourceOptions(s.resources.channels.filter(a=>a.type==='text'||a.type==='news'),ticketEditor.settings.transcript_channel_id,'بدون سجل نصي')+'</select></label>'+
+        '</div>'+
+        '<div class="toggle-grid">'+
+          '<label class="toggle-row"><input id="ts-enabled" type="checkbox" '+(ticketEditor.settings.enabled!==false?'checked':'')+'><span>تفعيل النظام</span><b>✓</b></label>'+
+          '<label class="toggle-row"><input id="ts-claim" type="checkbox" '+(ticketEditor.settings.claim_enabled!==false?'checked':'')+'><span>تفعيل تولّي التذاكر</span><b>🙋</b></label>'+
+          '<label class="toggle-row"><input id="ts-rating" type="checkbox" '+(ticketEditor.settings.rating_enabled!==false?'checked':'')+'><span>تفعيل التقييم بعد الإغلاق</span><b>★</b></label>'+
+          '<label class="toggle-row"><input id="ts-userclose" type="checkbox" '+(ticketEditor.settings.allow_user_close!==false?'checked':'')+'><span>السماح لصاحب التذكرة بالإغلاق</span><b>🔒</b></label>'+
+          '<label class="toggle-row"><input id="ts-userreopen" type="checkbox" '+(ticketEditor.settings.allow_user_reopen===true?'checked':'')+'><span>السماح لصاحب التذكرة بإعادة الفتح</span><b>↺</b></label>'+
+          '<label class="toggle-row"><input id="ts-add" type="checkbox" '+(ticketEditor.settings.allow_member_add!==false?'checked':'')+'><span>إضافة أعضاء</span><b>＋</b></label>'+
+          '<label class="toggle-row"><input id="ts-remove" type="checkbox" '+(ticketEditor.settings.allow_member_remove!==false?'checked':'')+'><span>إزالة أعضاء</span><b>−</b></label>'+
+          '<label class="toggle-row"><input id="ts-rename" type="checkbox" '+(ticketEditor.settings.allow_rename!==false?'checked':'')+'><span>إعادة التسمية</span><b>✎</b></label>'+
+          '<label class="toggle-row"><input id="ts-lock" type="checkbox" '+(ticketEditor.settings.allow_lock!==false?'checked':'')+'><span>قفل وفتح التذكرة</span><b>🔐</b></label>'+
+          '<label class="toggle-row"><input id="ts-keep" type="checkbox" '+(ticketEditor.settings.keep_closed!==false?'checked':'')+'><span>الإبقاء على التذكرة بعد الإغلاق</span><b>▣</b></label>'+
+        '</div>'+
+        '<div class="form-grid">'+
+          '<label>الحد الأقصى للتذاكر المفتوحة للعضو<input id="ts-max" type="number" min="1" max="10" value="'+(Number(ticketEditor.settings.max_open_per_user)||1)+'"></label>'+
+          '<label>قالب اسم القناة<input id="ts-template" value="'+esc(ticketEditor.settings.channel_name_template||'ticket-{number}-{user}')+'"></label>'+
+          '<label>الحذف التلقائي بعد الإغلاق بالثواني<input id="ts-delete" type="number" min="0" max="3600" value="'+(Number(ticketEditor.settings.delete_after_close_seconds)||0)+'"></label>'+
+        '</div>'
+      )+
+    '</div>'+
+    '<section class="card ticket-types-card"><div class="card-head"><div class="ticket-types-title"><b>أنواع التذاكر</b><button class="action" id="ticket-add-type">إضافة نوع</button></div></div><div class="card-body" id="ticket-types">'+ticketEditor.options.map(ticketTypeCard).join('')+'</div></section>'+
+    '<div class="ticket-hint">المتغيرات المتاحة لاسم القناة: {number} رقم التذكرة، {user} اسم العضو، {id} معرف العضو، {type} نوع التذكرة.</div>'+
+  '</div>';
+}
+async function tickets(){
+  const d=await api("/api/guilds/"+s.guild.id+"/tickets");
+  ticketEditor.panels=d.panels||[];ticketEditor.settings=d.settings||{};
+  if(!ticketEditor.options.length && ticketEditor.panels[0]) ticketEditor.options=(ticketEditor.panels[0].options||[]);
+  const counts=(d.tickets||[]).reduce((a,x)=>(a[x.status]=(a[x.status]||0)+1,a),{});
+  $("#root").innerHTML=head("نظام التذاكر", "نظام دعم احترافي قابل للتخصيص بالكامل، مع لوحات متعددة وسجلات وتقييمات وصلاحيات دقيقة.")+
+    '<div class="stats ticket-stats">'+stat("المفتوحة",counts.open||0,"●")+stat("المقفلة",counts.locked||0,"◐")+stat("المغلقة",counts.closed||0,"✓")+stat("اللوحات",ticketEditor.panels.length,"▣")+'</div>'+
+    '<div class="ticket-layout">'+
+      '<aside class="ticket-panel-list"><div class="ticket-panel-list-head"><b>لوحات التذاكر</b><button class="action" id="ticket-create-top">＋</button></div>'+
+      '<div class="list">'+(ticketEditor.panels.length?ticketEditor.panels.map(p=>'<button class="ticket-panel-item '+(ticketEditor.panelId===p.id?'active':'')+'" data-ticket-panel="'+p.id+'"><b>#'+p.id+' · '+esc(p.title)+'</b><small>'+(p.mode==='select'?'قائمة اختيار':'أزرار')+' · '+(p.options||[]).length+' أنواع</small></button>').join(''):'<div class="empty small">لا توجد لوحة بعد. أنشئ أول لوحة من الزر أعلاه.</div>')+'</div></aside>'+
+      '<section id="ticket-editor-host">'+ticketForm(ticketEditor.panels.find(p=>p.id===ticketEditor.panelId)||ticketEditor.panels[0])+'</section>'+
+    '</div>'+
+    card("آخر التذاكر",'<div class="list">'+(d.tickets||[]).slice(0,25).map(x=>{
+      const dt=x.data||{}; const r=x.rating; return '<div><span><b>#'+x.id+' · '+esc(dt.type||'دعم')+'</b><small>العضو <@'+esc(x.user_id)+'></small></span><span><b>'+esc(x.status)+'</b><small>'+(r?('التقييم '+r.rating+'/5'):'بدون تقييم')+'</small></span></div>';
+    }).join('')+'</div>');
+
+  bindTicketEditor();
+}
+function bindTicketEditor(){
+  document.querySelectorAll("[data-ticket-panel]").forEach(b=>b.onclick=()=>{
+    ticketEditor.panelId=Number(b.dataset.ticketPanel);
+    const p=ticketEditor.panels.find(x=>x.id===ticketEditor.panelId)||{};
+    ticketEditor.options=(p.options||[]).map(x=>({...x}));
+    $("#ticket-editor-host").innerHTML=ticketForm(p);bindTicketEditor();
+  });
+  const add=()=>{ticketEditor.options.push({name:"قسم جديد",emoji:"🎫",description:"افتح تذكرة للحصول على المساعدة.",ticket_name:"ticket-{number}-{user}",button_style:"primary",priority:"normal",max_open:1,enabled:true,color:"#5865F2",footer:"Ader Support"});$("#ticket-types").insertAdjacentHTML("beforeend",ticketTypeCard(ticketEditor.options.at(-1),ticketEditor.options.length-1));bindTicketEditor();};
+  document.getElementById("ticket-add-type")?.addEventListener("click",add);
+  document.getElementById("ticket-create-top")?.addEventListener("click",()=>{ticketEditor.panelId=null;ticketEditor.options=[{name:"الدعم العام",emoji:"🎫",description:"فتح تذكرة دعم",ticket_name:"ticket-{number}-{user}",button_style:"primary",priority:"normal",max_open:1,enabled:true,color:"#5865F2",footer:"Ader Support"}];document.getElementById("ticket-editor-host").innerHTML=ticketForm(null);bindTicketEditor();});
+  document.getElementById("ticket-new")?.addEventListener("click",()=>{ticketEditor.panelId=null;ticketEditor.options=[{name:"الدعم العام",emoji:"🎫",description:"فتح تذكرة دعم",ticket_name:"ticket-{number}-{user}",button_style:"primary",priority:"normal",max_open:1,enabled:true,color:"#5865F2",footer:"Ader Support"}];document.getElementById("ticket-editor-host").innerHTML=ticketForm(null);bindTicketEditor();});
+  document.querySelectorAll("[data-remove-type]").forEach(b=>b.onclick=()=>{if(document.querySelectorAll("[data-ticket-type]").length<=1)return warn("يجب الإبقاء على نوع واحد على الأقل.");b.closest("[data-ticket-type]")?.remove();});
+  async function persist(publish){
+    ticketEditor.options=readTicketTypes();
+    const gid=s.guild.id,get=id=>document.getElementById(id),val=id=>get(id)?.value||"",check=id=>Boolean(get(id)?.checked);
+    const settings={
+      enabled:check("ts-enabled"),default_support_role_id:val("ts-role")||null,default_category_id:val("ts-category")||null,
+      log_channel_id:val("ts-log")||null,transcript_channel_id:val("ts-transcript")||null,claim_enabled:check("ts-claim"),rating_enabled:check("ts-rating"),
+      allow_user_close:check("ts-userclose"),allow_user_reopen:check("ts-userreopen"),allow_member_add:check("ts-add"),allow_member_remove:check("ts-remove"),
+      allow_rename:check("ts-rename"),allow_lock:check("ts-lock"),keep_closed:check("ts-keep"),max_open_per_user:Number(val("ts-max")||1),
+      channel_name_template:val("ts-template"),delete_after_close_seconds:Number(val("ts-delete")||0)
+    };
+    await api("/api/guilds/"+gid+"/tickets/settings",{method:"PUT",body:JSON.stringify(settings)});
+    const payload={title:val("tp-title"),description:val("tp-description"),channel_id:val("tp-channel")||null,category_id:val("tp-category")||null,
+      support_role_id:val("ts-role")||null,image_url:val("tp-image")||null,mode:val("tp-mode"),ticket_description:val("tp-ticket-desc"),
+      options:ticketEditor.options,settings:{color:val("tp-color"),thumbnail_url:val("tp-thumb")||null,footer:val("tp-footer"),select_placeholder:"اختر نوع التذكرة",ticket_footer:"Ader Support"}
+    };
+    const url="/api/guilds/"+gid+"/tickets/panels"+(ticketEditor.panelId?"/"+ticketEditor.panelId:"");
+    const out=await api(url,{method:ticketEditor.panelId?"PUT":"POST",body:JSON.stringify({...payload,publish})});
+    ticketEditor.panelId=out.panel.id;ticketEditor.options=out.panel.options||ticketEditor.options;
+    warn(publish?"تم حفظ اللوحة ونشرها بنجاح.":"تم حفظ التغييرات بنجاح.");setTimeout(()=>$("#apiWarning").classList.add("hidden"),1800);
+    await tickets();
+  }
+  document.getElementById("ticket-save")?.addEventListener("click",()=>persist(false).catch(e=>warn(e.message)));
+  document.getElementById("ticket-publish")?.addEventListener("click",()=>persist(true).catch(e=>warn(e.message)));
+}
 async function welcome(){const d=await api("/api/guilds/"+s.guild.id+"/welcome"),g=d.config||{},m=d.module||{};$("#root").innerHTML=head("Welcome",desc.welcome)+'<div class="cards">'+card("Verification Module",'<label>Enabled<input type="checkbox" id="ver-enabled" '+(m.enabled!==false?"checked":"")+'></label><label>Method<select id="ver-method"><option value="dm" '+(g.verification_method==="dm"?"selected":"")+'>DM</option><option value="channel" '+(g.verification_method==="channel"?"selected":"")+'>Channel</option></select></label><label>Type<input id="ver-type" value="'+esc(g.verification_type||"button")+'"></label>')+card("Channels & Role",'<label>Verified Role'+selectRoles("ver-role",g.verified_role)+'</label><label>Welcome Channel'+selectChannels("welcome-channel",g.welcome_channel)+'</label><label>Verify Channel'+selectChannels("verify-channel",g.verify_channel)+'</label>')+card("Welcome Message",'<textarea id="welcome-message" rows="7">'+esc(g.welcome_message||"مرحبا {user} 👋")+'</textarea><button class="primary smallbtn" id="save-welcome">حفظ</button>')+'</div>';$("#save-welcome").onclick=async()=>{await api("/api/guilds/"+s.guild.id+"/settings",{method:"PUT",body:JSON.stringify({modules:{verification:{enabled:$("#ver-enabled").checked}},verification:{verified_role:$("#ver-role").value||null,welcome_channel:$("#welcome-channel").value||null,verify_channel:$("#verify-channel").value||null,verification_method:$("#ver-method").value,verification_type:$("#ver-type").value,welcome_message:$("#welcome-message").value}})});await welcome()}}
 async function commands(){const d=await api("/api/guilds/"+s.guild.id+"/commands");$("#root").innerHTML=head("Commands",desc.commands)+card("الأوامر",'<div class="list">'+(d.commands||[]).map(c=>'<div><span><b>/'+esc(c.name)+'</b><small>'+esc(c.description||"بدون وصف")+'</small></span><label class="switch"><input type="checkbox" data-command="'+esc(c.name)+'" '+(c.enabled?"checked":"")+'><i></i></label></div>').join("")+'</div>');document.querySelectorAll("[data-command]").forEach(x=>x.onchange=async()=>{try{await api("/api/guilds/"+s.guild.id+"/commands/"+encodeURIComponent(x.dataset.command),{method:"PUT",body:JSON.stringify({enabled:x.checked})})}catch(e){x.checked=!x.checked;warn(e.message)}})}
 async function shortcuts(){const d=await api("/api/guilds/"+s.guild.id+"/shortcuts");$("#root").innerHTML=head("Shortcuts",desc.shortcuts)+card("الاختصارات",'<div class="list">'+(d.shortcuts||[]).map(x=>'<div class="shortcut-row"><span><b>'+esc(x.label)+'</b><small>'+esc(x.name)+'</small></span><input data-alias="'+esc(x.name)+'" value="'+esc(x.alias||"")+'"><label class="switch"><input type="checkbox" data-shortcut="'+esc(x.name)+'" '+(x.enabled?"checked":"")+'><i></i></label><button class="action" data-save-shortcut="'+esc(x.name)+'">حفظ</button></div>').join("")+'</div>');document.querySelectorAll("[data-save-shortcut]").forEach(b=>b.onclick=async()=>{const n=b.dataset.saveShortcut;try{await api("/api/guilds/"+s.guild.id+"/shortcuts/"+encodeURIComponent(n),{method:"PUT",body:JSON.stringify({alias:document.querySelector("[data-alias='"+CSS.escape(n)+"']").value,enabled:document.querySelector("[data-shortcut='"+CSS.escape(n)+"']").checked})});b.textContent="تم"}catch(e){warn(e.message)}})}
