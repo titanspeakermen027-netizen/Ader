@@ -7,6 +7,7 @@ without a frontend build or external assets.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import html
 import json
 import os
@@ -24,8 +25,8 @@ from starlette.middleware.sessions import SessionMiddleware
 MANAGE_GUILD = 0x20
 ADMINISTRATOR = 0x8
 
-_SESSIONS: dict[str, dict[str, Any]] = {}
 _OAUTH_STATES: dict[str, float] = {}
+SESSION_TTL = 86400
 
 
 def _guild_is_managed(item: dict[str, Any]) -> bool:
@@ -68,22 +69,39 @@ def _cleanup_state() -> None:
     for key, expires in list(_OAUTH_STATES.items()):
         if expires <= now:
             _OAUTH_STATES.pop(key, None)
-    for key, session in list(_SESSIONS.items()):
-        if float(session.get("expires_at", 0)) <= now:
-            _SESSIONS.pop(key, None)
 
 
-def _session_for(request: Request) -> dict[str, Any] | None:
+async def _session_for(request: Request, bot) -> dict[str, Any] | None:
     _cleanup_state()
-    sid = request.session.get("sid")
+    sid = str(request.session.get("sid") or "").strip()
     if not sid:
         return None
-    session = _SESSIONS.get(str(sid))
+    try:
+        session = await bot.db.get_dashboard_session(sid)
+    except Exception:
+        return None
     if not session:
         request.session.clear()
         return None
-    session["expires_at"] = time.time() + 86400
+    expires_at = time.time() + SESSION_TTL
+    session["expires_at"] = expires_at
+    try:
+        await bot.db.create_dashboard_session(sid, session, expires_at)
+    except Exception:
+        pass
     return session
+
+
+def _session_secret(bot, cfg: dict[str, Any]) -> str:
+    configured = os.getenv("DASHBOARD_SESSION_SECRET", "").strip() or str(cfg.get("session_secret", "")).strip()
+    if len(configured) >= 32:
+        return configured
+    # Stable fallback prevents every process restart from invalidating the signed sid cookie.
+    # Production deployments should still provide DASHBOARD_SESSION_SECRET explicitly.
+    token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
+    if not token:
+        token = str(cfg.get("session_fallback", "ader-dashboard")).strip()
+    return hashlib.sha256(("ader-session:" + token).encode("utf-8")).hexdigest()
 
 
 def _json_ids(value: Any) -> str:
@@ -145,9 +163,7 @@ def create_app(bot) -> FastAPI:
     cfg = bot.config.get("web", {}) or {}
     app = FastAPI(title="Ader Dashboard", version="4.0.0", docs_url="/api/docs", redoc_url=None)
 
-    session_secret = os.getenv("DASHBOARD_SESSION_SECRET", "").strip() or str(cfg.get("session_secret", "")).strip()
-    if len(session_secret) < 32:
-        session_secret = secrets.token_urlsafe(48)
+    session_secret = _session_secret(bot, cfg)
 
     app.add_middleware(
         SessionMiddleware,
@@ -168,7 +184,7 @@ def create_app(bot) -> FastAPI:
         return bool(os.getenv("DISCORD_CLIENT_ID", "").strip() and os.getenv("DISCORD_CLIENT_SECRET", "").strip())
 
     async def require_session(request: Request) -> dict[str, Any]:
-        session = _session_for(request)
+        session = await _session_for(request, bot)
         if not session:
             raise HTTPException(status_code=401, detail="تسجيل الدخول مطلوب")
         return session
@@ -190,7 +206,7 @@ def create_app(bot) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def home(request: Request):
-        if not _session_for(request):
+        if not await _session_for(request, bot):
             return HTMLResponse(_login_html(oauth_ready()), headers={"Cache-Control": "no-store"})
         return HTMLResponse(_dashboard_html(), headers={"Cache-Control": "no-store"})
 
@@ -259,22 +275,31 @@ def create_app(bot) -> FastAPI:
             managed[str(guild_id)] = {"id": guild_id, "name": str(item.get("name") or "Unknown Server"), "icon": item.get("icon"), "permissions": permissions, "administrator": bool(permissions & ADMINISTRATOR), "manage_guild": bool(permissions & MANAGE_GUILD)}
 
         sid = secrets.token_urlsafe(32)
-        _SESSIONS[sid] = {"expires_at": time.time() + 86400, "access_token": access_token, "discord_user": {"id": int(user["id"]), "username": str(user.get("username") or "Discord User"), "global_name": str(user.get("global_name") or user.get("username") or "Discord User"), "avatar": user.get("avatar")}, "managed_guilds": managed}
+        session_data = {
+            "discord_user": {
+                "id": int(user["id"]),
+                "username": str(user.get("username") or "Discord User"),
+                "global_name": str(user.get("global_name") or user.get("username") or "Discord User"),
+                "avatar": user.get("avatar"),
+            },
+            "managed_guilds": managed,
+        }
+        await bot.db.create_dashboard_session(sid, session_data, time.time() + SESSION_TTL)
         request.session.clear()
         request.session["sid"] = sid
         return RedirectResponse("/", status_code=302)
 
     @app.get("/logout")
     async def logout(request: Request):
-        sid = request.session.get("sid")
+        sid = str(request.session.get("sid") or "").strip()
         if sid:
-            _SESSIONS.pop(str(sid), None)
+            await bot.db.delete_dashboard_session(sid)
         request.session.clear()
         return RedirectResponse("/")
 
     @app.get("/api/me")
     async def me(request: Request):
-        session = _session_for(request)
+        session = await _session_for(request, bot)
         return {"user": session.get("discord_user") if session else None, "logged_in": bool(session)}
 
     @app.get("/api/guilds")
