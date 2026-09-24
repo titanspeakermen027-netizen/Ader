@@ -98,7 +98,7 @@ def create_app(bot):
 
     @app.get("/api/guilds/{guild_id}/tickets")
     async def cloud_ticket_data(request: Request, guild_id: int):
-        _require_guild(bot, request, guild_id)
+        await _require_guild(bot, request, guild_id)
         await _require_premium(bot, guild_id)
         panels = await bot.db.list_ticket_panels(guild_id)
         settings = await bot.db.get_ticket_settings(guild_id)
@@ -119,7 +119,7 @@ def create_app(bot):
 
     @app.put("/api/guilds/{guild_id}/tickets/settings")
     async def cloud_ticket_settings(request: Request, guild_id: int):
-        guild = _require_guild(bot, request, guild_id)
+        guild = await _require_guild(bot, request, guild_id)
         await _require_premium(bot, guild_id)
         data = await request.json()
         current = merge_ticket_settings(data, await bot.db.get_ticket_settings(guild_id))
