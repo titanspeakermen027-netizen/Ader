@@ -872,6 +872,34 @@ class TicketManager(commands.Cog):
         embed.add_field(name="قناة النشر", value=f"<#{panel['channel_id']}>" if panel.get("channel_id") else "غير محددة", inline=True)
         return embed
 
+    async def publish_panel(self, panel_id: int) -> dict[str, Any]:
+        panel = await self.db.get_ticket_panel(panel_id)
+        if not panel:
+            raise ValueError("لوحة التذاكر غير موجودة.")
+        guild = self.bot.get_guild(int(panel["guild_id"]))
+        if guild is None:
+            raise ValueError("البوت غير متصل بالسيرفر حالياً.")
+        channel = guild.get_channel(as_int(panel.get("channel_id")) or 0)
+        if not isinstance(channel, discord.TextChannel):
+            raise ValueError("قناة نشر لوحة التذاكر غير صالحة.")
+        member = guild.me
+        if member is None or not channel.permissions_for(member).send_messages:
+            raise ValueError("البوت لا يملك صلاحية إرسال الرسائل في قناة اللوحة.")
+        view = TicketPanelView(self, panel)
+        message = None
+        old_id = as_int(panel.get("message_id"))
+        if old_id:
+            try:
+                message = await channel.fetch_message(old_id)
+                await message.edit(embed=self.panel_embed(panel), view=view)
+            except (discord.NotFound, discord.HTTPException):
+                message = None
+        if message is None:
+            message = await channel.send(embed=self.panel_embed(panel), view=view)
+        await self.db.update_ticket_panel(panel_id, {"message_id": message.id, "channel_id": channel.id})
+        self.bot.add_view(view, message_id=message.id)
+        return await self.db.get_ticket_panel(panel_id)
+
     def dashboard_url(self) -> str:
         return (str(__import__("os").getenv("DASHBOARD_FRONTEND_URL", "")).strip().rstrip("/") or
                 str(__import__("os").getenv("DASHBOARD_PUBLIC_URL", "")).strip().rstrip("/"))
