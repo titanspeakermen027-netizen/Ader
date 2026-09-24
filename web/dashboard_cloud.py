@@ -197,101 +197,101 @@ def create_app(bot):
 
 
 def merge_ticket_settings(payload: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
-        base = {
-            "enabled": True, "default_category_id": None, "default_support_role_id": None,
-            "transcript_channel_id": None, "log_channel_id": None, "claim_enabled": True,
-            "rating_enabled": True, "allow_user_close": True, "allow_user_reopen": False,
-            "allow_member_add": True, "allow_member_remove": True, "allow_rename": True,
-            "allow_lock": True, "keep_closed": True, "delete_after_close_seconds": 0,
-            "max_open_per_user": 1, "channel_name_template": "ticket-{number}-{user}",
-        }
-        base.update(current or {})
-        for key in base:
-            if key in payload:
-                base[key] = payload[key]
-        for key in ("enabled","claim_enabled","rating_enabled","allow_user_close","allow_user_reopen","allow_member_add","allow_member_remove","allow_rename","allow_lock","keep_closed"):
-            base[key] = bool(base[key])
-        try: base["max_open_per_user"] = max(1, min(10, int(base["max_open_per_user"])))
-        except (TypeError, ValueError): base["max_open_per_user"] = 1
-        try: base["delete_after_close_seconds"] = max(0, min(3600, int(base["delete_after_close_seconds"])))
-        except (TypeError, ValueError): base["delete_after_close_seconds"] = 0
-        return base
+    base = {
+        "enabled": True, "default_category_id": None, "default_support_role_id": None,
+        "transcript_channel_id": None, "log_channel_id": None, "claim_enabled": True,
+        "rating_enabled": True, "allow_user_close": True, "allow_user_reopen": False,
+        "allow_member_add": True, "allow_member_remove": True, "allow_rename": True,
+        "allow_lock": True, "keep_closed": True, "delete_after_close_seconds": 0,
+        "max_open_per_user": 1, "channel_name_template": "ticket-{number}-{user}",
+    }
+    base.update(current or {})
+    for key in base:
+        if key in payload:
+            base[key] = payload[key]
+    for key in ("enabled","claim_enabled","rating_enabled","allow_user_close","allow_user_reopen","allow_member_add","allow_member_remove","allow_rename","allow_lock","keep_closed"):
+        base[key] = bool(base[key])
+    try: base["max_open_per_user"] = max(1, min(10, int(base["max_open_per_user"])))
+    except (TypeError, ValueError): base["max_open_per_user"] = 1
+    try: base["delete_after_close_seconds"] = max(0, min(3600, int(base["delete_after_close_seconds"])))
+    except (TypeError, ValueError): base["delete_after_close_seconds"] = 0
+    return base
 
 
 def normalise_panel_payload(guild, data: dict[str, Any]) -> dict[str, Any]:
-        import discord
-        title = str(data.get("title") or "الدعم الفني").strip()[:256]
-        description = str(data.get("description") or "اختر نوع الطلب لفتح تذكرة.").strip()[:4096]
-        mode = str(data.get("mode") or "buttons").lower()
-        if mode not in {"buttons","select"}: mode = "buttons"
-        channel_id = as_resource_int(data.get("channel_id"))
-        category_id = as_resource_int(data.get("category_id"))
-        role_id = as_resource_int(data.get("support_role_id"))
-        channel = guild.get_channel(channel_id or 0)
-        category = guild.get_channel(category_id or 0)
-        role = guild.get_role(role_id) if role_id else None
-        if not isinstance(channel, discord.TextChannel): raise HTTPException(status_code=400, detail="قناة نشر اللوحة غير صالحة.")
-        if not isinstance(category, discord.CategoryChannel): raise HTTPException(status_code=400, detail="فئة التذاكر غير صالحة.")
-        if role_id and role is None: raise HTTPException(status_code=400, detail="رتبة الدعم غير صالحة.")
-        image_url = safe_panel_url(data.get("image_url"))
-        raw_options = data.get("options") or []
-        if not isinstance(raw_options, list): raw_options = []
-        options = []
-        for raw in raw_options[:25]:
-            if not isinstance(raw, dict): continue
-            option = {
-                "name": str(raw.get("name") or "فتح تذكرة").strip()[:80],
-                "emoji": str(raw.get("emoji") or "🎫").strip()[:20],
-                "description": str(raw.get("description") or "فتح تذكرة").strip()[:100],
-                "ticket_name": str(raw.get("ticket_name") or "ticket-{number}-{user}").strip()[:90],
-                "category_id": as_resource_int(raw.get("category_id")) or category_id,
-                "support_role_id": as_resource_int(raw.get("support_role_id")) or role_id,
-                "color": safe_color(raw.get("color"), "#5865F2"),
-                "image_url": safe_panel_url(raw.get("image_url")),
-                "footer": str(raw.get("footer") or "Ader Support").strip()[:100],
-                "priority": str(raw.get("priority") or "normal")[:20],
-                "max_open": max(1, min(10, int(raw.get("max_open", 1) or 1))),
-                "button_style": str(raw.get("button_style") or "primary").lower(),
-                "enabled": bool(raw.get("enabled", True)),
-            }
-            if option["category_id"] and not isinstance(guild.get_channel(int(option["category_id"])), discord.CategoryChannel):
-                option["category_id"] = category_id
-            if option["support_role_id"] and guild.get_role(int(option["support_role_id"])) is None:
-                option["support_role_id"] = role_id
-            if option["button_style"] not in {"primary","secondary","success","danger"}: option["button_style"] = "primary"
-            options.append(option)
-        if not options:
-            options = [{"name":"الدعم العام","emoji":"🎫","description":"فتح تذكرة دعم","ticket_name":"ticket-{number}-{user}","category_id":category_id,"support_role_id":role_id,"color":"#5865F2","image_url":None,"footer":"Ader Support","priority":"normal","max_open":1,"button_style":"primary","enabled":True}]
-        settings = data.get("settings") if isinstance(data.get("settings"), dict) else {}
-        settings = {
-            "color": safe_color(settings.get("color"), "#5865F2"),
-            "thumbnail_url": safe_panel_url(settings.get("thumbnail_url")),
-            "footer": str(settings.get("footer") or "Ader Support").strip()[:100],
-            "select_placeholder": str(settings.get("select_placeholder") or "اختر نوع التذكرة").strip()[:100],
-            "ticket_footer": str(settings.get("ticket_footer") or "Ader Support").strip()[:100],
-            "ticket_image_url": safe_panel_url(settings.get("ticket_image_url")),
+    import discord
+    title = str(data.get("title") or "الدعم الفني").strip()[:256]
+    description = str(data.get("description") or "اختر نوع الطلب لفتح تذكرة.").strip()[:4096]
+    mode = str(data.get("mode") or "buttons").lower()
+    if mode not in {"buttons","select"}: mode = "buttons"
+    channel_id = as_resource_int(data.get("channel_id"))
+    category_id = as_resource_int(data.get("category_id"))
+    role_id = as_resource_int(data.get("support_role_id"))
+    channel = guild.get_channel(channel_id or 0)
+    category = guild.get_channel(category_id or 0)
+    role = guild.get_role(role_id) if role_id else None
+    if not isinstance(channel, discord.TextChannel): raise HTTPException(status_code=400, detail="قناة نشر اللوحة غير صالحة.")
+    if not isinstance(category, discord.CategoryChannel): raise HTTPException(status_code=400, detail="فئة التذاكر غير صالحة.")
+    if role_id and role is None: raise HTTPException(status_code=400, detail="رتبة الدعم غير صالحة.")
+    image_url = safe_panel_url(data.get("image_url"))
+    raw_options = data.get("options") or []
+    if not isinstance(raw_options, list): raw_options = []
+    options = []
+    for raw in raw_options[:25]:
+        if not isinstance(raw, dict): continue
+        option = {
+            "name": str(raw.get("name") or "فتح تذكرة").strip()[:80],
+            "emoji": str(raw.get("emoji") or "🎫").strip()[:20],
+            "description": str(raw.get("description") or "فتح تذكرة").strip()[:100],
+            "ticket_name": str(raw.get("ticket_name") or "ticket-{number}-{user}").strip()[:90],
+            "category_id": as_resource_int(raw.get("category_id")) or category_id,
+            "support_role_id": as_resource_int(raw.get("support_role_id")) or role_id,
+            "color": safe_color(raw.get("color"), "#5865F2"),
+            "image_url": safe_panel_url(raw.get("image_url")),
+            "footer": str(raw.get("footer") or "Ader Support").strip()[:100],
+            "priority": str(raw.get("priority") or "normal")[:20],
+            "max_open": max(1, min(10, int(raw.get("max_open", 1) or 1))),
+            "button_style": str(raw.get("button_style") or "primary").lower(),
+            "enabled": bool(raw.get("enabled", True)),
         }
-        return {
-            "channel_id": channel_id, "message_id": as_resource_int(data.get("message_id")),
-            "title": title, "description": description, "image_url": image_url, "mode": mode,
-            "button_label": "فتح تذكرة", "button_emoji": "🎫", "category_id": category_id,
-            "support_role_id": role_id, "ticket_description": str(data.get("ticket_description") or "يرجى شرح المشكلة بالتفصيل.").strip()[:2000],
-            "options": options, "settings": settings,
-        }
+        if option["category_id"] and not isinstance(guild.get_channel(int(option["category_id"])), discord.CategoryChannel):
+            option["category_id"] = category_id
+        if option["support_role_id"] and guild.get_role(int(option["support_role_id"])) is None:
+            option["support_role_id"] = role_id
+        if option["button_style"] not in {"primary","secondary","success","danger"}: option["button_style"] = "primary"
+        options.append(option)
+    if not options:
+        options = [{"name":"الدعم العام","emoji":"🎫","description":"فتح تذكرة دعم","ticket_name":"ticket-{number}-{user}","category_id":category_id,"support_role_id":role_id,"color":"#5865F2","image_url":None,"footer":"Ader Support","priority":"normal","max_open":1,"button_style":"primary","enabled":True}]
+    settings = data.get("settings") if isinstance(data.get("settings"), dict) else {}
+    settings = {
+        "color": safe_color(settings.get("color"), "#5865F2"),
+        "thumbnail_url": safe_panel_url(settings.get("thumbnail_url")),
+        "footer": str(settings.get("footer") or "Ader Support").strip()[:100],
+        "select_placeholder": str(settings.get("select_placeholder") or "اختر نوع التذكرة").strip()[:100],
+        "ticket_footer": str(settings.get("ticket_footer") or "Ader Support").strip()[:100],
+        "ticket_image_url": safe_panel_url(settings.get("ticket_image_url")),
+    }
+    return {
+        "channel_id": channel_id, "message_id": as_resource_int(data.get("message_id")),
+        "title": title, "description": description, "image_url": image_url, "mode": mode,
+        "button_label": "فتح تذكرة", "button_emoji": "🎫", "category_id": category_id,
+        "support_role_id": role_id, "ticket_description": str(data.get("ticket_description") or "يرجى شرح المشكلة بالتفصيل.").strip()[:2000],
+        "options": options, "settings": settings,
+    }
 
 
 def as_resource_int(value: Any) -> int | None:
-        try: return int(value) if value not in (None, "", 0, "0") else None
-        except (TypeError, ValueError): return None
+    try: return int(value) if value not in (None, "", 0, "0") else None
+    except (TypeError, ValueError): return None
 
 
 def safe_color(value: Any, fallback: str) -> str:
-        text = str(value or "").strip()
-        if re.match(r"^#[0-9a-fA-F]{6}$", text): return text
-        return fallback
+    text = str(value or "").strip()
+    if re.match(r"^#[0-9a-fA-F]{6}$", text): return text
+    return fallback
 
 
 def safe_panel_url(value: Any) -> str | None:
-        text = str(value or "").strip()
-        if not text: return None
-        return text[:1000] if text.startswith(("https://","http://")) else None
+    text = str(value or "").strip()
+    if not text: return None
+    return text[:1000] if text.startswith(("https://","http://")) else None
