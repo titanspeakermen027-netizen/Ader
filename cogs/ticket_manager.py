@@ -15,7 +15,7 @@ from typing import Any
 
 import discord
 from discord import app_commands
-from discord.ext import commands, tasks
+from discord.ext import commands
 
 from utils.embeds import EmbedColor
 from utils.permissions import is_admin
@@ -490,36 +490,14 @@ class TicketManager(commands.Cog):
                     self.bot.add_view(TicketPanelView(self, panel), message_id=int(panel["message_id"]))
                 except Exception:
                     pass
-        rows = await self.db.fetchall("SELECT channel_id,status FROM tickets WHERE channel_id IS NOT NULL AND status IN ('open','locked','closed')")
+        rows = await self.db.fetchall(
+            "SELECT channel_id,status FROM tickets WHERE channel_id IS NOT NULL AND status IN ('open','locked','closed')"
+        )
         for row in rows:
             try:
                 self.bot.add_view(TicketActionView(self, int(row["channel_id"]), str(row["status"]) == "closed"), message_id=None)
             except Exception:
                 pass
-        if not self._started:
-            self._started = True
-            self.cleanup_loop.start()
-
-    def cog_unload(self):
-        if self.cleanup_loop.is_running():
-            self.cleanup_loop.cancel()
-
-    @tasks.loop(minutes=30)
-    async def cleanup_loop(self):
-        try:
-            cutoff = time.time() - 30 * 86400
-            rows = await self.db.fetchall("SELECT id,channel_id,status,created_at FROM tickets WHERE status='closed' AND closed_at IS NOT NULL AND closed_at<? LIMIT 50", (cutoff,))
-            for row in rows:
-                data = await self.db.get_ticket(row["id"])
-                settings = await self.bot.db.get_ticket_settings(int(row["guild_id"])) if "guild_id" in row.keys() else {}
-                if settings.get("keep_closed", True):
-                    continue
-        except Exception:
-            return
-
-    @cleanup_loop.before_loop
-    async def before_cleanup(self):
-        await self.bot.wait_until_ready()
 
     def ticket_data(self, ticket: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -639,7 +617,7 @@ class TicketManager(commands.Cog):
                     overwrites[me] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True, manage_messages=True, attach_files=True)
                 if support_role:
                     overwrites[support_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, attach_files=True)
-                channel = await category.create_text_channel(name=name, overwrites=overwrites, reason=f"Ader Ticket • {interaction.user}")
+                channel = await category.create_text_channel(name=name, overwrites=overwrites, reason=f"دعم Ader • {interaction.user}")
                 ticket_data = {
                     "type": str(item.get("name") or "دعم"),
                     "type_description": str(item.get("description") or panel.get("ticket_description") or "يرجى شرح المشكلة بالتفصيل."),
@@ -672,7 +650,7 @@ class TicketManager(commands.Cog):
                     image = valid_url(item.get("image_url") or panel.get("settings", {}).get("ticket_image_url"))
                     if image:
                         embed.set_image(url=image)
-                footer = str(item.get("footer") or panel.get("settings", {}).get("ticket_footer") or "Ader Support")
+                footer = str(item.get("footer") or panel.get("settings", {}).get("ticket_footer") or "دعم Ader")
                 embed.set_footer(text=footer[:2048])
                 mentions = discord.AllowedMentions(users=True, roles=bool(support_role))
                 content = interaction.user.mention
@@ -699,6 +677,7 @@ class TicketManager(commands.Cog):
         if int(ticket["user_id"] or 0) != interaction.user.id and not await self.is_staff(interaction, ticket):
             return await interaction.response.send_message("لا يملك صلاحية إغلاق هذه التذكرة.", ephemeral=True)
 
+        await interaction.response.defer(ephemeral=True)
         await self.db.update_ticket(ticket["id"], {"status": "closed", "closed_at": time.time(), "data": json.dumps({**self.ticket_data(ticket), "close_reason": reason[:1000], "closed_by": interaction.user.id, "locked": True}, ensure_ascii=False)})
         try:
             owner = interaction.guild.get_member(int(ticket["user_id"]))
@@ -740,7 +719,7 @@ class TicketManager(commands.Cog):
                 await interaction.channel.delete(reason=f"حذف تلقائي للتذكرة المغلقة #{ticket['id']}")
             except discord.HTTPException:
                 pass
-        await interaction.response.send_message("تم إغلاق التذكرة بنجاح.", ephemeral=True)
+        await interaction.followup.send("تم إغلاق التذكرة بنجاح.", ephemeral=True)
 
     async def set_locked(self, ticket: dict[str, Any], locked: bool):
         channel = self.bot.get_channel(int(ticket["channel_id"]))
@@ -828,6 +807,11 @@ class TicketManager(commands.Cog):
         staff_id = as_int(self.ticket_data(ticket).get("claimed_by"))
         await self.db.save_ticket_rating({"ticket_id": int(ticket["id"]), "guild_id": int(ticket["guild_id"]), "user_id": int(ticket["user_id"]), "staff_id": staff_id, "rating": rating, "comment": comment})
 
+    EVENT_LABELS = {
+        "created": "إنشاء التذكرة", "closed": "إغلاق التذكرة", "reopened": "إعادة فتح التذكرة",
+        "claim": "تولّي التذكرة", "deleted": "حذف التذكرة", "rating": "تقييم التذكرة",
+    }
+
     async def log_event(self, ticket: dict[str, Any], event: str, data: dict[str, Any]):
         guild = self.bot.get_guild(int(ticket["guild_id"]))
         if not guild:
@@ -837,7 +821,7 @@ class TicketManager(commands.Cog):
         channel = guild.get_channel(destination_id or 0) if destination_id else None
         if not isinstance(channel, discord.TextChannel):
             return
-        embed = discord.Embed(title=f"سجل التذاكر • {event}", color=EmbedColor.PRIMARY, timestamp=discord.utils.utcnow())
+        embed = discord.Embed(title=f"سجل التذاكر • {self.EVENT_LABELS.get(event, event)}", color=EmbedColor.PRIMARY, timestamp=discord.utils.utcnow())
         embed.add_field(name="رقم التذكرة", value=f"#{ticket['id']}", inline=True)
         embed.add_field(name="صاحب التذكرة", value=f"<@{ticket['user_id']}>", inline=True)
         for key, value in list(data.items())[:8]:
@@ -859,7 +843,7 @@ class TicketManager(commands.Cog):
             embed.set_image(url=valid_url(panel.get("image_url")))
         if valid_url(settings.get("thumbnail_url")):
             embed.set_thumbnail(url=valid_url(settings.get("thumbnail_url")))
-        footer = str(settings.get("footer") or "Ader Support")
+        footer = str(settings.get("footer") or "دعم Ader")
         if footer:
             embed.set_footer(text=footer[:2048])
         return embed
