@@ -15,7 +15,7 @@ function selectRoles(id,value){return '<select id="'+id+'"><option value="">اخ
 function selectChannels(id,value){return '<select id="'+id+'"><option value="">اختار قناة…</option>'+s.resources.channels.filter(c=>["text","news"].includes(c.type)).map(c=>'<option value="'+c.id+'" '+(String(value||"")===String(c.id)?"selected":"")+'># '+esc(c.name)+'</option>').join("")+'</select>'}
 async function loadGuild(){try{[s.overview,s.resources]=await Promise.all([api("/api/guilds/"+s.guild.id+"/overview"),api("/api/guilds/"+s.guild.id+"/resources")]);clearWarn()}catch(e){warn("تعذر تحميل بيانات السيرفر: "+e.message)}$("#guildName").textContent=s.guild.name;$("#guildIcon").innerHTML=icon(s.guild)}
 async function pick(id){s.guild=s.guilds.find(g=>String(g.id)===String(id));$("#guildSelect").value=s.guild.id;await loadGuild();render()}
-const titles={overview:"Overview",servers:"السيرفرات",analytics:"Analytics",moderation:"Moderation",automod:"AutoMod",economy:"ANORIS Economy",tickets:"Tickets",levels:"Levels",giveaways:"Giveaways",welcome:"Welcome",commands:"Commands",shortcuts:"Shortcuts",resources:"القنوات والرتب",teams:"Teams",logs:"Logs",security:"Security",settings:"Settings"};
+const titles={overview:"Overview",servers:"السيرفرات",analytics:"Analytics",moderation:"Moderation",automod:"AutoMod",economy:"ANORIS Economy",tickets:"التذاكر",levels:"Levels",giveaways:"Giveaways",welcome:"Welcome",commands:"Commands",shortcuts:"Shortcuts",resources:"القنوات والرتب",teams:"Teams",logs:"Logs",security:"Security",settings:"Settings"};
 const desc={overview:"نظرة شاملة على حالة Ader والسيرفر.",analytics:"إحصائيات النشاط المسجلة فعلياً.",moderation:"الإشراف والتحذيرات والحماية التلقائية.",automod:"إعدادات AutoMod المبنية على نظام Ader.",economy:"إعدادات ANORIS وترتيب الأرصدة.",tickets:"لوحات التذاكر والتذاكر المفتوحة.",levels:"ترتيب XP والمستويات.",giveaways:"بيانات الهدايا المحفوظة.",welcome:"الترحيب والتحقق.",commands:"تحكم مباشر في أوامر Ader.",shortcuts:"إدارة الاختصارات النصية.",resources:"القنوات والرتب المتاحة.",teams:"الفرق الموثقة وإعداداتها.",logs:"سجل الأحداث والتحذيرات.",security:"حالة جلسة الدخول وصلاحياتك.",settings:"تفعيل وتعطيل أنظمة Ader."};
 async function render(){const p=s.page;$("#title").textContent=titles[p]||p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));try{if(p==="overview")overview();else if(p==="servers")servers();else if(p==="resources")resources();else if(p==="analytics")await analytics();else if(p==="moderation"||p==="automod")await moderation();else if(p==="economy")await economy();else if(p==="levels")await levels();else if(p==="tickets")await tickets();else if(p==="welcome")await welcome();else if(p==="commands")await commands();else if(p==="shortcuts")await shortcuts();else if(p==="teams")await teams();else if(p==="logs")await logs();else if(p==="security")security();else if(p==="settings")await settings();else giveaways();}catch(e){if(e.message==="AUTH")showLogin();else warn("تعذر تحميل القسم: "+e.message)}bindCommon()}
 function overview(){const o=s.overview||{};$("#root").innerHTML=head("مرحباً بك في Ader",desc.overview)+'<div class="stats">'+stat("الأعضاء",o.members||0,"♙")+stat("القنوات",o.channels||0,"#")+stat("الرتب",o.roles||0,"◆")+stat("التذاكر المفتوحة",o.open_tickets||0,"🎫")+'</div><div class="cards">'+card("System Health",'<div class="health"><div>Ader Bot <b>Online</b></div><div>Database <b>Connected</b></div><div>Commands <b>'+(o.commands||0)+'</b></div><div>Guilds <b>'+s.guilds.length+'</b></div></div>')+card("Quick Actions",'<div class="quick"><button class="action" data-go="moderation">🛡 Moderation</button><button class="action" data-go="economy">🪙 Economy</button><button class="action" data-go="tickets">🎫 Tickets</button><button class="action" data-go="settings">⚙ Settings</button></div>')+'</div>'}
@@ -49,7 +49,7 @@ function ticketTypeCard(x,i){
     '<div class="form-grid">'+
       '<label>اللون<input data-tf="color" type="color" value="'+esc(x.color||'#5865F2')+'"></label>'+
       '<label>الصورة داخل التذكرة<input data-tf="image_url" value="'+esc(x.image_url||'')+'"></label>'+
-      '<label>النص السفلي<input data-tf="footer" value="'+esc(x.footer||'Ader Support')+'"></label>'+
+      '<label>النص السفلي<input data-tf="footer" value="'+esc(x.footer||'دعم Ader')+'"></label>'+
       '<label>الحد الأقصى المفتوح<input data-tf="max_open" type="number" min="1" max="10" value="'+(Number(x.max_open)||1)+'"></label>'+
     '</div>'+
     '<label class="inline-check"><input data-tf="enabled" type="checkbox" '+(x.enabled!==false?'checked':'')+'><span>تفعيل هذا النوع</span></label>'+
@@ -66,7 +66,7 @@ function readTicketTypes(){
       ticket_name:get('ticket_name')?.value||'ticket-{number}-{user}',
       category_id:get('category_id')?.value||null,support_role_id:get('support_role_id')?.value||null,
       color:get('color')?.value||'#5865F2',image_url:get('image_url')?.value||null,
-      footer:get('footer')?.value||'Ader Support',max_open:Number(get('max_open')?.value||1),
+      footer:get('footer')?.value||'دعم Ader',max_open:Number(get('max_open')?.value||1),
       enabled:Boolean(get('enabled')?.checked)
     };
   });
@@ -88,7 +88,7 @@ function ticketForm(panel){
         '<div class="form-grid">'+
           '<label>الصورة<input id="tp-image" value="'+esc(p.image_url||'')+'"></label>'+
           '<label>الصورة المصغرة<input id="tp-thumb" value="'+esc(ts.thumbnail_url||'')+'"></label>'+
-          '<label>التذييل<input id="tp-footer" value="'+esc(ts.footer||'Ader Support')+'"></label>'+
+          '<label>التذييل<input id="tp-footer" value="'+esc(ts.footer||'دعم Ader')+'"></label>'+
           '<label>نمط العرض<select id="tp-mode"><option value="buttons" '+(p.mode!=='select'?'selected':'')+'>أزرار</option><option value="select" '+(p.mode==='select'?'selected':'')+'>قائمة اختيار</option></select></label>'+
         '</div>'+
         '<label>وصف التذكرة الافتراضي<textarea id="tp-ticket-desc" rows="3">'+esc(p.ticket_description||'يرجى شرح المشكلة بالتفصيل.')+'</textarea></label>'+
@@ -139,7 +139,7 @@ async function tickets(){
       '<section id="ticket-editor-host">'+ticketForm(ticketEditor.panels.find(p=>p.id===ticketEditor.panelId)||ticketEditor.panels[0])+'</section>'+
     '</div>'+
     card("آخر التذاكر",'<div class="list">'+(d.tickets||[]).slice(0,25).map(x=>{
-      const dt=x.data||{}; const r=x.rating; return '<div><span><b>#'+x.id+' · '+esc(dt.type||'دعم')+'</b><small>العضو <@'+esc(x.user_id)+'></small></span><span><b>'+esc(x.status)+'</b><small>'+(r?('التقييم '+r.rating+'/5'):'بدون تقييم')+'</small></span></div>';
+      const dt=x.data||{}; const r=x.rating; return '<div><span><b>#'+x.id+' · '+esc(dt.type||'دعم')+'</b><small>العضو <@'+esc(x.user_id)+'></small></span><span><b>'+(statusName[x.status]||esc(x.status))+'</b><small>'+(r?('التقييم '+r.rating+'/5'):'بدون تقييم')+'</small></span></div>';
     }).join('')+'</div>');
 
   bindTicketEditor();
@@ -151,10 +151,10 @@ function bindTicketEditor(){
     ticketEditor.options=(p.options||[]).map(x=>({...x}));
     $("#ticket-editor-host").innerHTML=ticketForm(p);bindTicketEditor();
   });
-  const add=()=>{ticketEditor.options.push({name:"قسم جديد",emoji:"🎫",description:"افتح تذكرة للحصول على المساعدة.",ticket_name:"ticket-{number}-{user}",button_style:"primary",priority:"normal",max_open:1,enabled:true,color:"#5865F2",footer:"Ader Support"});const idx=ticketEditor.options.length-1;$("#ticket-types").insertAdjacentHTML("beforeend",ticketTypeCard(ticketEditor.options[idx],idx));const rb=document.querySelector('[data-remove-type="'+idx+'"]');if(rb)rb.onclick=()=>{if(document.querySelectorAll("[data-ticket-type]").length<=1)return warn("يجب الإبقاء على نوع واحد على الأقل.");rb.closest("[data-ticket-type]")?.remove();};};
+  const add=()=>{ticketEditor.options.push({name:"قسم جديد",emoji:"🎫",description:"افتح تذكرة للحصول على المساعدة.",ticket_name:"ticket-{number}-{user}",button_style:"primary",priority:"normal",max_open:1,enabled:true,color:"#5865F2",footer:"دعم Ader"});const idx=ticketEditor.options.length-1;$("#ticket-types").insertAdjacentHTML("beforeend",ticketTypeCard(ticketEditor.options[idx],idx));const rb=document.querySelector('[data-remove-type="'+idx+'"]');if(rb)rb.onclick=()=>{if(document.querySelectorAll("[data-ticket-type]").length<=1)return warn("يجب الإبقاء على نوع واحد على الأقل.");rb.closest("[data-ticket-type]")?.remove();};};
   document.getElementById("ticket-add-type")?.addEventListener("click",add);
-  document.getElementById("ticket-create-top")?.addEventListener("click",()=>{ticketEditor.panelId=null;ticketEditor.options=[{name:"الدعم العام",emoji:"🎫",description:"فتح تذكرة دعم",ticket_name:"ticket-{number}-{user}",button_style:"primary",priority:"normal",max_open:1,enabled:true,color:"#5865F2",footer:"Ader Support"}];document.getElementById("ticket-editor-host").innerHTML=ticketForm(null);bindTicketEditor();});
-  document.getElementById("ticket-new")?.addEventListener("click",()=>{ticketEditor.panelId=null;ticketEditor.options=[{name:"الدعم العام",emoji:"🎫",description:"فتح تذكرة دعم",ticket_name:"ticket-{number}-{user}",button_style:"primary",priority:"normal",max_open:1,enabled:true,color:"#5865F2",footer:"Ader Support"}];document.getElementById("ticket-editor-host").innerHTML=ticketForm(null);bindTicketEditor();});
+  document.getElementById("ticket-create-top")?.addEventListener("click",()=>{ticketEditor.panelId=null;ticketEditor.options=[{name:"الدعم العام",emoji:"🎫",description:"فتح تذكرة دعم",ticket_name:"ticket-{number}-{user}",button_style:"primary",priority:"normal",max_open:1,enabled:true,color:"#5865F2",footer:"دعم Ader"}];document.getElementById("ticket-editor-host").innerHTML=ticketForm(null);bindTicketEditor();});
+  document.getElementById("ticket-new")?.addEventListener("click",()=>{ticketEditor.panelId=null;ticketEditor.options=[{name:"الدعم العام",emoji:"🎫",description:"فتح تذكرة دعم",ticket_name:"ticket-{number}-{user}",button_style:"primary",priority:"normal",max_open:1,enabled:true,color:"#5865F2",footer:"دعم Ader"}];document.getElementById("ticket-editor-host").innerHTML=ticketForm(null);bindTicketEditor();});
   document.querySelectorAll("[data-remove-type]").forEach(b=>b.onclick=()=>{if(document.querySelectorAll("[data-ticket-type]").length<=1)return warn("يجب الإبقاء على نوع واحد على الأقل.");b.closest("[data-ticket-type]")?.remove();});
   async function persist(publish){
     ticketEditor.options=readTicketTypes();
@@ -169,7 +169,7 @@ function bindTicketEditor(){
     await api("/api/guilds/"+gid+"/tickets/settings",{method:"PUT",body:JSON.stringify(settings)});
     const payload={title:val("tp-title"),description:val("tp-description"),channel_id:val("tp-channel")||null,category_id:val("tp-category")||null,
       support_role_id:val("ts-role")||null,image_url:val("tp-image")||null,mode:val("tp-mode"),ticket_description:val("tp-ticket-desc"),
-      options:ticketEditor.options,settings:{color:val("tp-color"),thumbnail_url:val("tp-thumb")||null,footer:val("tp-footer"),select_placeholder:"اختر نوع التذكرة",ticket_footer:"Ader Support"}
+      options:ticketEditor.options,settings:{color:val("tp-color"),thumbnail_url:val("tp-thumb")||null,footer:val("tp-footer"),select_placeholder:"اختر نوع التذكرة",ticket_footer:"دعم Ader"}
     };
     const url="/api/guilds/"+gid+"/tickets/panels"+(ticketEditor.panelId?"/"+ticketEditor.panelId:"");
     const out=await api(url,{method:ticketEditor.panelId?"PUT":"POST",body:JSON.stringify({...payload,publish})});
