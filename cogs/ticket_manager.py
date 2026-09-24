@@ -639,7 +639,7 @@ class TicketManager(commands.Cog):
                     overwrites[me] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True, manage_messages=True, attach_files=True)
                 if support_role:
                     overwrites[support_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, attach_files=True)
-                channel = await category.create_text_channel(name=name, overwrites=overwrites, reason=f"Ader Ticket • {interaction.user}”")
+                channel = await category.create_text_channel(name=name, overwrites=overwrites, reason=f"Ader Ticket • {interaction.user}")
                 ticket_data = {
                     "type": str(item.get("name") or "دعم"),
                     "type_description": str(item.get("description") or panel.get("ticket_description") or "يرجى شرح المشكلة بالتفصيل."),
@@ -817,7 +817,7 @@ class TicketManager(commands.Cog):
         if isinstance(destination, discord.TextChannel):
             await destination.send(content=f"سجل التذكرة رقم #{ticket['id']}", file=file, allowed_mentions=discord.AllowedMentions.none())
             return destination.mention
-        await channel.send(content="تم إنشاء سجل التذكرة في القناة الحالية.", file=file, ephemeral=False if False else None)
+        await channel.send(content="تم إنشاء سجل التذكرة في القناة الحالية.", file=file, allowed_mentions=discord.AllowedMentions.none())
         return channel.mention
 
     async def send_transcript_to_log(self, ticket: dict[str, Any], channel: discord.TextChannel) -> str:
