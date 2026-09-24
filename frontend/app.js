@@ -126,8 +126,11 @@ function ticketForm(panel){
 async function tickets(){
   const d=await api("/api/guilds/"+s.guild.id+"/tickets");
   ticketEditor.panels=d.panels||[];ticketEditor.settings=d.settings||{};
-  if(!ticketEditor.options.length && ticketEditor.panels[0]) ticketEditor.options=(ticketEditor.panels[0].options||[]);
+  const selected=ticketEditor.panels.find(p=>Number(p.id)===Number(ticketEditor.panelId))||ticketEditor.panels[0]||null;
+  ticketEditor.panelId=selected?Number(selected.id):null;
+  ticketEditor.options=(selected?.options||[]).map(x=>({...x}));
   const counts=(d.tickets||[]).reduce((a,x)=>(a[x.status]=(a[x.status]||0)+1,a),{});
+  const statusName={open:"مفتوحة",locked:"مقفلة",closed:"مغلقة",deleted:"محذوفة"};
   $("#root").innerHTML=head("نظام التذاكر", "نظام دعم احترافي قابل للتخصيص بالكامل، مع لوحات متعددة وسجلات وتقييمات وصلاحيات دقيقة.")+
     '<div class="stats ticket-stats">'+stat("المفتوحة",counts.open||0,"●")+stat("المقفلة",counts.locked||0,"◐")+stat("المغلقة",counts.closed||0,"✓")+stat("اللوحات",ticketEditor.panels.length,"▣")+'</div>'+
     '<div class="ticket-layout">'+
@@ -148,7 +151,7 @@ function bindTicketEditor(){
     ticketEditor.options=(p.options||[]).map(x=>({...x}));
     $("#ticket-editor-host").innerHTML=ticketForm(p);bindTicketEditor();
   });
-  const add=()=>{ticketEditor.options.push({name:"قسم جديد",emoji:"🎫",description:"افتح تذكرة للحصول على المساعدة.",ticket_name:"ticket-{number}-{user}",button_style:"primary",priority:"normal",max_open:1,enabled:true,color:"#5865F2",footer:"Ader Support"});$("#ticket-types").insertAdjacentHTML("beforeend",ticketTypeCard(ticketEditor.options.at(-1),ticketEditor.options.length-1));bindTicketEditor();};
+  const add=()=>{ticketEditor.options.push({name:"قسم جديد",emoji:"🎫",description:"افتح تذكرة للحصول على المساعدة.",ticket_name:"ticket-{number}-{user}",button_style:"primary",priority:"normal",max_open:1,enabled:true,color:"#5865F2",footer:"Ader Support"});const idx=ticketEditor.options.length-1;$("#ticket-types").insertAdjacentHTML("beforeend",ticketTypeCard(ticketEditor.options[idx],idx));const rb=document.querySelector('[data-remove-type="'+idx+'"]');if(rb)rb.onclick=()=>{if(document.querySelectorAll("[data-ticket-type]").length<=1)return warn("يجب الإبقاء على نوع واحد على الأقل.");rb.closest("[data-ticket-type]")?.remove();};};
   document.getElementById("ticket-add-type")?.addEventListener("click",add);
   document.getElementById("ticket-create-top")?.addEventListener("click",()=>{ticketEditor.panelId=null;ticketEditor.options=[{name:"الدعم العام",emoji:"🎫",description:"فتح تذكرة دعم",ticket_name:"ticket-{number}-{user}",button_style:"primary",priority:"normal",max_open:1,enabled:true,color:"#5865F2",footer:"Ader Support"}];document.getElementById("ticket-editor-host").innerHTML=ticketForm(null);bindTicketEditor();});
   document.getElementById("ticket-new")?.addEventListener("click",()=>{ticketEditor.panelId=null;ticketEditor.options=[{name:"الدعم العام",emoji:"🎫",description:"فتح تذكرة دعم",ticket_name:"ticket-{number}-{user}",button_style:"primary",priority:"normal",max_open:1,enabled:true,color:"#5865F2",footer:"Ader Support"}];document.getElementById("ticket-editor-host").innerHTML=ticketForm(null);bindTicketEditor();});
