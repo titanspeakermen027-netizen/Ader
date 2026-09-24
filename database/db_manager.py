@@ -589,7 +589,7 @@ class DatabaseManager:
             return False
         sets, vals = [], []
         for k, v in data.items():
-            if k in {'status', 'claimed_by', 'channel_id', 'user_id', 'closed_at'}:
+            if k in {'status', 'claimed_by', 'channel_id', 'user_id', 'closed_at', 'data'}:
                 sets.append(f'{k}=?')
                 vals.append(v)
         if not sets:
@@ -601,9 +601,9 @@ class DatabaseManager:
     async def create_ticket_panel(self, data: Dict[str, Any]) -> int:
         options = json.dumps(data.get('options', []), ensure_ascii=False)
         cur = await self.execute(
-            """INSERT INTO ticket_panels(guild_id,channel_id,message_id,title,description,image_url,mode,button_label,button_emoji,category_id,support_role_id,ticket_description,options,created_at)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (data['guild_id'], data.get('channel_id'), data.get('message_id'), data.get('title', '🎫 الدعم الفني'), data.get('description', 'اختار القسم المناسب لفتح تذكرة.'), data.get('image_url'), data.get('mode', 'buttons'), data.get('button_label', 'فتح تذكرة'), data.get('button_emoji', '🎫'), data.get('category_id'), data.get('support_role_id'), data.get('ticket_description', 'شرح لينا المشكل ديالك بالتفصيل.'), options, time.time())
+            """INSERT INTO ticket_panels(guild_id,channel_id,message_id,title,description,image_url,mode,button_label,button_emoji,category_id,support_role_id,ticket_description,options,created_at,settings)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (data['guild_id'], data.get('channel_id'), data.get('message_id'), data.get('title', '🎫 الدعم الفني'), data.get('description', 'اختر القسم المناسب لفتح تذكرة.'), data.get('image_url'), data.get('mode', 'buttons'), data.get('button_label', 'فتح تذكرة'), data.get('button_emoji', '🎫'), data.get('category_id'), data.get('support_role_id'), data.get('ticket_description', 'يُرجى شرح المشكلة بالتفصيل.'), options, time.time(), json.dumps(data.get('settings') or {}, ensure_ascii=False))
         )
         return int(cur.lastrowid)
 
@@ -613,6 +613,10 @@ class DatabaseManager:
             return None
         data = dict(row)
         data['options'] = json.loads(data.get('options') or '[]')
+        try:
+            data['settings'] = json.loads(data.get('settings') or '{}')
+        except (TypeError, ValueError, json.JSONDecodeError):
+            data['settings'] = {}
         return data
 
     async def list_ticket_panels(self, guild_id: int) -> List[Dict[str, Any]]:
@@ -621,6 +625,10 @@ class DatabaseManager:
         for row in rows:
             data = dict(row)
             data['options'] = json.loads(data.get('options') or '[]')
+            try:
+                data['settings'] = json.loads(data.get('settings') or '{}')
+            except (TypeError, ValueError, json.JSONDecodeError):
+                data['settings'] = {}
             result.append(data)
         return result
 
@@ -631,16 +639,20 @@ class DatabaseManager:
         for row in rows:
             data = dict(row)
             data['options'] = json.loads(data.get('options') or '[]')
+            try:
+                data['settings'] = json.loads(data.get('settings') or '{}')
+            except (TypeError, ValueError, json.JSONDecodeError):
+                data['settings'] = {}
             result.append(data)
         return result
 
     async def update_ticket_panel(self, panel_id: int, data: Dict[str, Any]) -> bool:
-        allowed = {'guild_id', 'channel_id', 'message_id', 'title', 'description', 'image_url', 'mode', 'button_label', 'button_emoji', 'category_id', 'support_role_id', 'ticket_description', 'options'}
+        allowed = {'guild_id', 'channel_id', 'message_id', 'title', 'description', 'image_url', 'mode', 'button_label', 'button_emoji', 'category_id', 'support_role_id', 'ticket_description', 'options', 'settings'}
         sets, vals = [], []
         for key, value in data.items():
             if key not in allowed:
                 continue
-            if key == 'options':
+            if key in {'options', 'settings'}:
                 value = json.dumps(value, ensure_ascii=False)
             sets.append(f"{key}=?")
             vals.append(value)
