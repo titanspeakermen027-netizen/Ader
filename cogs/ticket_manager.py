@@ -640,9 +640,7 @@ class TicketManager(commands.Cog):
                 color = valid_color(item.get("color"), valid_color(panel.get("settings", {}).get("color"), 0x5865F2))
                 embed = discord.Embed(
                     title=str(item.get("title") or item.get("name") or "تذكرة دعم")[:256],
-                    description=f"مرحباً {interaction.user.mention}،
-
-{item.get('description') or panel.get('ticket_description') or 'يرجى شرح المشكلة بالتفصيل.'}",
+                    description=f"مرحباً {interaction.user.mention}،\n\n{item.get('description') or panel.get('ticket_description') or 'يرجى شرح المشكلة بالتفصيل.'}",
                     color=color,
                     timestamp=discord.utils.utcnow(),
                 )
