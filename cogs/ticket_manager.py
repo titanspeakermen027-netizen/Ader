@@ -769,7 +769,7 @@ class TicketManager(commands.Cog):
 
     async def generate_transcript(self, ticket: dict[str, Any], channel: discord.TextChannel) -> str:
         lines = [
-            f"Ader Ticket Transcript • #{ticket['id']}",
+            f"سجل تذكرة Ader • #{ticket['id']}",
             f"Guild: {channel.guild.name} ({channel.guild.id})",
             f"Owner ID: {ticket['user_id']}",
             f"Status: {ticket['status']}",
@@ -869,12 +869,22 @@ class TicketManager(commands.Cog):
         view = TicketPanelView(self, panel)
         message = None
         old_id = as_int(panel.get("message_id"))
+        old_channel_id = as_int(panel.get("channel_id"))
         if old_id:
-            try:
-                message = await channel.fetch_message(old_id)
-                await message.edit(embed=self.panel_embed(panel), view=view)
-            except (discord.NotFound, discord.HTTPException):
-                message = None
+            # When the panel moves to another channel, remove the old published panel.
+            if old_channel_id and old_channel_id != channel.id:
+                old_channel = guild.get_channel(old_channel_id)
+                if isinstance(old_channel, discord.TextChannel):
+                    try:
+                        await (await old_channel.fetch_message(old_id)).delete()
+                    except (discord.NotFound, discord.HTTPException):
+                        pass
+            else:
+                try:
+                    message = await channel.fetch_message(old_id)
+                    await message.edit(embed=self.panel_embed(panel), view=view)
+                except (discord.NotFound, discord.HTTPException):
+                    message = None
         if message is None:
             message = await channel.send(embed=self.panel_embed(panel), view=view)
         await self.db.update_ticket_panel(panel_id, {"message_id": message.id, "channel_id": channel.id})
