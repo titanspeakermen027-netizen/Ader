@@ -295,5 +295,3 @@ def safe_panel_url(value: Any) -> str | None:
         text = str(value or "").strip()
         if not text: return None
         return text[:1000] if text.startswith(("https://","http://")) else None
-
-    return app
