@@ -1,5 +1,5 @@
-"""Web package for Logiq"""
+"""Canonical Ader web package."""
 
-from .api import create_app
+from .dashboard_app import create_app
 
-__all__ = ['create_app']
+__all__ = ("create_app",)
