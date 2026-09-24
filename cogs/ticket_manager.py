@@ -702,8 +702,7 @@ class TicketManager(commands.Cog):
                     await owner.send(
                         embed=discord.Embed(
                             title="تقييم تجربة الدعم",
-                            description=f"أُغلقت تذكرتك رقم #{ticket['id']}.
-اختر تقييماً من نجمة إلى خمس نجوم، ويمكنك إضافة تعليق.",
+                            description=f"أُغلقت تذكرتك رقم #{ticket['id']}.\nاختر تقييماً من نجمة إلى خمس نجوم، ويمكنك إضافة تعليق.",
                             color=valid_color((await self.db.get_ticket_panel(int(self.ticket_data(ticket).get("panel_id") or 0)) or {}).get("settings", {}).get("color"), 0x5865F2),
                         ),
                         view=RatingView(self, int(ticket["id"])),
