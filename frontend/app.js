@@ -75,7 +75,7 @@ function ticketForm(panel){
   const p=panel||{};
   const ts=p.settings||{};
   return '<div class="ticket-builder">'+
-    '<div class="ticket-builder-top"><div><h2>'+((p.id?'تعديل لوحة التذاكر #'+p.id:'إنشاء لوحة تذاكر جديدة'))+'</h2><p>اضبط كل شيء من مكان واحد، ثم احفظ أو احفظ وانشر مباشرة.</p></div><div class="ticket-actions"><button class="action" id="ticket-new">لوحة جديدة</button><button class="action" id="ticket-save">حفظ</button><button class="primary smallbtn" id="ticket-publish">حفظ ونشر</button>${p.id?'<button class="action danger" id="ticket-delete">حذف اللوحة</button>':''}</div></div>'+
+    '<div class="ticket-builder-top"><div><h2>'+((p.id?'تعديل لوحة التذاكر #'+p.id:'إنشاء لوحة تذاكر جديدة'))+'</h2><p>اضبط كل شيء من مكان واحد، ثم احفظ أو احفظ وانشر مباشرة.</p></div><div class="ticket-actions"><button class="action" id="ticket-new">لوحة جديدة</button><button class="action" id="ticket-save">حفظ</button><button class="primary smallbtn" id="ticket-publish">حفظ ونشر</button>'+ (p.id ? '<button class="action danger" id="ticket-delete">حذف اللوحة</button>' : '') +'</div></div>'+
     '<div class="cards">'+
       card('مظهر اللوحة',
         '<div class="form-grid">'+
