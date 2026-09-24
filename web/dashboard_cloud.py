@@ -10,6 +10,8 @@ import os
 import re
 from typing import Any
 
+import discord
+
 from fastapi import HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -50,8 +52,8 @@ def _frontend_origins(cfg: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(values))
 
 
-def _require_guild(bot, request: Request, guild_id: int):
-    session = base._session_for(request)
+async def _require_guild(bot, request: Request, guild_id: int):
+    session = await base._session_for(request, bot)
     if not session:
         raise HTTPException(status_code=401, detail="تسجيل الدخول مطلوب")
     managed = session.get("managed_guilds", {}) or {}
@@ -85,7 +87,7 @@ def create_app(bot):
 
     @app.get("/api/guilds/{guild_id}/premium")
     async def cloud_premium(request: Request, guild_id: int):
-        _require_guild(bot, request, guild_id)
+        await _require_guild(bot, request, guild_id)
         premium = await bot.db.get_server_premium(guild_id) if hasattr(bot.db, "get_server_premium") else None
         return {
             "active": bool(premium),
