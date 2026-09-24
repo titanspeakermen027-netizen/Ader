@@ -171,6 +171,37 @@ class DatabaseManager:
             if column not in existing:
                 await self.connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
+        # Ticket/dashboard persistence upgrades. These tables are deliberately
+        # additive so existing bot databases keep all their data.
+        existing_ticket_panel_columns = {str(row[1]) for row in await self.fetchall("PRAGMA table_info(ticket_panels)")}
+        if "settings" not in existing_ticket_panel_columns:
+            await self.connection.execute("ALTER TABLE ticket_panels ADD COLUMN settings TEXT NOT NULL DEFAULT '{}'")
+
+        await self.connection.executescript("""
+        CREATE TABLE IF NOT EXISTS ticket_settings (
+            guild_id INTEGER PRIMARY KEY,
+            config TEXT NOT NULL DEFAULT '{}',
+            updated_at REAL NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS ticket_ratings (
+            ticket_id INTEGER PRIMARY KEY,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            staff_id INTEGER,
+            rating INTEGER NOT NULL,
+            comment TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS dashboard_sessions (
+            sid TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            created_at REAL NOT NULL,
+            expires_at REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_dashboard_sessions_expiry ON dashboard_sessions(expires_at);
+        CREATE INDEX IF NOT EXISTS idx_ticket_ratings_guild ON ticket_ratings(guild_id, created_at DESC);
+        """)
+
         # This must happen before any uniqueness enforcement.  Older releases
         # permitted duplicate logical users, so a direct CREATE UNIQUE INDEX
         # prevented the bot from starting on a persistent database.
@@ -488,6 +519,62 @@ class DatabaseManager:
     async def get_warnings(self, user_id: int, guild_id: int) -> List[Dict[str, Any]]:
         rows = await self.fetchall("SELECT * FROM warnings WHERE user_id=? AND guild_id=? AND active=1 ORDER BY id DESC", (user_id, guild_id))
         return [dict(r) for r in rows]
+
+    async def get_ticket_settings(self, guild_id: int) -> Dict[str, Any]:
+        row = await self.fetchone("SELECT config FROM ticket_settings WHERE guild_id=?", (guild_id,))
+        if not row:
+            return {}
+        try:
+            value = json.loads(row["config"] or "{}")
+            return value if isinstance(value, dict) else {}
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return {}
+
+    async def save_ticket_settings(self, guild_id: int, config: Dict[str, Any]) -> Dict[str, Any]:
+        payload = json.dumps(config or {}, ensure_ascii=False)
+        await self.execute(
+            "INSERT INTO ticket_settings(guild_id,config,updated_at) VALUES(?,?,?) "
+            "ON CONFLICT(guild_id) DO UPDATE SET config=excluded.config,updated_at=excluded.updated_at",
+            (guild_id, payload, time.time()),
+        )
+        return await self.get_ticket_settings(guild_id)
+
+    async def create_dashboard_session(self, sid: str, data: Dict[str, Any], expires_at: float) -> None:
+        await self.execute(
+            "INSERT OR REPLACE INTO dashboard_sessions(sid,data,created_at,expires_at) VALUES(?,?,?,?)",
+            (sid, json.dumps(data or {}, ensure_ascii=False), time.time(), float(expires_at)),
+        )
+
+    async def get_dashboard_session(self, sid: str) -> Optional[Dict[str, Any]]:
+        row = await self.fetchone("SELECT data,expires_at FROM dashboard_sessions WHERE sid=?", (sid,))
+        if not row:
+            return None
+        if float(row["expires_at"] or 0) <= time.time():
+            await self.execute("DELETE FROM dashboard_sessions WHERE sid=?", (sid,))
+            return None
+        try:
+            value = json.loads(row["data"] or "{}")
+            return value if isinstance(value, dict) else None
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+
+    async def delete_dashboard_session(self, sid: str) -> None:
+        await self.execute("DELETE FROM dashboard_sessions WHERE sid=?", (sid,))
+
+    async def cleanup_dashboard_sessions(self) -> None:
+        await self.execute("DELETE FROM dashboard_sessions WHERE expires_at<=?", (time.time(),))
+
+    async def get_ticket_rating(self, ticket_id: int) -> Optional[Dict[str, Any]]:
+        row = await self.fetchone("SELECT * FROM ticket_ratings WHERE ticket_id=?", (int(ticket_id),))
+        return dict(row) if row else None
+
+    async def save_ticket_rating(self, data: Dict[str, Any]) -> bool:
+        cur = await self.execute(
+            "INSERT INTO ticket_ratings(ticket_id,guild_id,user_id,staff_id,rating,comment,created_at) VALUES(?,?,?,?,?,?,?) "
+            "ON CONFLICT(ticket_id) DO UPDATE SET rating=excluded.rating,comment=excluded.comment,staff_id=excluded.staff_id,created_at=excluded.created_at",
+            (int(data["ticket_id"]), int(data["guild_id"]), int(data["user_id"]), data.get("staff_id"), int(data["rating"]), str(data.get("comment") or "")[:1000], time.time()),
+        )
+        return cur.rowcount > 0
 
     async def create_ticket(self, ticket_data: Dict[str, Any]) -> str:
         cur = await self.execute("INSERT INTO tickets(guild_id,channel_id,user_id,status,claimed_by,created_at,data) VALUES(?,?,?,?,?,?,?)", (ticket_data.get('guild_id'), ticket_data.get('channel_id'), ticket_data.get('user_id'), ticket_data.get('status', 'open'), ticket_data.get('claimed_by'), time.time(), json.dumps(ticket_data)))
