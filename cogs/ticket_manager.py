@@ -295,6 +295,7 @@ class TicketActionView(discord.ui.View):
         self.add_item(TicketCloseButton(cog, channel_id))
         self.add_item(TicketLockButton(cog, channel_id))
         self.add_item(TicketMemberButton(cog, channel_id, "add"))
+        self.add_item(TicketMemberButton(cog, channel_id, "remove"))
         self.add_item(TicketRenameButton(cog, channel_id))
         self.add_item(TicketTranscriptButton(cog, channel_id))
         purchase = cog.bot.get_cog("TicketPurchase")
