@@ -1,0 +1,23 @@
+name: Validate Ader dashboard
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Compile Python
+        run: python -m compileall -q cogs database web main.py
+      - name: Check frontend JavaScript
+        run: node --check frontend/app.js
