@@ -12,7 +12,6 @@ import yaml
 from dotenv import load_dotenv
 
 from database.db_manager import DatabaseManager
-from healthcheck import start_health_check
 from utils.logger import BotLogger
 
 load_dotenv()
@@ -71,7 +70,6 @@ class Ader(commands.Bot):
         self.db = DatabaseManager(str(db_path))
         self._instance_lock_handle = None
         self._ready_sync_done = False
-        self._health_server = None
         self._processed_message_count = 0
         self.tree.on_error = self._tree_error
 
@@ -107,10 +105,6 @@ class Ader(commands.Bot):
 
     async def setup_hook(self):
         self._acquire_instance_lock()
-        try:
-            self._health_server = start_health_check()
-        except OSError as exc:
-            self.logger.warning(f"Health check server was not started: {exc}")
         await self.db.connect()
         await self.db.execute("""CREATE TABLE IF NOT EXISTS processed_messages(message_id INTEGER PRIMARY KEY, created_at REAL NOT NULL)""")
         await self.db.execute("DELETE FROM processed_messages WHERE created_at < ?", (time.time() - 7 * 24 * 60 * 60,))
@@ -302,10 +296,6 @@ class Ader(commands.Bot):
 
     async def close(self):
         try:
-            if self._health_server is not None:
-                self._health_server.shutdown()
-                self._health_server.server_close()
-                self._health_server = None
             await self.db.disconnect()
         finally:
             self._release_instance_lock()
