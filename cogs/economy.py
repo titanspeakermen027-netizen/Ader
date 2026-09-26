@@ -222,7 +222,7 @@ class Economy(commands.Cog):
                 await user_code_message.reply(
                     text,
                     mention_author=False,
-                    allowed_mentions=discord.AllowedMentions.none(),
+                    allowed_mentions=discord.AllowedMentions(users=[recipient], replied_user=False),
                 )
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                 await interaction.followup.send(text, ephemeral=True)
@@ -279,14 +279,20 @@ class Economy(commands.Cog):
                 await user_code_message.reply(
                     text,
                     mention_author=False,
-                    allowed_mentions=discord.AllowedMentions.none(),
+                    allowed_mentions=discord.AllowedMentions(users=[member], replied_user=False),
                 )
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                await ctx.send(text, allowed_mentions=discord.AllowedMentions.none())
+                await ctx.send(
+                    text,
+                    allowed_mentions=discord.AllowedMentions(users=[member], replied_user=False),
+                )
             finally:
                 await self._delete_message(user_code_message)
         else:
-            await ctx.send(text, allowed_mentions=discord.AllowedMentions.none())
+            await ctx.send(
+                text,
+                allowed_mentions=discord.AllowedMentions(users=[member], replied_user=False),
+            )
 
     @app_commands.command(name="give", description="Give ANOCoin from your own balance")
     @app_commands.describe(user="User to give to", amount="Amount to give")
