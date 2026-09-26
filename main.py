@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from database.db_manager import DatabaseManager
 from utils.logger import BotLogger
+from utils.converters import NumberConverter
 
 load_dotenv()
 discord.timedelta = timedelta
@@ -210,27 +211,39 @@ class Ader(commands.Bot):
         if len(mentions) > 1:
             await message.reply("❌ يرجى تحديد عضو واحد فقط.", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
-        if len(mentions) == 0:
+
+        member = mentions[0] if mentions else None
+        if member is None and len(parts) >= 2:
+            target = parts[1].strip()
+            try:
+                target_id = int(target.strip("<@!>"))
+            except ValueError:
+                target_id = 0
+            if target_id:
+                member = message.guild.get_member(target_id)
+
+        if member is None:
             if len(parts) == 1:
                 balance = await self.db.get_balance(message.author.id)
                 text = await economy.format_balance_message(message.author.id, message.author.name, balance, own_balance=True)
                 await message.reply(text, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             else:
-                await message.reply("❌ الاستعمال: `A` أو `A @العضو` أو `A @العضو المبلغ`", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+                await message.reply("❌ الاستعمال: `A` أو `A @العضو/ID` أو `A @العضو/ID المبلغ`", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
 
-        member = mentions[0]
         amount = None
         if len(parts) == 3:
-            try:
-                amount = int(parts[-1].replace(",", ""))
-            except ValueError:
-                await message.reply("❌ المبلغ يجب أن يكون رقماً صحيحاً.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+            amount = NumberConverter.parse_number(parts[-1].replace(",", "").replace(" ", ""))
+            if amount is None:
+                await message.reply("❌ المبلغ يجب أن يكون رقماً صحيحاً أو بصيغة `40k` أو `1m` أو `1b`.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
                 return True
-        if amount is None:
+        elif len(parts) == 2:
             balance = await self.db.get_balance(member.id)
             text = await economy.format_balance_message(message.author.id, member.name, balance, own_balance=False)
             await message.reply(text, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+            return True
+        else:
+            await message.reply("❌ الاستعمال: `A` أو `A @العضو/ID` أو `A @العضو/ID المبلغ`", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
         if amount <= 0 or member.bot or member.id == message.author.id:
             await message.reply("❌ يجب تحديد مبلغ موجب وعضو آخر غير البوتات.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
