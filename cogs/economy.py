@@ -102,38 +102,79 @@ class Economy(commands.Cog):
         out.seek(0)
         return out
 
-    async def _confirm(self, channel: discord.abc.Messageable, user: discord.abc.User, guild_id: int, operation: str) -> bool:
+    @staticmethod
+    async def _delete_message(message: discord.Message | None) -> None:
+        if message is None:
+            return
+        try:
+            await message.delete()
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            pass
+
+    async def _confirm(
+        self,
+        channel: discord.abc.Messageable,
+        user: discord.abc.User,
+        guild_id: int,
+        operation: str,
+    ) -> tuple[bool, discord.Message | None]:
         key = (guild_id, user.id)
         if key in self._pending_confirmations:
-            return False
+            return False, None
         self._pending_confirmations.add(key)
         code = "".join(random.choices("0123456789", k=6))
+        confirmation_message: discord.Message | None = None
         try:
             file = discord.File(self._confirmation_image(code), filename="confirmation.png")
-            await channel.send(
+            confirmation_message = await channel.send(
                 content=f"🔐 **تأكيد العملية** — {user.mention}\nأرسل الكود الموجود في الصورة هنا خلال **{CONFIRM_TIMEOUT} ثانية**.",
                 file=file,
             )
 
             def check(message: discord.Message) -> bool:
-                return message.author.id == user.id and message.channel.id == getattr(channel, "id", None) and not message.author.bot
+                return (
+                    message.author.id == user.id
+                    and message.channel.id == getattr(channel, "id", None)
+                    and not message.author.bot
+                )
 
             try:
-                message = await self.bot.wait_for("message", timeout=CONFIRM_TIMEOUT, check=check)
+                user_code_message = await self.bot.wait_for(
+                    "message",
+                    timeout=CONFIRM_TIMEOUT,
+                    check=check,
+                )
             except asyncio.TimeoutError:
-                await channel.send(f"⌛ {user.mention} انتهى وقت تأكيد {operation}.", delete_after=8)
-                return False
-            if message.content.strip() != code:
-                await channel.send(f"❌ {user.mention} رمز التأكيد غير صحيح. العملية **لم تتم**.", delete_after=8)
-                return False
-            try:
-                await message.delete()
-            except discord.HTTPException:
-                pass
-            return True
+                await self._delete_message(confirmation_message)
+                await channel.send(
+                    f"⌛ {user.mention} انتهى وقت تأكيد {operation}.",
+                    delete_after=8,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+                return False, None
+
+            if user_code_message.content.strip() != code:
+                await self._delete_message(confirmation_message)
+                try:
+                    await user_code_message.reply(
+                        "❌ رمز التأكيد غير صحيح. العملية **لم تتم**.",
+                        mention_author=False,
+                        allowed_mentions=discord.AllowedMentions.none(),
+                        delete_after=8,
+                    )
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    await channel.send(
+                        "❌ رمز التأكيد غير صحيح. العملية **لم تتم**.",
+                        delete_after=8,
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
+                await self._delete_message(user_code_message)
+                return False, None
+
+            await self._delete_message(confirmation_message)
+            return True, user_code_message
         finally:
             self._pending_confirmations.discard(key)
-
     async def _send_transfer_dm(self, recipient: discord.Member, amount: int, sender: discord.Member):
         try:
             await recipient.send(
@@ -155,9 +196,8 @@ class Economy(commands.Cog):
         if not await self.db.add_balance(recipient.id, guild.id, amount):
             await self.db.add_balance(sender.id, guild.id, total_cost)
             return False, "❌ تعذر إضافة المبلغ للمستلم؛ تمت إعادة الرصيد."
-        new_balance = await self.db.get_balance(sender.id)
         await self._send_transfer_dm(recipient, amount, sender)
-        return True, f"✅ تم تحويل **{amount:,} {self.currency_name}** إلى {recipient.mention}.\nالضريبة: **{fee:,} {self.currency_name} (5%)**\nرصيدك الجديد: **{new_balance:,} {self.currency_name}**."
+        return True, f"**ـ {sender.name}, قام بتحويل `{amount:,}` لـ {recipient.mention} ** | 💰"
 
     async def _transfer_interaction(self, interaction: discord.Interaction, recipient: discord.Member, amount: int):
         if amount <= 0 or recipient.bot or recipient.id == interaction.user.id:
@@ -167,10 +207,29 @@ class Economy(commands.Cog):
         if balance < amount + fee:
             return await interaction.response.send_message(embed=EmbedFactory.error("رصيد غير كافٍ", f"تحتاج **{amount + fee:,} {self.currency_name}** ورصيدك **{balance:,} {self.currency_name}**."), ephemeral=True)
         await interaction.response.defer(ephemeral=True)
-        if not await self._confirm(interaction.channel, interaction.user, interaction.guild.id, "التحويل"):
-            return await interaction.followup.send("❌ لم يتم تنفيذ التحويل.", ephemeral=True)
+        confirmed, user_code_message = await self._confirm(
+            interaction.channel,
+            interaction.user,
+            interaction.guild.id,
+            "التحويل",
+        )
+        if not confirmed:
+            return
+
         ok, text = await self._transfer_amount(interaction.guild, interaction.user, recipient, amount)
-        await interaction.followup.send(text, ephemeral=True)
+        if user_code_message is not None:
+            try:
+                await user_code_message.reply(
+                    text,
+                    mention_author=False,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                await interaction.followup.send(text, ephemeral=True)
+            finally:
+                await self._delete_message(user_code_message)
+        else:
+            await interaction.followup.send(text, ephemeral=True)
 
     @app_commands.command(name="credits", description="Show your balance or another member's balance, or transfer ANOCoin")
     @app_commands.describe(user="Member whose balance you want to view or receive ANOCoin", amount="Amount to transfer")
@@ -205,11 +264,29 @@ class Economy(commands.Cog):
         total = amount + fee
         if balance < total:
             return await ctx.send(f"❌ رصيدك غير كافٍ. تحتاج **{total:,} {self.currency_name}** ورصيدك الحالي **{balance:,} {self.currency_name}**.", delete_after=10)
-        confirmed = await self._confirm(ctx.channel, ctx.author, ctx.guild.id, "التحويل")
+        confirmed, user_code_message = await self._confirm(
+            ctx.channel,
+            ctx.author,
+            ctx.guild.id,
+            "التحويل",
+        )
         if not confirmed:
             return
+
         ok, text = await self._transfer_amount(ctx.guild, ctx.author, member, amount)
-        await ctx.send(text)
+        if user_code_message is not None:
+            try:
+                await user_code_message.reply(
+                    text,
+                    mention_author=False,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                await ctx.send(text, allowed_mentions=discord.AllowedMentions.none())
+            finally:
+                await self._delete_message(user_code_message)
+        else:
+            await ctx.send(text, allowed_mentions=discord.AllowedMentions.none())
 
     @app_commands.command(name="give", description="Give ANOCoin from your own balance")
     @app_commands.describe(user="User to give to", amount="Amount to give")
