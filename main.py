@@ -241,11 +241,32 @@ class Ader(commands.Bot):
         if balance < total:
             await message.reply(f"❌ رصيدك غير كافٍ. تحتاج **{total:,} ANORIS** ورصيدك الحالي **{balance:,} ANORIS**.", delete_after=10, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
-        confirmed = await economy._confirm(message.channel, message.author, message.guild.id, "التحويل")
+        confirmed, user_code_message = await economy._confirm(
+            message.channel,
+            message.author,
+            message.guild.id,
+            "التحويل",
+        )
         if not confirmed:
             return True
+
         ok, text = await economy._transfer_amount(message.guild, message.author, member, amount)
-        await message.reply(text, delete_after=None if ok else 10, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+        if user_code_message is not None:
+            try:
+                await user_code_message.reply(
+                    text,
+                    mention_author=False,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                await message.channel.send(
+                    text,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            finally:
+                await economy._delete_message(user_code_message)
+        else:
+            await message.channel.send(text, allowed_mentions=discord.AllowedMentions.none())
         return True
 
     async def on_message(self, message: discord.Message):
