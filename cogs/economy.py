@@ -197,7 +197,7 @@ class Economy(commands.Cog):
             await self.db.add_balance(sender.id, guild.id, total_cost)
             return False, "❌ تعذر إضافة المبلغ للمستلم؛ تمت إعادة الرصيد."
         await self._send_transfer_dm(recipient, amount, sender)
-        return True, f"**ـ {sender.name}, قام بتحويل `{amount:,}` لـ {recipient.mention} ** | 💰"
+        return True, f"**ـ {sender.name}, قام بتحويل `${amount:,}` لـ {recipient.mention} ** | 💰"
 
     async def _transfer_interaction(self, interaction: discord.Interaction, recipient: discord.Member, amount: int):
         if amount <= 0 or recipient.bot or recipient.id == interaction.user.id:
