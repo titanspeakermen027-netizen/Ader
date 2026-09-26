@@ -221,6 +221,11 @@ class Ader(commands.Bot):
                 target_id = 0
             if target_id:
                 member = message.guild.get_member(target_id)
+                if member is None:
+                    try:
+                        member = await message.guild.fetch_member(target_id)
+                    except (discord.NotFound, discord.HTTPException):
+                        member = None
 
         if member is None:
             if len(parts) == 1:
