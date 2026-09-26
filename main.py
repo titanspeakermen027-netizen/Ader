@@ -256,17 +256,20 @@ class Ader(commands.Bot):
                 await user_code_message.reply(
                     text,
                     mention_author=False,
-                    allowed_mentions=discord.AllowedMentions.none(),
+                    allowed_mentions=discord.AllowedMentions(users=[member], replied_user=False),
                 )
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                 await message.channel.send(
                     text,
-                    allowed_mentions=discord.AllowedMentions.none(),
+                    allowed_mentions=discord.AllowedMentions(users=[member], replied_user=False),
                 )
             finally:
                 await economy._delete_message(user_code_message)
         else:
-            await message.channel.send(text, allowed_mentions=discord.AllowedMentions.none())
+            await message.channel.send(
+                text,
+                allowed_mentions=discord.AllowedMentions(users=[member], replied_user=False),
+            )
         return True
 
     async def on_message(self, message: discord.Message):
