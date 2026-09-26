@@ -7,6 +7,8 @@ import time
 import discord
 from discord.ext import commands
 
+from utils.converters import NumberConverter
+
 OWNER_ID = 1472570059367911587
 BLACKLIST_FINE = 25_000
 OWNER_MENTION = "<@1472570059367911587>"
@@ -165,10 +167,9 @@ class OwnerCurrency(commands.Cog):
         if member.bot:
             await ctx.send("❌ لا يمكن سحب العملة من بوت.", delete_after=8)
             return
-        try:
-            amount = int(amount_text.replace(",", "").replace(" ", ""))
-        except ValueError:
-            await ctx.send("❌ المبلغ يجب أن يكون رقماً صحيحاً.", delete_after=8)
+        amount = NumberConverter.parse_number(amount_text.replace(",", "").replace(" ", ""))
+        if amount is None:
+            await ctx.send("❌ المبلغ يجب أن يكون رقماً صحيحاً أو بصيغة `40k` أو `1m` أو `1b`.", delete_after=8)
             return
         if amount <= 0:
             await ctx.send("❌ المبلغ يجب أن يكون أكبر من 0.", delete_after=8)
@@ -190,10 +191,9 @@ class OwnerCurrency(commands.Cog):
         if member.bot:
             await ctx.send("❌ لا يمكن إعطاء ANORIS لبوت.", delete_after=8)
             return
-        try:
-            amount = int(amount_text.replace(",", "").replace(" ", ""))
-        except ValueError:
-            await ctx.send("❌ المبلغ يجب أن يكون رقماً صحيحاً.", delete_after=8)
+        amount = NumberConverter.parse_number(amount_text.replace(",", "").replace(" ", ""))
+        if amount is None:
+            await ctx.send("❌ المبلغ يجب أن يكون رقماً صحيحاً أو بصيغة `40k` أو `1m` أو `1b`.", delete_after=8)
             return
         if amount <= 0:
             await ctx.send("❌ المبلغ يجب أن يكون أكبر من 0.", delete_after=8)
