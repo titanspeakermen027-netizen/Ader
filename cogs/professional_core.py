@@ -43,7 +43,7 @@ class ProfessionalCore(commands.Cog):
         if row:
             try: data = json.loads(row["data"] or "{}")
             except Exception: data = {}
-        d = {"logs":{"channel":None},"automod":{"enabled":True,"spam":True,"links":False,"mentions":5,"messages":6,"window":5,"timeout":5,"words":[]},"welcome":{"enabled":False,"channel":None,"message":"مرحبا بك {mention} في {server}."},"leave":{"enabled":False,"channel":None,"message":"غادر {user} السيرفر."},"autorole":{"enabled":False,"role":None},"levels":{"enabled":True,"min":8,"max":14,"cooldown":45,"base":100},"antinuke":{"enabled":True,"threshold":4,"window":10,"action":"timeout"}}
+        d = {"logs":{"channel":None},"automod":{"enabled":True,"spam":True,"links":False,"mentions":5,"messages":6,"window":5,"timeout":5,"words":[]},"autorole":{"enabled":False,"role":None},"levels":{"enabled":True,"min":8,"max":14,"cooldown":45,"base":100},"antinuke":{"enabled":True,"threshold":4,"window":10,"action":"timeout"}}
         def merge(a,b):
             for k,v in b.items():
                 if isinstance(v,dict) and isinstance(a.get(k),dict): merge(a[k],v)
@@ -80,19 +80,6 @@ class ProfessionalCore(commands.Cog):
             await self.log(m.guild,"AutoMod",f"تم حذف رسالة من {m.author.mention} بسبب كلمة محظورة.",discord.Color.orange())
             return True
         if s["links"] and re.search(r"(?:https?://|www\.)\S+",m.content,re.I):
-            try: await m.delete()
-            except discord.HTTPException: pass
-            return True
-        if s["spam"]:
-            q=self.spam[(m.guild.id,m.author.id)]; now=time.time(); q.append(now)
-            while q and now-q[0]>max(2,int(s["window"])): q.popleft()
-            if len(q)>=max(3,int(s["messages"])):
-                q.clear()
-                try: await m.author.timeout(timedelta(minutes=max(1,int(s["timeout"]))),reason="Ader AutoMod: spam")
-                except discord.HTTPException: pass
-                await self.log(m.guild,"AutoMod",f"تم تقييد {m.author.mention} بسبب الرسائل المتكررة.",discord.Color.orange())
-                return True
-        if len(m.mentions)>max(2,int(s["mentions"])):
             try: await m.delete()
             except discord.HTTPException: pass
             return True
