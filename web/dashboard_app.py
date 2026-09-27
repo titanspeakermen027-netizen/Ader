@@ -211,8 +211,16 @@ def create_app(bot) -> FastAPI:
         return HTMLResponse(_dashboard_html(), headers={"Cache-Control": "no-store"})
 
     @app.get("/login")
-    async def login(request: Request):
+    async def login(request: Request, force: int = 0):
         _cleanup_state()
+        if force:
+            sid = str(request.session.get("sid") or "").strip()
+            if sid:
+                try:
+                    await bot.db.delete_dashboard_session(sid)
+                except Exception:
+                    pass
+            request.session.clear()
         if not oauth_ready():
             return HTMLResponse(_error_html("إعدادات OAuth2 ناقصة", "خاصك DISCORD_CLIENT_ID و DISCORD_CLIENT_SECRET في متغيرات البيئة."), status_code=503)
         state = secrets.token_urlsafe(32)
@@ -223,6 +231,7 @@ def create_app(bot) -> FastAPI:
             "https://discord.com/oauth2/authorize?client_id=" + quote(os.environ["DISCORD_CLIENT_ID"], safe="")
             + "&response_type=code&redirect_uri=" + quote(redirect_uri, safe="")
             + "&scope=identify%20guilds"
+            + "&prompt=consent"
             + "&state=" + quote(state, safe="")
         )
         return RedirectResponse(url, status_code=302)
