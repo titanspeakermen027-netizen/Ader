@@ -168,20 +168,6 @@ class ProfessionalCore(commands.Cog):
         if v is None or (i.guild.me and role>=i.guild.me.top_role): return await i.response.send_message("إعداد غير صالح أو الرتبة أعلى من البوت.",ephemeral=True)
         s=await self.settings(i.guild.id); s["autorole"]={"enabled":v,"role":role.id}; await self.save(i.guild.id,s); await i.response.send_message("تم حفظ AutoRole.",ephemeral=True)
 
-    @app_commands.command(name="set-welcome",description="إعداد الترحيب")
-    @is_admin()
-    async def set_welcome(self,i,channel:discord.TextChannel,enabled:str="on",message:str="مرحبا بك {mention} في {server}."):
-        v=bool_value(enabled)
-        if v is None: return await i.response.send_message("استعمل on أو off.",ephemeral=True)
-        s=await self.settings(i.guild.id); s["welcome"]={"enabled":v,"channel":channel.id,"message":message[:1000]}; await self.save(i.guild.id,s); await i.response.send_message("تم حفظ الترحيب.",ephemeral=True)
-
-    @app_commands.command(name="set-leave",description="إعداد رسالة المغادرة")
-    @is_admin()
-    async def set_leave(self,i,channel:discord.TextChannel,enabled:str="on",message:str="غادر {user} السيرفر."):
-        v=bool_value(enabled)
-        if v is None: return await i.response.send_message("استعمل on أو off.",ephemeral=True)
-        s=await self.settings(i.guild.id); s["leave"]={"enabled":v,"channel":channel.id,"message":message[:1000]}; await self.save(i.guild.id,s); await i.response.send_message("تم حفظ المغادرة.",ephemeral=True)
-
     @app_commands.command(name="level",description="عرض المستوى والXP")
     async def level(self,i,user:Optional[discord.Member]=None):
         m=user or i.user; r=await self.db.fetchone("SELECT xp,level FROM users WHERE user_id=? AND guild_id=?",(m.id,i.guild.id))
