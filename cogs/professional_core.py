@@ -94,7 +94,7 @@ class ProfessionalCore(commands.Cog):
             row=await self.db.fetchone("SELECT xp,level FROM users WHERE user_id=? AND guild_id=?",(m.author.id,m.guild.id))
         xp=int(row["xp"])+random.randint(int(s["min"]),int(s["max"])); old=int(row["level"]); base=max(10,int(s["base"])); level=old
         while xp>=base*(level+1): level+=1
-        await self.db.execute("UPDATE users SET xp=?,level=? WHERE user_id=? AND guild_id=?",(xp,level,m.author.id,m.guild.id)); await self.db.commit()
+        await self.db.execute("UPDATE users SET xp=?,level=? WHERE user_id=? AND guild_id=?",(xp,level,m.author.id,m.guild.id))
         if level>old:
             await m.channel.send(f"🎉 {m.author.mention} وصل للمستوى {level}!",delete_after=8,allowed_mentions=discord.AllowedMentions(users=True))
 
@@ -182,7 +182,7 @@ class ProfessionalCore(commands.Cog):
     @app_commands.command(name="clear-mod-history",description="حذف سجل إجراءات عضو")
     @is_admin()
     async def clear_mod_history(self,i,user:discord.Member):
-        await self.db.execute("DELETE FROM ader_mod_cases WHERE guild_id=? AND user_id=?",(i.guild.id,user.id)); await self.db.commit(); await i.response.send_message("تم حذف السجل.",ephemeral=True)
+        await self.db.execute("DELETE FROM ader_mod_cases WHERE guild_id=? AND user_id=?",(i.guild.id,user.id)); await i.response.send_message("تم حذف السجل.",ephemeral=True)
 
     @app_commands.command(name="server-health",description="فحص حالة Ader")
     @is_admin()
