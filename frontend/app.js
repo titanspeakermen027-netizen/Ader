@@ -186,10 +186,61 @@ async function commands(){const d=await api("/api/guilds/"+s.guild.id+"/commands
 async function shortcuts(){const d=await api("/api/guilds/"+s.guild.id+"/shortcuts");$("#root").innerHTML=head("Shortcuts",desc.shortcuts)+card("الاختصارات",'<div class="list">'+(d.shortcuts||[]).map(x=>'<div class="shortcut-row"><span><b>'+esc(x.label)+'</b><small>'+esc(x.name)+'</small></span><input data-alias="'+esc(x.name)+'" value="'+esc(x.alias||"")+'"><label class="switch"><input type="checkbox" data-shortcut="'+esc(x.name)+'" '+(x.enabled?"checked":"")+'><i></i></label><button class="action" data-save-shortcut="'+esc(x.name)+'">حفظ</button></div>').join("")+'</div>');document.querySelectorAll("[data-save-shortcut]").forEach(b=>b.onclick=async()=>{const n=b.dataset.saveShortcut;try{await api("/api/guilds/"+s.guild.id+"/shortcuts/"+encodeURIComponent(n),{method:"PUT",body:JSON.stringify({alias:document.querySelector("[data-alias='"+CSS.escape(n)+"']").value,enabled:document.querySelector("[data-shortcut='"+CSS.escape(n)+"']").checked})});b.textContent="تم"}catch(e){warn(e.message)}})}
 async function teams(){const [d,ts]=await Promise.all([api("/api/guilds/"+s.guild.id+"/teams"),api("/api/guilds/"+s.guild.id+"/teams/settings")]);const cfg=ts.settings||{};$("#root").innerHTML=head("Teams",desc.teams)+'<div class="cards">'+card("Team Settings",'<label>Coach Role'+selectRoles("coach-role",cfg.coach_role_id)+'</label><label>Max Players<input id="max-players" type="number" min="1" max="200" value="'+(cfg.max_players||15)+'"></label><button class="primary smallbtn" id="save-team">حفظ</button>')+card("Verified Teams",'<div class="list">'+(d.teams||[]).map(x=>'<div><b>'+esc(x.emoji||"👥")+' '+esc(x.name)+'</b><small>'+esc(x.team_type)+' · '+x.players+' players · role '+x.role_id+'</small></div>').join("")+'</div>')+'</div>';$("#save-team").onclick=async()=>{await api("/api/guilds/"+s.guild.id+"/teams/settings",{method:"PUT",body:JSON.stringify({coach_role_id:$("#coach-role").value||null,max_players:Number($("#max-players").value)})});await teams()}}
 async function logs(){const d=await api("/api/guilds/"+s.guild.id+"/logs");$("#root").innerHTML=head("Logs",desc.logs)+card("Recent Activity",'<div class="list">'+(d.logs||[]).map(x=>'<div><b>'+esc(x.type)+'</b><small>'+esc(new Date(Number(x.timestamp)*1000).toLocaleString())+' · '+esc(JSON.stringify(x.data||{}))+'</small></div>').join("")+'</div>')}
-function security(){$("#root").innerHTML=head("Security",desc.security)+'<div class="cards">'+card("Session",'<div class="kv"><span>User</span><b>'+esc(s.user?.username||"Discord User")+'</b></div><div class="kv"><span>Managed Servers</span><b>'+s.guilds.length+'</b></div>')+card("OAuth",'<div class="empty small">State validation مفعّل، session cookie Secure + SameSite=Lax، وAPI الإداري كيتحقق من صلاحية السيرفر.</div>')+'</div>'}
-async function settings(){const d=await api("/api/guilds/"+s.guild.id+"/settings"),m=d.modules||{},names=["moderation","verification","analytics","economy","leveling","roles","tickets","games"];$("#root").innerHTML=head("Settings",desc.settings)+card("Modules",'<div class="list">'+names.map(n=>'<div><b>'+n+'</b><label class="switch"><input type="checkbox" data-module="'+n+'" '+(m[n]?.enabled!==false?"checked":"")+'><i></i></label></div>').join("")+'</div>');document.querySelectorAll("[data-module]").forEach(x=>x.onchange=async()=>{try{await api("/api/guilds/"+s.guild.id+"/modules/"+x.dataset.module,{method:"PUT",body:JSON.stringify({enabled:x.checked})})}catch(e){x.checked=!x.checked;warn(e.message)}})}
+function security(){$("#root").innerHTML=head("Security",desc.security)+'<div class="cards">'+card("Session",'<div class="kv"><span>User</span><b>'+esc(s.user?.username||"Discord User")+'</b></div><div class="kv"><span>Managed Servers</span><b>'+s.guilds.length+'</b></div>')+card("OAuth",'<div class="empty small">تسجيل الدخول يمر عبر نفس Cloudflare origin، مع state validation وSession Cookie آمن.</div><a class="btn primary" href="/login?force=1">إعادة تسجيل الدخول بواسطة Discord</a>')+'</div>'}
+async function settings(){
+  const [d,core]=await Promise.all([
+    api("/api/guilds/"+s.guild.id+"/settings"),
+    api("/api/guilds/"+s.guild.id+"/core-settings")
+  ]);
+  const m=d.modules||{},s2=core.settings||{},a=s2.automod||{},ar=s2.autorole||{},l=s2.levels||{},n=s2.antinuke||{},logsCfg=s2.logs||{};
+  const words=(a.words||[]).join(", ");
+  $("#root").innerHTML=head("Settings",desc.settings)+
+    '<div class="cards">'+
+      card("Modules",'<div class="list">'+["moderation","verification","analytics","leveling","roles","tickets","games"].map(nm=>'<div><b>'+nm+'</b><label class="switch"><input type="checkbox" data-module="'+nm+'" '+(m[nm]?.enabled!==false?"checked":"")+'><i></i></label></div>').join("")+'</div>')+
+      card("السجلات",'<label>قناة السجلات'+selectChannels("core-log",logsCfg.channel)+'</label><p class="muted">يسجل أحداث Core المهمة في قناة واحدة.</p>')+
+      card("AutoMod",'<label class="switchline">تفعيل <input type="checkbox" id="core-auto" '+(a.enabled!==false?"checked":"")+'></label><label>حد الرسائل<input id="core-msg" type="number" min="3" max="50" value="'+(a.messages??6)+'"></label><label>ثواني النافذة<input id="core-win" type="number" min="2" max="60" value="'+(a.window??5)+'"></label><label>التحذير/Timeout بالدقائق<input id="core-time" type="number" min="1" max="40320" value="'+(a.timeout??5)+'"></label><label>منع الروابط<input type="checkbox" id="core-links" '+(a.links?"checked":"")+'></label><label>الكلمات المحظورة<input id="core-words" value="'+esc(words)+'" placeholder="كلمة1, كلمة2"></label>')+
+      card("AutoRole",'<label>الرتبة'+selectRoles("core-role",ar.role)+'</label><label>تفعيل <input type="checkbox" id="core-role-on" '+(ar.enabled?"checked":"")+'></label>')+
+      card("Levels",'<label>تفعيل <input type="checkbox" id="core-levels" '+(l.enabled!==false?"checked":"")+'></label><label>Cooldown بالثواني<input id="core-lvl-cd" type="number" min="5" max="3600" value="'+(l.cooldown??45)+'"></label><label>XP الأدنى<input id="core-xp-min" type="number" min="1" max="100" value="'+(l.min??8)+'"></label><label>XP الأقصى<input id="core-xp-max" type="number" min="1" max="100" value="'+(l.max??14)+'"></label>')+
+      card("Anti-Nuke",'<label>تفعيل <input type="checkbox" id="core-nuke" '+(n.enabled!==false?"checked":"")+'></label><label>عدد العمليات<input id="core-nuke-th" type="number" min="2" max="20" value="'+(n.threshold??4)+'"></label><label>النافذة بالثواني<input id="core-nuke-win" type="number" min="3" max="120" value="'+(n.window??10)+'"></label><label>الإجراء<select id="core-nuke-act"><option value="timeout" '+(n.action==="timeout"?"selected":"")+'>Timeout</option><option value="ban" '+(n.action==="ban"?"selected":"")+'>Ban</option></select></label>')+
+    '</div>'+
+    '<button class="primary smallbtn" id="save-core">حفظ إعدادات الأنظمة</button>';
+  document.querySelectorAll("[data-module]").forEach(x=>x.onchange=async()=>{
+    try{await api("/api/guilds/"+s.guild.id+"/modules/"+x.dataset.module,{method:"PUT",body:JSON.stringify({enabled:x.checked})})}
+    catch(e){x.checked=!x.checked;warn(e.message)}
+  });
+  $("#save-core").onclick=async()=>{
+    try{
+      const payload={
+        logs:{channel:$("#core-log").value||null},
+        automod:{
+          enabled:$("#core-auto").checked,
+          messages:Number($("#core-msg").value),
+          window:Number($("#core-win").value),
+          timeout:Number($("#core-time").value),
+          links:$("#core-links").checked,
+          words:$("#core-words").value.split(",").map(x=>x.trim()).filter(Boolean)
+        },
+        autorole:{enabled:$("#core-role-on").checked,role:$("#core-role").value||null},
+        levels:{
+          enabled:$("#core-levels").checked,
+          cooldown:Number($("#core-lvl-cd").value),
+          min:Number($("#core-xp-min").value),
+          max:Number($("#core-xp-max").value)
+        },
+        antinuke:{
+          enabled:$("#core-nuke").checked,
+          threshold:Number($("#core-nuke-th").value),
+          window:Number($("#core-nuke-win").value),
+          action:$("#core-nuke-act").value
+        }
+      };
+      await api("/api/guilds/"+s.guild.id+"/core-settings",{method:"PUT",body:JSON.stringify(payload)});
+      await settings();
+    }catch(e){warn("تعذر حفظ الإعدادات: "+e.message)}
+  };
+}
 function giveaways(){const rows=s.overview||{};$("#root").innerHTML=head("Giveaways",desc.giveaways)+card("Status",'<div class="empty small">قاعدة البيانات فيها جدول giveaways، ولكن main.py حالياً ما كيحملش cog مستقل ديال giveaways؛ لذلك هاد القسم ما غاديش يوهمك بوجود إنشاء غير مربوط.</div>')}
 function bindCommon(){document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{s.page=b.dataset.go;render()});document.querySelectorAll("[data-guild]").forEach(b=>b.onclick=()=>pick(b.dataset.guild))}
 async function boot(){try{const me=await api("/api/me");if(!me.logged_in)return showLogin();s.user=me.user;const g=await api("/api/guilds");s.guilds=g.guilds||[];showApp();if(!s.guilds.length){$("#root").innerHTML='<div class="empty">ما كاين حتى سيرفر متاح للإدارة.</div>';return}s.guild=s.guilds[0];$("#user").textContent=(s.user.username||"U")[0];$("#guildSelect").innerHTML=s.guilds.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");$("#guildSelect").onchange=()=>pick($("#guildSelect").value);await loadGuild();await render()}catch(e){if(e.message==="AUTH")showLogin();else{showLogin();warn("تعذر الاتصال بالـAPI: "+e.message)}}}
-document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{s.page=b.dataset.page;render()});$("#loginBtn").onclick=()=>location.href=API+"/login";$("#logoutBtn").onclick=()=>location.href=API+"/logout";$("#refresh").onclick=()=>loadGuild().then(render);$("#theme").onclick=()=>document.body.classList.toggle("light");$("#menu").onclick=()=>$("#sidebar").classList.toggle("open");boot();
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{s.page=b.dataset.page;render()});$("#loginBtn").onclick=()=>location.assign("/login?force=1");$("#logoutBtn").onclick=()=>location.href=API+"/logout";$("#refresh").onclick=()=>loadGuild().then(render);$("#theme").onclick=()=>document.body.classList.toggle("light");$("#menu").onclick=()=>$("#sidebar").classList.toggle("open");boot();
 })();
