@@ -34,7 +34,6 @@ class ProfessionalCore(commands.Cog):
     async def cog_load(self):
         await self.db.execute("CREATE TABLE IF NOT EXISTS ader_core_settings(guild_id INTEGER PRIMARY KEY,data TEXT NOT NULL DEFAULT '{}',updated_at REAL NOT NULL DEFAULT 0)")
         await self.db.execute("CREATE TABLE IF NOT EXISTS ader_mod_cases(id INTEGER PRIMARY KEY AUTOINCREMENT,guild_id INTEGER NOT NULL,user_id INTEGER NOT NULL,moderator_id INTEGER NOT NULL,action TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',created_at REAL NOT NULL)")
-        await self.db.commit()
 
     async def settings(self, gid):
         if gid in self.cache: return self.cache[gid]
@@ -53,7 +52,6 @@ class ProfessionalCore(commands.Cog):
     async def save(self,gid,data):
         self.cache[gid]=data
         await self.db.execute("INSERT INTO ader_core_settings(guild_id,data,updated_at) VALUES(?,?,?) ON CONFLICT(guild_id) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at",(gid,json.dumps(data,ensure_ascii=False),time.time()))
-        await self.db.commit()
 
     async def log(self,guild,title,text,color=discord.Color.blurple()):
         c=(await self.settings(guild.id))["logs"]["channel"]
@@ -65,7 +63,6 @@ class ProfessionalCore(commands.Cog):
 
     async def case(self,guild,user,mod,action,reason):
         await self.db.execute("INSERT INTO ader_mod_cases(guild_id,user_id,moderator_id,action,reason,created_at) VALUES(?,?,?,?,?,?)",(guild.id,user,mod,action,reason[:1000],time.time()))
-        await self.db.commit()
 
     async def automod(self,m):
         s=(await self.settings(m.guild.id))["automod"]
@@ -137,7 +134,7 @@ class ProfessionalCore(commands.Cog):
     @is_admin()
     async def core_settings(self,i):
         s=await self.settings(i.guild.id)
-        await i.response.send_message(embed=EmbedFactory.create(title="Ader Core Systems",color=EmbedColor.INFO,fields=[{"name":"AutoMod","value":"مفعّل" if s["automod"]["enabled"] else "متوقف","inline":True},{"name":"Anti-Nuke","value":"مفعّل" if s["antinuke"]["enabled"] else "متوقف","inline":True},{"name":"Levels","value":"مفعّل" if s["levels"]["enabled"] else "متوقف","inline":True},{"name":"Welcome","value":"مفعّل" if s["welcome"]["enabled"] else "متوقف","inline":True},{"name":"Leave","value":"مفعّل" if s["leave"]["enabled"] else "متوقف","inline":True},{"name":"AutoRole","value":"مفعّل" if s["autorole"]["enabled"] else "متوقف","inline":True}]),ephemeral=True)
+        await i.response.send_message(embed=EmbedFactory.create(title="Ader Core Systems",color=EmbedColor.INFO,fields=[{"name":"AutoMod","value":"مفعّل" if s["automod"]["enabled"] else "متوقف","inline":True},{"name":"Anti-Nuke","value":"مفعّل" if s["antinuke"]["enabled"] else "متوقف","inline":True},{"name":"Levels","value":"مفعّل" if s["levels"]["enabled"] else "متوقف","inline":True},{"name":"AutoRole","value":"مفعّل" if s["autorole"]["enabled"] else "متوقف","inline":True}]),ephemeral=True)
 
     @app_commands.command(name="automod-word",description="إضافة أو حذف كلمة محظورة")
     @app_commands.describe(action="add أو remove",word="الكلمة")
