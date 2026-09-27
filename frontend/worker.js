@@ -5,14 +5,17 @@ export default {
 
     if (url.pathname === "/healthz") {
       try {
-        const r = await fetch(`${backend}/healthz`);
+        const r = await fetch(`${backend}/healthz`, { cache: "no-store" });
         return new Response(JSON.stringify({
           worker: "ok",
           backend_status: r.status,
           backend_ok: r.ok
         }), {
           status: r.ok ? 200 : 502,
-          headers: { "content-type": "application/json" }
+          headers: {
+            "content-type": "application/json",
+            "cache-control": "no-store"
+          }
         });
       } catch (error) {
         return new Response(JSON.stringify({
@@ -21,7 +24,10 @@ export default {
           error: String(error)
         }), {
           status: 502,
-          headers: { "content-type": "application/json" }
+          headers: {
+            "content-type": "application/json",
+            "cache-control": "no-store"
+          }
         });
       }
     }
@@ -36,8 +42,10 @@ export default {
 
     const target = new URL(url.pathname + url.search, backend);
     const headers = new Headers(request.headers);
+
+    // Tell the backend which public origin the browser is actually using.
     headers.set("X-Forwarded-Host", url.host);
-    headers.set("X-Forwarded-Proto", "https");
+    headers.set("X-Forwarded-Proto", url.protocol.replace(":", ""));
 
     const response = await fetch(target, {
       method: request.method,
@@ -45,13 +53,14 @@ export default {
       body: request.method === "GET" || request.method === "HEAD"
         ? undefined
         : request.body,
-      redirect: "manual"
+      redirect: "manual",
+      cache: "no-store"
     });
 
     const responseHeaders = new Headers(response.headers);
 
-    // Rewrite ONLY redirects that point back to the backend.
-    // Never rewrite external redirects such as Discord OAuth.
+    // Keep redirects on the public Worker origin when the backend points
+    // back to itself. External redirects (Discord OAuth) are left untouched.
     const location = response.headers.get("Location");
 
     if (location) {
@@ -59,28 +68,42 @@ export default {
         const redirectUrl = new URL(location, backend);
         const backendUrl = new URL(backend);
 
-        if (redirectUrl.hostname === backendUrl.hostname) {
+        if (
+          redirectUrl.protocol === backendUrl.protocol &&
+          redirectUrl.hostname === backendUrl.hostname &&
+          redirectUrl.port === backendUrl.port
+        ) {
           redirectUrl.protocol = url.protocol;
           redirectUrl.hostname = url.hostname;
           redirectUrl.port = "";
 
           responseHeaders.set("Location", redirectUrl.toString());
         }
-      } catch {}
+      } catch {
+        // Leave an invalid/unparseable Location header untouched.
+      }
     }
 
-    // Cloudflare Workers can collapse Set-Cookie when copied through Headers.
-    // Re-append every cookie individually so the OAuth session survives.
+    // IMPORTANT: Set-Cookie is a multi-value header. Cloudflare Workers
+    // exposes getAll() specifically for this case. Prefer it, then use
+    // getSetCookie() for runtimes that expose the standard API.
     responseHeaders.delete("Set-Cookie");
+
     let cookies = [];
-    if (typeof response.headers.getSetCookie === "function") {
+    if (typeof response.headers.getAll === "function") {
+      cookies = response.headers.getAll("Set-Cookie");
+    } else if (typeof response.headers.getSetCookie === "function") {
       cookies = response.headers.getSetCookie();
     } else {
       const cookie = response.headers.get("Set-Cookie");
       if (cookie) cookies = [cookie];
     }
-    for (const cookie of cookies) responseHeaders.append("Set-Cookie", cookie);
-    if (isBackendRoute) responseHeaders.set("Cache-Control", "no-store");
+
+    for (const cookie of cookies) {
+      if (cookie) responseHeaders.append("Set-Cookie", cookie);
+    }
+
+    responseHeaders.set("Cache-Control", "no-store, private");
 
     return new Response(response.body, {
       status: response.status,
