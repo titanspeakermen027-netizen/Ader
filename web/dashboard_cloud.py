@@ -195,6 +195,61 @@ def create_app(bot):
         await bot.db.delete_ticket_panel(panel_id)
         return {"ok": True}
 
+    @app.get("/api/guilds/{guild_id}/core-settings")
+    async def core_settings_get(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        cog = bot.get_cog("ProfessionalCore")
+        if cog is not None and hasattr(cog, "settings"):
+            settings = await cog.settings(guild_id)
+        else:
+            row = await bot.db.fetchone("SELECT data FROM ader_core_settings WHERE guild_id=?", (guild_id,))
+            try:
+                settings = json.loads(row["data"] or "{}") if row else {}
+            except Exception:
+                settings = {}
+        return {"settings": settings}
+
+    @app.put("/api/guilds/{guild_id}/core-settings")
+    async def core_settings_put(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="إعدادات غير صالحة")
+        cog = bot.get_cog("ProfessionalCore")
+        if cog is None or not hasattr(cog, "settings") or not hasattr(cog, "save"):
+            raise HTTPException(status_code=503, detail="نظام Ader Core غير متاح حالياً")
+        settings = await cog.settings(guild_id)
+        for section in ("logs", "automod", "autorole", "levels", "antinuke"):
+            value = data.get(section)
+            if isinstance(value, dict):
+                settings[section].update(value)
+        settings["automod"]["mentions"] = max(2, min(50, int(settings["automod"].get("mentions", 5))))
+        settings["automod"]["messages"] = max(3, min(50, int(settings["automod"].get("messages", 6))))
+        settings["automod"]["window"] = max(2, min(60, int(settings["automod"].get("window", 5))))
+        settings["automod"]["timeout"] = max(1, min(40320, int(settings["automod"].get("timeout", 5))))
+        words = settings["automod"].get("words", [])
+        settings["automod"]["words"] = [str(x).strip()[:100] for x in words if str(x).strip()][:200]
+        settings["levels"]["min"] = max(1, min(100, int(settings["levels"].get("min", 8))))
+        settings["levels"]["max"] = max(settings["levels"]["min"], min(100, int(settings["levels"].get("max", 14))))
+        settings["levels"]["cooldown"] = max(5, min(3600, int(settings["levels"].get("cooldown", 45))))
+        settings["levels"]["base"] = max(10, min(1000000, int(settings["levels"].get("base", 100))))
+        settings["antinuke"]["threshold"] = max(2, min(20, int(settings["antinuke"].get("threshold", 4))))
+        settings["antinuke"]["window"] = max(3, min(120, int(settings["antinuke"].get("window", 10))))
+        if settings["antinuke"].get("action") not in {"timeout", "ban"}:
+            settings["antinuke"]["action"] = "timeout"
+        role_id = settings["autorole"].get("role")
+        guild = bot.get_guild(guild_id)
+        if role_id:
+            role = guild.get_role(int(role_id)) if guild else None
+            me = guild.me if guild else None
+            if role is None or (me and role >= me.top_role):
+                settings["autorole"]["role"] = None
+        channel_id = settings["logs"].get("channel")
+        if channel_id and guild and guild.get_channel(int(channel_id)) is None:
+            settings["logs"]["channel"] = None
+        await cog.save(guild_id, settings)
+        return {"ok": True, "settings": settings}
+
     return app
 
 
