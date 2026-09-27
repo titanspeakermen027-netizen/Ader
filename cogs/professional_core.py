@@ -107,33 +107,6 @@ class ProfessionalCore(commands.Cog):
         if await self.automod(m): return
         await self.add_xp(m)
 
-    @commands.Cog.listener()
-    async def on_member_join(self,m):
-        s=await self.settings(m.guild.id); a=s["autorole"]
-        if a["enabled"] and a["role"]:
-            role=m.guild.get_role(int(a["role"]))
-            if role and m.guild.me and role<m.guild.me.top_role:
-                try: await m.add_roles(role,reason="Ader AutoRole")
-                except discord.HTTPException: pass
-        w=s["welcome"]
-        if w["enabled"] and w["channel"]:
-            ch=m.guild.get_channel(int(w["channel"]))
-            if ch:
-                text=w["message"].format(mention=m.mention,user=m.display_name,server=m.guild.name,count=m.guild.member_count)
-                try: await ch.send(text,allowed_mentions=discord.AllowedMentions(users=True))
-                except discord.HTTPException: pass
-        await self.log(m.guild,"Member Join",f"{m.mention} انضم للسيرفر.")
-
-    @commands.Cog.listener()
-    async def on_member_remove(self,m):
-        s=await self.settings(m.guild.id); w=s["leave"]
-        if w["enabled"] and w["channel"]:
-            ch=m.guild.get_channel(int(w["channel"]))
-            if ch:
-                try: await ch.send(w["message"].format(user=m.display_name,server=m.guild.name,count=m.guild.member_count),allowed_mentions=discord.AllowedMentions.none())
-                except discord.HTTPException: pass
-        await self.log(m.guild,"Member Leave",f"{m} غادر السيرفر.")
-
     async def nuke_guard(self,guild,actor,action):
         s=(await self.settings(guild.id))["antinuke"]
         if not s["enabled"] or actor.bot or actor.id==guild.owner_id or actor.guild_permissions.administrator: return
