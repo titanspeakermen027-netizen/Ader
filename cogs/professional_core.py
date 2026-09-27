@@ -184,10 +184,6 @@ class ProfessionalCore(commands.Cog):
     async def clear_mod_history(self,i,user:discord.Member):
         await self.db.execute("DELETE FROM ader_mod_cases WHERE guild_id=? AND user_id=?",(i.guild.id,user.id)); await i.response.send_message("تم حذف السجل.",ephemeral=True)
 
-    @app_commands.command(name="server-health",description="فحص حالة Ader")
-    @is_admin()
-    async def server_health(self,i):
-        await i.response.send_message(embed=EmbedFactory.create(title="Ader Server Health",color=EmbedColor.SUCCESS,fields=[{"name":"Gateway","value":f"{round(self.bot.latency*1000)}ms","inline":True},{"name":"Database","value":"Online" if self.db.is_connected else "Offline","inline":True},{"name":"Members","value":f"{i.guild.member_count:,}","inline":True},{"name":"Channels","value":f"{len(i.guild.channels):,}","inline":True},{"name":"Roles","value":f"{len(i.guild.roles):,}","inline":True}]),ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(ProfessionalCore(bot,bot.db,bot.config))
