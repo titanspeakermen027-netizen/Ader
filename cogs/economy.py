@@ -178,7 +178,7 @@ class Economy(commands.Cog):
     async def _send_transfer_dm(self, recipient: discord.Member, amount: int, sender: discord.Member):
         try:
             await recipient.send(
-                f"**تم تحويل مبلغ '{amount:,} {self.currency_name}' لرصيدك من قبل {sender.mention} من الرصيد.**"
+                f"<:atm:1553743679431254026> | إيصال التحويل `(ID: {sender.id})` لقد استلمت `${amount:,}` من المستخدم {sender.name}"
             )
         except (discord.Forbidden, discord.HTTPException):
             logger.info("Could not send transfer DM to %s", recipient.id)
