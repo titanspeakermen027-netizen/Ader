@@ -1,0 +1,20 @@
+{
+  "name": "ader3",
+  "main": "./worker.js",
+  "compatibility_date": "2026-09-25",
+  "assets": {
+    "directory": "./frontend",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/healthz",
+      "/login",
+      "/callback",
+      "/logout",
+      "/api/*"
+    ]
+  },
+  "vars": {
+    "BACKEND_URL": "http://nova.hatenna.com:25979"
+  }
+}

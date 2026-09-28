@@ -1,33 +1,113 @@
-# Ader Dashboard — Cloudflare Pages
+# Ader Dashboard — Cloudflare Workers
 
-This directory is a **static frontend**. It does not run Python, FastAPI, SQLite, or the Discord bot.
+The Ader dashboard uses Cloudflare Workers Static Assets for the frontend and a separate FastAPI service for the Discord bot/API.
 
-## Cloudflare Pages
+The Cloudflare Worker lives at the repository root (worker.js). The frontend/ directory contains only browser assets.
 
-Use these settings when importing the Ader repository:
+## Architecture
 
-- **Production branch:** `main`
-- **Root directory:** `frontend`
-- **Build command:** leave empty
-- **Build output directory:** `.`
+Browser → Cloudflare Worker → FastAPI backend
 
-After deployment, Cloudflare gives the project a `*.pages.dev` address.
+The same Worker origin serves:
 
-## Backend setup
+- static frontend files
+- /login, /callback, /logout
+- /api/*
+- /healthz
 
-Keep the Ader bot + FastAPI backend on the current Python host. Set:
+This keeps the dashboard and OAuth session on one public origin and avoids cross-origin cookie problems.
 
-```text
-DASHBOARD_FRONTEND_URL=https://YOUR-PROJECT.pages.dev
-DASHBOARD_REDIRECT_URI=https://YOUR-BACKEND-DOMAIN.example.com/callback
-DASHBOARD_SESSION_SECRET=<long-random-secret>
-```
+## Cloudflare deployment
 
-Then edit `frontend/config.js` and set `API_BASE` to the public HTTPS URL of the backend.
+This repository includes wrangler.jsonc with the required Workers Static Assets configuration:
 
-## Discord OAuth2
+- Worker entry point: ./worker.js
+- Static assets directory: ./frontend
+- Assets binding: ASSETS
+- SPA fallback: single-page-application
+- Backend routes run through the Worker first
+- Backend URL: http://nova.hatenna.com:25979
 
-In the Discord Developer Portal, add the backend callback URL from `DASHBOARD_REDIRECT_URI` as an OAuth2 Redirect URI. The browser starts OAuth on the backend, Discord returns to the backend callback, and the backend redirects the authenticated session to the Cloudflare Pages frontend.
+### Deploy with Wrangler
+
+From the repository root:
+
+~~~bash
+npx wrangler deploy
+~~~
+
+Use the repository wrangler.jsonc when deploying. Do not paste the old frontend/worker.js into a standalone Worker without the Static Assets configuration.
+
+### Cloudflare Dashboard
+
+When configuring the Worker from the Cloudflare dashboard, make sure the Worker is deployed with a Static Assets collection pointing to:
+
+~~~text
+frontend
+~~~
+
+and that the binding name is exactly:
+
+~~~text
+ASSETS
+~~~
+
+Without that binding, browser requests that reach the static frontend can fail with:
+
+~~~text
+TypeError: Cannot read properties of undefined (reading 'fetch')
+~~~
+
+## Backend environment
+
+On the Python/FastAPI host, keep the existing Discord OAuth2 and dashboard session environment variables configured.
+
+The public callback must be:
+
+~~~text
+https://ader3.titanspeakermen027.workers.dev/callback
+~~~
+
+The public frontend URL must be:
+
+~~~text
+https://ader3.titanspeakermen027.workers.dev
+~~~
+
+The callback URL must exactly match the OAuth2 Redirect URI configured in the Discord Developer Portal.
+
+The FastAPI backend already reads the public origin from X-Forwarded-Host / X-Forwarded-Proto, which the Worker supplies for OAuth requests.
+
+## Worker backend variable
+
+The Worker uses:
+
+~~~text
+BACKEND_URL=http://nova.hatenna.com:25979
+~~~
+
+This value is stored in wrangler.jsonc and can also be managed as a Cloudflare Worker environment variable.
+
+## Login flow
+
+1. The browser opens the dashboard on the Worker domain.
+2. /login is proxied to FastAPI.
+3. FastAPI creates OAuth state and redirects to Discord.
+4. Discord returns to /callback on the same Worker domain.
+5. The Worker forwards the callback to FastAPI and preserves Set-Cookie.
+6. FastAPI creates the dashboard session.
+7. The browser is redirected to /.
+8. The frontend reads /api/me using the same origin.
+
+## Frontend configuration
+
+frontend/config.js intentionally keeps:
+
+~~~js
+API_BASE: ""
+~~~
+
+A relative API base keeps the dashboard API and OAuth session on the same public origin.
 
 ## Features
 
@@ -35,7 +115,7 @@ In the Discord Developer Portal, add the backend callback URL from `DASHBOARD_RE
 - Server selector
 - Responsive dark/light UI
 - Overview statistics and Ader health
-- Slash-command enable/disable controls
+- Slash-command controls
 - Shortcut alias management
 - Ticket panel creation/publishing
 - Ticket list
@@ -43,3 +123,4 @@ In the Discord Developer Portal, add the backend callback URL from `DASHBOARD_RE
 - Server roles/channels browser
 - Mobile navigation
 - Arabic/French UI direction toggle
+- AutoMod forbidden-reaction controls
