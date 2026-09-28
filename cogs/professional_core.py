@@ -23,6 +23,40 @@ def norm(s: str) -> str:
 def bool_value(v: str):
     return {"on":True,"off":False,"enable":True,"disable":False,"enabled":True,"disabled":False}.get(v.lower())
 
+
+_CUSTOM_EMOJI_RE = re.compile(r"^<a?:[A-Za-z0-9_]{1,32}:\d{1,25}>$")
+
+
+def normalize_reaction_emoji(value) -> str | None:
+    """Return a canonical reaction string or None when the input is not an emoji."""
+    raw = str(value or "").strip()
+    if not raw or len(raw) > 100:
+        return None
+    if _CUSTOM_EMOJI_RE.fullmatch(raw):
+        return raw
+    # Unicode emoji may be a sequence (ZWJ, variation selector, skin tone, etc.).
+    # Symbols/emoji modifiers and keycap marks are accepted; plain names such as
+    # "fire" or "smile" are intentionally rejected.
+    if any(unicodedata.category(ch) in {"So", "Sk", "Me"} for ch in raw):
+        return raw
+    return None
+
+
+def normalize_reaction_emojis(values) -> list[str]:
+    if isinstance(values, str):
+        values = values.split(",")
+    if not isinstance(values, (list, tuple, set)):
+        return []
+    result = []
+    seen = set()
+    for value in list(values)[:100]:
+        emoji = normalize_reaction_emoji(value)
+        if emoji and emoji not in seen:
+            seen.add(emoji)
+            result.append(emoji)
+    return result
+
+
 class ProfessionalCore(commands.Cog):
     def __init__(self, bot, db, config):
         self.bot, self.db, self.config = bot, db, config
@@ -42,7 +76,7 @@ class ProfessionalCore(commands.Cog):
         if row:
             try: data = json.loads(row["data"] or "{}")
             except Exception: data = {}
-        d = {"logs":{"channel":None},"automod":{"enabled":True,"spam":True,"links":False,"mentions":5,"messages":6,"window":5,"timeout":5,"words":[]},"autorole":{"enabled":False,"role":None},"levels":{"enabled":True,"min":8,"max":14,"cooldown":45,"base":100},"antinuke":{"enabled":True,"threshold":4,"window":10,"action":"timeout"}}
+        d = {"logs":{"channel":None},"automod":{"enabled":True,"spam":True,"links":False,"mentions":5,"messages":6,"window":5,"timeout":5,"words":[],"reaction_filter":{"enabled":False,"emojis":[],"timeout":5}},"autorole":{"enabled":False,"role":None},"levels":{"enabled":True,"min":8,"max":14,"cooldown":45,"base":100},"antinuke":{"enabled":True,"threshold":4,"window":10,"action":"timeout"}}
         def merge(a,b):
             for k,v in b.items():
                 if isinstance(v,dict) and isinstance(a.get(k),dict): merge(a[k],v)
@@ -103,6 +137,65 @@ class ProfessionalCore(commands.Cog):
         if m.author.bot or not m.guild: return
         if await self.automod(m): return
         await self.add_xp(m)
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+        """Enforce the per-server forbidden reaction filter."""
+        if not payload.guild_id:
+            return
+        if self.bot.user and payload.user_id == self.bot.user.id:
+            return
+
+        guild = self.bot.get_guild(payload.guild_id)
+        if guild is None:
+            return
+
+        member = guild.get_member(payload.user_id)
+        if member is None:
+            try:
+                member = await guild.fetch_member(payload.user_id)
+            except (discord.NotFound, discord.HTTPException, discord.Forbidden):
+                return
+        if member.bot or member.guild_permissions.manage_messages:
+            return
+
+        settings = await self.settings(guild.id)
+        reaction_filter = settings["automod"].get("reaction_filter") or {}
+        if not reaction_filter.get("enabled"):
+            return
+
+        emoji = normalize_reaction_emoji(str(payload.emoji))
+        blocked = set(normalize_reaction_emojis(reaction_filter.get("emojis", [])))
+        if not emoji or emoji not in blocked:
+            return
+
+        # Remove only the offending user's reaction. PartialMessage avoids
+        # depending on the message being present in the local cache.
+        channel = guild.get_channel(payload.channel_id)
+        if channel is None and hasattr(guild, "get_thread"):
+            channel = guild.get_thread(payload.channel_id)
+        if channel is not None and hasattr(channel, "get_partial_message"):
+            try:
+                message = channel.get_partial_message(payload.message_id)
+                await message.remove_reaction(payload.emoji, member)
+            except (discord.Forbidden, discord.HTTPException):
+                pass
+
+        timeout_minutes = max(1, min(40320, int(reaction_filter.get("timeout", 5) or 5)))
+        reason = f"رياكتشن ممنوع: {emoji}"
+        try:
+            await member.timeout(timedelta(minutes=timeout_minutes), reason=f"Ader AutoMod • {reason}")
+        except (discord.Forbidden, discord.HTTPException):
+            return
+
+        await self.case(guild, member.id, self.bot.user.id, "automod-reaction", reason)
+        await self.log(
+            guild,
+            "AutoMod",
+            f"تمت معاقبة {member.mention} بسبب استخدام رياكتشن ممنوع على رسالة.\\n"
+            f"**الرياكتشن:** {emoji}\\n**المدة:** {timeout_minutes} دقيقة.",
+            discord.Color.orange(),
+        )
 
     async def nuke_guard(self,guild,actor,action):
         s=(await self.settings(guild.id))["antinuke"]

@@ -192,13 +192,15 @@ async function settings(){
     api("/api/guilds/"+s.guild.id+"/settings"),
     api("/api/guilds/"+s.guild.id+"/core-settings")
   ]);
-  const m=d.modules||{},s2=core.settings||{},a=s2.automod||{},ar=s2.autorole||{},l=s2.levels||{},n=s2.antinuke||{},logsCfg=s2.logs||{};
+  const m=d.modules||{},s2=core.settings||{},a=s2.automod||{},rf=a.reaction_filter||{},ar=s2.autorole||{},l=s2.levels||{},n=s2.antinuke||{},logsCfg=s2.logs||{};
   const words=(a.words||[]).join(", ");
+  const reactionEmojis=(rf.emojis||[]).join(", ");
   $("#root").innerHTML=head("Settings",desc.settings)+
     '<div class="cards">'+
       card("Modules",'<div class="list">'+["moderation","verification","analytics","leveling","roles","tickets","games"].map(nm=>'<div><b>'+nm+'</b><label class="switch"><input type="checkbox" data-module="'+nm+'" '+(m[nm]?.enabled!==false?"checked":"")+'><i></i></label></div>').join("")+'</div>')+
       card("السجلات",'<label>قناة السجلات'+selectChannels("core-log",logsCfg.channel)+'</label><p class="muted">يسجل أحداث Core المهمة في قناة واحدة.</p>')+
       card("AutoMod",'<label class="switchline">تفعيل <input type="checkbox" id="core-auto" '+(a.enabled!==false?"checked":"")+'></label><label>حد الرسائل<input id="core-msg" type="number" min="3" max="50" value="'+(a.messages??6)+'"></label><label>ثواني النافذة<input id="core-win" type="number" min="2" max="60" value="'+(a.window??5)+'"></label><label>التحذير/Timeout بالدقائق<input id="core-time" type="number" min="1" max="40320" value="'+(a.timeout??5)+'"></label><label>منع الروابط<input type="checkbox" id="core-links" '+(a.links?"checked":"")+'></label><label>الكلمات المحظورة<input id="core-words" value="'+esc(words)+'" placeholder="كلمة1, كلمة2"></label>')+
+      card("منع التفاعلات",'<label class="switchline">تفعيل <input type="checkbox" id="core-reaction-on" '+(rf.enabled?"checked":"")+'></label><label>الإيموجيات الممنوعة<input id="core-reactions" value="'+esc(reactionEmojis)+'" placeholder="😀, 😡, <:emoji:123456789>, <a:emoji:123456789>"></label><p class="muted">كتب الإيموجي نفسه ماشي سميتو، وفصل بين كل إيموجي بفاصلة. التكرار كيتحيد تلقائياً.</p><label>مدة Timeout بالدقائق<input id="core-reaction-time" type="number" min="1" max="40320" value="'+(rf.timeout??5)+'"></label>')+
       card("AutoRole",'<label>الرتبة'+selectRoles("core-role",ar.role)+'</label><label>تفعيل <input type="checkbox" id="core-role-on" '+(ar.enabled?"checked":"")+'></label>')+
       card("Levels",'<label>تفعيل <input type="checkbox" id="core-levels" '+(l.enabled!==false?"checked":"")+'></label><label>Cooldown بالثواني<input id="core-lvl-cd" type="number" min="5" max="3600" value="'+(l.cooldown??45)+'"></label><label>XP الأدنى<input id="core-xp-min" type="number" min="1" max="100" value="'+(l.min??8)+'"></label><label>XP الأقصى<input id="core-xp-max" type="number" min="1" max="100" value="'+(l.max??14)+'"></label>')+
       card("Anti-Nuke",'<label>تفعيل <input type="checkbox" id="core-nuke" '+(n.enabled!==false?"checked":"")+'></label><label>عدد العمليات<input id="core-nuke-th" type="number" min="2" max="20" value="'+(n.threshold??4)+'"></label><label>النافذة بالثواني<input id="core-nuke-win" type="number" min="3" max="120" value="'+(n.window??10)+'"></label><label>الإجراء<select id="core-nuke-act"><option value="timeout" '+(n.action==="timeout"?"selected":"")+'>Timeout</option><option value="ban" '+(n.action==="ban"?"selected":"")+'>Ban</option></select></label>')+
@@ -218,7 +220,12 @@ async function settings(){
           window:Number($("#core-win").value),
           timeout:Number($("#core-time").value),
           links:$("#core-links").checked,
-          words:$("#core-words").value.split(",").map(x=>x.trim()).filter(Boolean)
+          words:$("#core-words").value.split(",").map(x=>x.trim()).filter(Boolean),
+          reaction_filter:{
+            enabled:$("#core-reaction-on").checked,
+            timeout:Number($("#core-reaction-time").value),
+            emojis:[...new Set($("#core-reactions").value.split(",").map(x=>x.trim()).filter(Boolean))]
+          }
         },
         autorole:{enabled:$("#core-role-on").checked,role:$("#core-role").value||null},
         levels:{
