@@ -24,7 +24,7 @@ def bool_value(v: str):
     return {"on":True,"off":False,"enable":True,"disable":False,"enabled":True,"disabled":False}.get(v.lower())
 
 
-_CUSTOM_EMOJI_RE = re.compile(r"^<a?:[A-Za-z0-9_]{1,32}:\\d{1,25}>$")
+_CUSTOM_EMOJI_RE = re.compile(r"^<a?:[A-Za-z0-9_]{1,32}:\d{1,25}>$")
 
 
 def normalize_reaction_emoji(value) -> str | None:
