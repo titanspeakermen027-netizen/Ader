@@ -18,6 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import RedirectResponse
 
 from web import dashboard_app as base
+from cogs.professional_core import normalize_reaction_emojis
 
 
 class CloudflareSessionBridge(BaseHTTPMiddleware):
@@ -223,12 +224,22 @@ def create_app(bot):
             value = data.get(section)
             if isinstance(value, dict):
                 settings[section].update(value)
+        if not isinstance(settings.get("automod"), dict):
+            settings["automod"] = {}
         settings["automod"]["mentions"] = max(2, min(50, int(settings["automod"].get("mentions", 5))))
         settings["automod"]["messages"] = max(3, min(50, int(settings["automod"].get("messages", 6))))
         settings["automod"]["window"] = max(2, min(60, int(settings["automod"].get("window", 5))))
         settings["automod"]["timeout"] = max(1, min(40320, int(settings["automod"].get("timeout", 5))))
         words = settings["automod"].get("words", [])
         settings["automod"]["words"] = [str(x).strip()[:100] for x in words if str(x).strip()][:200]
+        reaction_filter = settings["automod"].get("reaction_filter")
+        if not isinstance(reaction_filter, dict):
+            reaction_filter = {}
+        settings["automod"]["reaction_filter"] = {
+            "enabled": bool(reaction_filter.get("enabled", False)),
+            "timeout": max(1, min(40320, int(reaction_filter.get("timeout", 5) or 5))),
+            "emojis": normalize_reaction_emojis(reaction_filter.get("emojis", [])),
+        }
         settings["levels"]["min"] = max(1, min(100, int(settings["levels"].get("min", 8))))
         settings["levels"]["max"] = max(settings["levels"]["min"], min(100, int(settings["levels"].get("max", 14))))
         settings["levels"]["cooldown"] = max(5, min(3600, int(settings["levels"].get("cooldown", 45))))
