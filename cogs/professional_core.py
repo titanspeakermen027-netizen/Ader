@@ -172,6 +172,8 @@ class ProfessionalCore(commands.Cog):
         # Remove only the offending user's reaction. PartialMessage avoids
         # depending on the message being present in the local cache.
         channel = guild.get_channel(payload.channel_id)
+        if channel is None and hasattr(guild, "get_thread"):
+            channel = guild.get_thread(payload.channel_id)
         if channel is not None and hasattr(channel, "get_partial_message"):
             try:
                 message = channel.get_partial_message(payload.message_id)
