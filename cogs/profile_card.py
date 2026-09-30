@@ -226,6 +226,104 @@ class ProfileCard(commands.Cog):
         output.seek(0)
         return output
 
+    @commands.hybrid_command(name="rep")
+    async def reputation(self, ctx: commands.Context, member: Optional[discord.Member] = None):
+        """Give one reputation point to another member, once every 24 hours."""
+        if ctx.guild is None:
+            return
+
+        if member is None:
+            await ctx.send(
+                "❌ الاستعمال: \`!rep @العضو/ID\` أو \`/rep\` ثم اختر العضو.",
+                allowed_mentions=discord.AllowedMentions.none(),
+                delete_after=8 if ctx.interaction is None else None,
+            )
+            return
+
+        if member.bot:
+            await ctx.send(
+                "❌ لا يمكنك إعطاء السمعة للبوتات.",
+                allowed_mentions=discord.AllowedMentions.none(),
+                delete_after=8 if ctx.interaction is None else None,
+            )
+            return
+
+        if member.id == ctx.author.id:
+            await ctx.send(
+                "❌ لا يمكنك إعطاء السمعة لنفسك.",
+                allowed_mentions=discord.AllowedMentions.none(),
+                delete_after=8 if ctx.interaction is None else None,
+            )
+            return
+
+        now = discord.utils.utcnow().timestamp()
+        cooldown_seconds = 24 * 60 * 60
+
+        await self.db.execute(
+            """CREATE TABLE IF NOT EXISTS profile_reputation_cooldowns (
+                guild_id INTEGER NOT NULL,
+                giver_id INTEGER NOT NULL,
+                last_given_at REAL NOT NULL DEFAULT 0,
+                PRIMARY KEY (guild_id, giver_id)
+            )"""
+        )
+        await self.db.execute(
+            "INSERT OR IGNORE INTO profile_reputation_cooldowns(guild_id,giver_id,last_given_at) VALUES(?,?,0)",
+            (ctx.guild.id, ctx.author.id),
+        )
+
+        cooldown_row = await self.db.fetchone(
+            "SELECT last_given_at FROM profile_reputation_cooldowns WHERE guild_id=? AND giver_id=?",
+            (ctx.guild.id, ctx.author.id),
+        )
+        last_given_at = float(cooldown_row["last_given_at"]) if cooldown_row else 0.0
+        remaining = cooldown_seconds - (now - last_given_at)
+        if remaining > 0:
+            hours, rem = divmod(int(remaining), 3600)
+            minutes = rem // 60
+            seconds = rem % 60
+            await ctx.send(
+                f"⏳ مازال خاصك تستنى **{hours} ساعة و {minutes} دقيقة و {seconds} ثانية** قبل ما تعطي سمعة أخرى.",
+                allowed_mentions=discord.AllowedMentions.none(),
+                delete_after=8 if ctx.interaction is None else None,
+            )
+            return
+
+        # Claim the 24-hour cooldown atomically so duplicate requests cannot
+        # both award reputation when they arrive at nearly the same time.
+        claimed = await self.db.execute(
+            """UPDATE profile_reputation_cooldowns
+               SET last_given_at=?
+               WHERE guild_id=? AND giver_id=? AND (? - last_given_at) >= ?""",
+            (now, ctx.guild.id, ctx.author.id, now, cooldown_seconds),
+        )
+        if claimed.rowcount != 1:
+            await ctx.send(
+                "⏳ لا يمكنك إعطاء سمعة أخرى حالياً. حاول مرة أخرى بعد انتهاء المدة.",
+                allowed_mentions=discord.AllowedMentions.none(),
+                delete_after=8 if ctx.interaction is None else None,
+            )
+            return
+
+        await self.db.execute(
+            """INSERT INTO profile_reputation(guild_id,user_id,reputation)
+               VALUES(?,?,1)
+               ON CONFLICT(guild_id,user_id)
+               DO UPDATE SET reputation=reputation+1""",
+            (ctx.guild.id, member.id),
+        )
+        row = await self.db.fetchone(
+            "SELECT reputation FROM profile_reputation WHERE guild_id=? AND user_id=?",
+            (ctx.guild.id, member.id),
+        )
+        reputation = int(row["reputation"]) if row else 1
+
+        await ctx.send(
+            f"✅ {ctx.author.mention} عطى **+1 REP** لـ {member.mention}.\n"
+            f"📈 السمعة الحالية ديال {member.display_name}: **{reputation:+d} REP**",
+            allowed_mentions=discord.AllowedMentions(users=[ctx.author, member]),
+        )
+
     @commands.command(name="p", aliases=["P"])
     async def profile(
         self,
