@@ -234,7 +234,7 @@ class ProfileCard(commands.Cog):
 
         if member is None:
             await ctx.send(
-                "❌ الاستعمال: \`!rep @العضو/ID\` أو \`/rep\` ثم اختر العضو.",
+                "❌ الاستعمال: `!rep @العضو/ID` أو `/rep` ثم اختر العضو.",
                 allowed_mentions=discord.AllowedMentions.none(),
                 delete_after=8 if ctx.interaction is None else None,
             )
