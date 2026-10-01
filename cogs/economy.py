@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
-import math
 import random
 from datetime import datetime
 
@@ -18,7 +17,6 @@ from utils.embeds import EmbedFactory, EmbedColor
 
 logger = logging.getLogger(__name__)
 OWNER_ID = 1472570059367911587
-TRANSFER_TAX = 0.05
 CONFIRM_TIMEOUT = 60
 
 
@@ -260,10 +258,8 @@ class Economy(commands.Cog):
         if amount <= 0 or member.bot or member.id == ctx.author.id:
             return await ctx.send("❌ يجب تحديد مبلغ موجب وعضو آخر غير البوتات.", delete_after=8)
         balance = await self.db.get_balance(ctx.author.id)
-        fee = max(1, math.ceil(amount * TRANSFER_TAX))
-        total = amount + fee
-        if balance < total:
-            return await ctx.send(f"❌ رصيدك غير كافٍ. تحتاج **{total:,} {self.currency_name}** ورصيدك الحالي **{balance:,} {self.currency_name}**.", delete_after=10)
+        if balance < amount:
+            return await ctx.send(f"**ـ {ctx.author.name} رصيدك غير كافي لهذا!** :thinking:", allowed_mentions=discord.AllowedMentions.none())
         confirmed, user_code_message = await self._confirm(
             ctx.channel,
             ctx.author,
