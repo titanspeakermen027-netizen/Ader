@@ -313,7 +313,7 @@ class ProfileCard(commands.Cog):
         if remaining > 0:
             hours, rem = divmod(int(remaining), 3600)
             minutes = rem // 60
-            seconds = rem // 60 % 60
+            seconds = rem % 60
             await ctx.send(
                 f"⏳ مازال خاصك تستنى {hours} ساعة و {minutes} دقيقة و {seconds} ثانية قبل ما تعطي سمعة أخرى.",
                 allowed_mentions=discord.AllowedMentions.none(),
