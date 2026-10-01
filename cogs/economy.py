@@ -184,26 +184,24 @@ class Economy(commands.Cog):
     async def _transfer_amount(self, guild: discord.Guild, sender: discord.Member, recipient: discord.Member, amount: int) -> tuple[bool, str]:
         if amount <= 0 or recipient.bot or recipient.id == sender.id:
             return False, "❌ حدد مبلغاً موجباً وعضواً آخر غير البوتات."
-        fee = max(1, math.ceil(amount * TRANSFER_TAX))
-        total_cost = amount + fee
         balance = await self.db.get_balance(sender.id)
-        if balance < total_cost:
-            return False, f"❌ رصيدك غير كافٍ. تحتاج **{total_cost:,} {self.currency_name}** (المبلغ + ضريبة 5%) ورصيدك الحالي **{balance:,} {self.currency_name}**."
-        if not await self.db.remove_balance(sender.id, guild.id, total_cost):
+        if balance < amount:
+            return False, f"**ـ {sender.name} رصيدك غير كافي لهذا!** :thinking:"
+        if not await self.db.remove_balance(sender.id, guild.id, amount):
             return False, "❌ تعذر خصم المبلغ من رصيدك. لم يتم التحويل."
         if not await self.db.add_balance(recipient.id, guild.id, amount):
-            await self.db.add_balance(sender.id, guild.id, total_cost)
+            await self.db.add_balance(sender.id, guild.id, amount)
             return False, "❌ تعذر إضافة المبلغ للمستلم؛ تمت إعادة الرصيد."
         await self._send_transfer_dm(recipient, amount, sender)
         return True, f"**ـ {sender.name}, قام بتحويل `${amount:,}` لـ {recipient.mention} ** | 💰"
-
     async def _transfer_interaction(self, interaction: discord.Interaction, recipient: discord.Member, amount: int):
-        if amount <= 0 or recipient.bot or recipient.id == interaction.user.id:
-            return await interaction.response.send_message(embed=EmbedFactory.error("مبلغ غير صالح", "حدد مبلغاً موجباً وعضواً آخر غير البوتات."), ephemeral=True)
+        if amount <= 0 or recipient.id == interaction.user.id:
+            return await interaction.response.send_message(embed=EmbedFactory.error("مبلغ غير صالح", "حدد مبلغاً موجباً وعضواً آخر."), ephemeral=True)
+        if recipient.bot:
+            return await interaction.response.send_message(f":thinking: | **{interaction.user.name}، البوتات لا تملك أرصدة !**", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         balance = await self.db.get_balance(interaction.user.id)
-        fee = max(1, math.ceil(amount * TRANSFER_TAX))
-        if balance < amount + fee:
-            return await interaction.response.send_message(embed=EmbedFactory.error("رصيد غير كافٍ", f"تحتاج **{amount + fee:,} {self.currency_name}** ورصيدك **{balance:,} {self.currency_name}**."), ephemeral=True)
+        if balance < amount:
+            return await interaction.response.send_message(f"**ـ {interaction.user.name} رصيدك غير كافي لهذا!** :thinking:", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         await interaction.response.defer(ephemeral=True)
         confirmed, user_code_message = await self._confirm(
             interaction.channel,
@@ -228,7 +226,6 @@ class Economy(commands.Cog):
                 await self._delete_message(user_code_message)
         else:
             await interaction.followup.send(text, ephemeral=True)
-
     @app_commands.command(name="credits", description="Show your balance or another member's balance, or transfer ANOCoin")
     @app_commands.describe(user="Member whose balance you want to view or receive ANOCoin", amount="Amount to transfer")
     async def credits(self, interaction: discord.Interaction, user: discord.Member | None = None, amount: int | None = None):
@@ -237,6 +234,8 @@ class Economy(commands.Cog):
             text = await self.format_balance_message(interaction.user.id, interaction.user.name, balance, own_balance=True)
             return await interaction.response.send_message(text, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         if user is not None and amount is None:
+            if user.bot:
+                return await interaction.response.send_message(f":thinking: | **{interaction.user.name}، البوتات لا تملك أرصدة !**", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
             balance = await self.db.get_balance(user.id)
             text = await self.format_balance_message(interaction.user.id, user.name, balance, own_balance=False)
             return await interaction.response.send_message(text, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
@@ -253,10 +252,14 @@ class Economy(commands.Cog):
             balance = await self.db.get_balance(ctx.author.id)
             return await ctx.send(f"🪙 رصيدك الحالي هو **{balance:,} {self.currency_name}**.")
         if amount is None:
+            if member.bot:
+                return await ctx.send(f":thinking: | **{ctx.author.name}، البوتات لا تملك أرصدة !**", allowed_mentions=discord.AllowedMentions.none())
             balance = await self.db.get_balance(member.id)
             return await ctx.send(f"🪙 رصيد {member.mention} الحالي هو **{balance:,} {self.currency_name}**.")
-        if amount <= 0 or member.bot or member.id == ctx.author.id:
-            return await ctx.send("❌ يجب تحديد مبلغ موجب وعضو آخر غير البوتات.", delete_after=8)
+        if member.bot:
+            return await ctx.send(f":thinking: | **{ctx.author.name}، البوتات لا تملك أرصدة !**", allowed_mentions=discord.AllowedMentions.none())
+        if amount <= 0 or member.id == ctx.author.id:
+            return await ctx.send("❌ يجب تحديد مبلغ موجب وعضواً آخر غير البوتات.")
         balance = await self.db.get_balance(ctx.author.id)
         if balance < amount:
             return await ctx.send(f"**ـ {ctx.author.name} رصيدك غير كافي لهذا!** :thinking:", allowed_mentions=discord.AllowedMentions.none())
@@ -278,49 +281,11 @@ class Economy(commands.Cog):
                     allowed_mentions=discord.AllowedMentions(users=[member], replied_user=False),
                 )
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                await ctx.send(
-                    text,
-                    allowed_mentions=discord.AllowedMentions(users=[member], replied_user=False),
-                )
+                await ctx.send(text, allowed_mentions=discord.AllowedMentions(users=[member], replied_user=False))
             finally:
                 await self._delete_message(user_code_message)
         else:
-            await ctx.send(
-                text,
-                allowed_mentions=discord.AllowedMentions(users=[member], replied_user=False),
-            )
-
-    @app_commands.command(name="give", description="Give ANOCoin from your own balance")
-    @app_commands.describe(user="User to give to", amount="Amount to give")
-    async def give(self, interaction: discord.Interaction, user: discord.Member, amount: int):
-        await self._transfer_interaction(interaction, user, amount)
-
-    @app_commands.command(name="coinflip-bet", description="Bet ANOCoin on a coin flip")
-    @app_commands.describe(amount="Amount to bet", choice="heads or tails")
-    async def coinflip(self, interaction: discord.Interaction, amount: int, choice: str):
-        if amount <= 0 or choice.lower() not in {"heads", "tails", "h", "t"}:
-            return await interaction.response.send_message(embed=EmbedFactory.error("Invalid bet", "حدد مبلغاً موجباً واختياراً صحيحاً."), ephemeral=True)
-        balance = await self.db.get_balance(interaction.user.id)
-        if balance < amount:
-            return await interaction.response.send_message(embed=EmbedFactory.error("رصيد غير كافٍ", "لا يوجد لديك رصيد كافٍ."), ephemeral=True)
-        choice = "heads" if choice.lower() in {"heads", "h"} else "tails"
-        won = random.choice(["heads", "tails"]) == choice
-        await self.db.remove_balance(interaction.user.id, interaction.guild.id, amount)
-        if won:
-            await self.db.add_balance(interaction.user.id, interaction.guild.id, amount * 2)
-        new_balance = await self.db.get_balance(interaction.user.id)
-        text = f"🎉 ربحت **{amount:,} {self.currency_name}**" if won else f"❌ خسرت **{amount:,} {self.currency_name}**"
-        embed = EmbedFactory.success("Coinflip", f"{text}\nرصيدك: **{new_balance:,} {self.currency_name}**") if won else EmbedFactory.error("Coinflip", f"{text}\nرصيدك: **{new_balance:,} {self.currency_name}**")
-        await interaction.response.send_message(embed=embed)
-
-    @app_commands.command(name="shop", description="View the server shop")
-    async def shop(self, interaction: discord.Interaction):
-        items = await self.db.get_shop_items(interaction.guild.id)
-        if not items:
-            return await interaction.response.send_message(embed=EmbedFactory.info("Empty Shop", "المتجر فارغ حالياً."), ephemeral=True)
-        description = "\n\n".join(f"**{x['name']}** — {self.currency_symbol} {x['price']:,}\n{x['description']}" for x in items[:25])
-        await interaction.response.send_message(embed=EmbedFactory.create(title="🏪 ANOCoin Shop", description=description, color=EmbedColor.ECONOMY))
-
+            await ctx.send(text, allowed_mentions=discord.AllowedMentions(users=[member], replied_user=False))
 
 
 
