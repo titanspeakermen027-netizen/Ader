@@ -256,6 +256,13 @@ class Ader(commands.Bot):
             await message.reply("❌ يجب تحديد مبلغ موجب وعضو آخر غير البوتات.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
         balance = await self.db.get_balance(message.author.id)
+        if balance < amount:
+            await message.reply(
+                f"**ـ {message.author.name} رصيدك غير كافي لهذا!** :thinking:",
+                mention_author=False,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            return True
 
         confirmed, user_code_message = await economy._confirm(
             message.channel,
