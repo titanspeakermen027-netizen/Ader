@@ -1,6 +1,5 @@
 """Ader Ultimate Discord bot entry point."""
 import asyncio
-import math
 import os
 import time
 from pathlib import Path
@@ -240,9 +239,12 @@ class Ader(commands.Bot):
         if len(parts) == 3:
             amount = NumberConverter.parse_number(parts[-1].replace(",", "").replace(" ", ""))
             if amount is None:
-                await message.reply("❌ المبلغ يجب أن يكون رقماً صحيحاً أو بصيغة `40k` أو `1m` أو `1b`.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+                await message.reply(f"**ـ {message.author.name} اكتب المبلغ الذي تريد تحويله!** | :interrobang:", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
                 return True
         elif len(parts) == 2:
+            if member.bot:
+                await message.reply(f":thinking: | **{message.author.name}، البوتات لا تملك أرصدة !**", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+                return True
             balance = await self.db.get_balance(member.id)
             text = await economy.format_balance_message(message.author.id, member.name, balance, own_balance=False)
             await message.reply(text, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
