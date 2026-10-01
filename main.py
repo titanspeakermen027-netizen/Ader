@@ -256,11 +256,7 @@ class Ader(commands.Bot):
             await message.reply("❌ يجب تحديد مبلغ موجب وعضو آخر غير البوتات.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
         balance = await self.db.get_balance(message.author.id)
-        fee = max(1, math.ceil(amount * 0.05))
-        total = amount + fee
-        if balance < total:
-            await message.reply(f"❌ رصيدك غير كافٍ. تحتاج **{total:,} ANORIS** ورصيدك الحالي **{balance:,} ANORIS**.", delete_after=10, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
-            return True
+
         confirmed, user_code_message = await economy._confirm(
             message.channel,
             message.author,
