@@ -25,6 +25,25 @@ class LinkedBotManager:
         self.instances: dict[int, commands.Bot] = {}
         self.tasks: dict[int, asyncio.Task] = {}
         self.cipher = TokenCipher()
+        self.monitor_task: asyncio.Task | None = None
+
+    async def start_monitor(self):
+        if self.monitor_task is None or self.monitor_task.done():
+            self.monitor_task = asyncio.create_task(self._monitor(), name="ader-linked-bot-monitor")
+
+    async def _monitor(self):
+        while True:
+            try:
+                await asyncio.sleep(30)
+                for guild_id in list(self.instances):
+                    try:
+                        if not await self.primary.db.is_server_premium(guild_id):
+                            self.log.info("Premium expired; stopping linked bot for guild %s", guild_id)
+                            await self.stop_for_guild(guild_id)
+                    except Exception as exc:
+                        self.log.error("Linked bot monitor failed for guild %s: %s", guild_id, str(exc)[:300])
+            except asyncio.CancelledError:
+                return
 
     def is_handoff_guild(self, guild_id: int) -> bool:
         return int(guild_id) in self.instances
@@ -127,6 +146,13 @@ class LinkedBotManager:
     async def stop_all(self) -> None:
         for guild_id in list(self.instances):
             await self.stop_for_guild(guild_id)
+        if self.monitor_task is not None and not self.monitor_task.done():
+            self.monitor_task.cancel()
+            try:
+                await self.monitor_task
+            except asyncio.CancelledError:
+                pass
+        self.monitor_task = None
 
 
 async def apply_linked_profile(bot, profile: dict[str, Any]) -> None:
