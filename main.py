@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from database.db_manager import DatabaseManager
 from utils.logger import BotLogger
 from utils.converters import NumberConverter
+from utils.linked_bot import LinkedBotManager, apply_linked_profile
 
 load_dotenv()
 discord.timedelta = timedelta
@@ -47,7 +48,7 @@ class AderContext(commands.Context):
 class Ader(commands.Bot):
     TARGET_GUILD_ID = 1490355290116194388
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, *, linked_mode: bool = False, linked_guild_id: int | None = None, db_path: str | None = None):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.members = True
@@ -62,16 +63,58 @@ class Ader(commands.Bot):
             prefixes.append("$")
         super().__init__(command_prefix=prefixes, intents=intents, help_command=None)
         self.config = config
+        self.linked_mode = bool(linked_mode)
+        self.linked_guild_id = int(linked_guild_id) if linked_guild_id else None
+        self.linked_manager = None
+        self.linked_bot_manager = None
         self.start_time = discord.utils.utcnow()
         self.logger = BotLogger(config.get("logging", {}))
         configured_db = Path(config.get("database", {}).get("sqlite_path", "data/ader.sqlite3"))
         data_dir = os.getenv("ADER_DATA_DIR", "").strip()
-        db_path = Path(data_dir) / configured_db.name if data_dir else configured_db
-        self.db = DatabaseManager(str(db_path))
+        resolved_db = Path(db_path) if db_path else (Path(data_dir) / configured_db.name if data_dir else configured_db)
+        self.db = DatabaseManager(str(resolved_db))
         self._instance_lock_handle = None
         self._ready_sync_done = False
         self._processed_message_count = 0
         self.tree.on_error = self._tree_error
+        if not self.linked_mode:
+            self.linked_bot_manager = LinkedBotManager(self)
+
+    @staticmethod
+    def _event_guild_id(args) -> int | None:
+        for item in args[:3]:
+            if item is None:
+                continue
+            try:
+                guild_id = getattr(item, "guild_id", None)
+                if guild_id is not None:
+                    return int(guild_id)
+            except (TypeError, ValueError):
+                pass
+            guild = getattr(item, "guild", None)
+            if guild is not None:
+                try:
+                    return int(guild.id)
+                except (AttributeError, TypeError, ValueError):
+                    pass
+            if isinstance(item, dict) and item.get("guild_id") is not None:
+                try:
+                    return int(item["guild_id"])
+                except (TypeError, ValueError):
+                    pass
+        return None
+
+    def dispatch(self, event: str, /, *args, **kwargs):
+        manager = self.linked_manager if self.linked_mode else self.linked_bot_manager
+        if manager is not None:
+            guild_id = self._event_guild_id(args)
+            if guild_id is not None:
+                if self.linked_mode:
+                    if self.linked_guild_id is not None and guild_id != self.linked_guild_id:
+                        return
+                elif manager.is_handoff_guild(guild_id):
+                    return
+        return super().dispatch(event, *args, **kwargs)
 
     async def get_context(self, origin, *, cls=None):
         return await super().get_context(origin, cls=cls or AderContext)
@@ -104,7 +147,8 @@ class Ader(commands.Bot):
             self._instance_lock_handle = None
 
     async def setup_hook(self):
-        self._acquire_instance_lock()
+        if not self.linked_mode:
+            self._acquire_instance_lock()
         await self.db.connect()
         await self.db.execute("""CREATE TABLE IF NOT EXISTS processed_messages(message_id INTEGER PRIMARY KEY, created_at REAL NOT NULL)""")
         await self.db.execute("DELETE FROM processed_messages WHERE created_at < ?", (time.time() - 7 * 24 * 60 * 60,))
@@ -140,6 +184,8 @@ class Ader(commands.Bot):
             "cogs.dashboard_config", "cogs.dashboard_server", "cogs.owner_currency", "cogs.profile_card",
             "cogs.member_currency_reset", "cogs.server_premium", "cogs.professional_core",
         )
+        if self.linked_mode:
+            extensions = tuple(x for x in extensions if x != "cogs.dashboard_server")
         loaded, failed = [], []
         for extension in extensions:
             try:
@@ -172,6 +218,8 @@ class Ader(commands.Bot):
             pass
 
     async def on_interaction(self, interaction: discord.Interaction):
+        if self.linked_mode and self.linked_guild_id is not None and interaction.guild_id != self.linked_guild_id:
+            return
         if interaction.guild is not None and interaction.type is discord.InteractionType.application_command:
             command = getattr(interaction, "command", None)
             if command is not None:
@@ -319,6 +367,31 @@ class Ader(commands.Bot):
             await interaction.response.send_message(text, ephemeral=True)
 
     async def on_ready(self):
+        if self.linked_mode:
+            record = await self.db.get_linked_bot(self.linked_guild_id) if self.linked_guild_id else None
+            if record and self.user and not getattr(self, "_linked_profile_applied", False):
+                try:
+                    await apply_linked_profile(self, record)
+                    await self.db.update_linked_bot_status(self.linked_guild_id, "online", None)
+                    self._linked_profile_applied = True
+                except Exception as exc:
+                    self.logger.error("Failed to apply linked bot profile for guild %s: %s", self.linked_guild_id, str(exc)[:400])
+                    await self.db.update_linked_bot_status(self.linked_guild_id, "error", str(exc)[:500])
+            if self._ready_sync_done:
+                return
+            try:
+                target_guild = self.get_guild(self.linked_guild_id) if self.linked_guild_id else None
+                if target_guild is None:
+                    raise RuntimeError("البوت المرتبط ليس داخل السيرفر المحدد.")
+                target = discord.Object(id=target_guild.id)
+                self.tree.copy_global_to(guild=target)
+                guild_synced = await self.tree.sync(guild=target)
+                self._ready_sync_done = True
+                self.logger.info("Linked bot ready as %s in guild %s; synced %d commands", self.user, target_guild.id, len(guild_synced))
+            except Exception:
+                self.logger.error("Linked bot command synchronization failed", exc_info=True)
+            return
+
         types = {"playing": discord.ActivityType.playing, "watching": discord.ActivityType.watching, "listening": discord.ActivityType.listening, "streaming": discord.ActivityType.streaming}
         typ = self.config.get("bot", {}).get("activity_type", "watching")
         text = self.config.get("bot", {}).get("activity", "مجتمعك")
@@ -342,10 +415,16 @@ class Ader(commands.Bot):
             self.logger.error("Command synchronization failed", exc_info=True)
 
     async def close(self):
+        if not self.linked_mode and self.linked_bot_manager is not None:
+            try:
+                await self.linked_bot_manager.stop_all()
+            except Exception:
+                self.logger.error("Failed to stop linked bots cleanly", exc_info=True)
         try:
             await self.db.disconnect()
         finally:
-            self._release_instance_lock()
+            if not self.linked_mode:
+                self._release_instance_lock()
             await super().close()
 
 
