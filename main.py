@@ -152,6 +152,8 @@ class Ader(commands.Bot):
         await self.db.connect()
         await self.db.execute("""CREATE TABLE IF NOT EXISTS processed_messages(message_id INTEGER PRIMARY KEY, created_at REAL NOT NULL)""")
         await self.db.execute("DELETE FROM processed_messages WHERE created_at < ?", (time.time() - 7 * 24 * 60 * 60,))
+        if self.linked_bot_manager is not None:
+            await self.linked_bot_manager.start_monitor()
         await self.load_cogs()
 
     async def _claim_message_once(self, message_id: int) -> bool:
