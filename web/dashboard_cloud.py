@@ -19,6 +19,8 @@ from starlette.responses import RedirectResponse
 
 from web import dashboard_app as base
 from cogs.professional_core import normalize_reaction_emojis
+from utils.premium import describe as describe_premium, has_feature, FEATURES
+from utils.secrets_store import TokenCipher
 
 
 class CloudflareSessionBridge(BaseHTTPMiddleware):
@@ -72,6 +74,31 @@ async def _require_premium(bot, guild_id: int):
         raise HTTPException(status_code=402, detail="⭐ هذه الميزة متوفرة حصرياً لسيرفرات Ader Premium")
 
 
+async def _require_feature(bot, guild_id: int, feature: str):
+    await _require_premium(bot, guild_id)
+    if not await has_feature(bot.db, guild_id, feature):
+        raise HTTPException(status_code=403, detail="هذه الميزة غير متاحة ضمن خطة Premium الحالية.")
+
+
+def _clean_profile(data: dict[str, Any]) -> dict[str, Any]:
+    allowed = {"bot_name", "avatar_url", "banner_url", "bio", "activity_text", "activity_type"}
+    profile = {k: data.get(k) for k in allowed if k in data}
+    name = str(profile.get("bot_name") or "").strip()
+    if name and not 2 <= len(name) <= 32:
+        raise HTTPException(status_code=400, detail="اسم البوت يجب أن يكون بين 2 و32 حرفاً.")
+    for key in ("avatar_url", "banner_url"):
+        value = str(profile.get(key) or "").strip()
+        if value and not value.startswith("https://"):
+            raise HTTPException(status_code=400, detail="روابط الصور يجب أن تبدأ بـ https://")
+        profile[key] = value or None
+    profile["bio"] = str(profile.get("bio") or "").strip()[:1900]
+    profile["activity_text"] = str(profile.get("activity_text") or "Managing your community").strip()[:128]
+    profile["activity_type"] = str(profile.get("activity_type") or "watching").lower()
+    if profile["activity_type"] not in {"playing", "watching", "listening", "streaming"}:
+        profile["activity_type"] = "watching"
+    return profile
+
+
 def create_app(bot):
     cfg = bot.config.get("web", {}) or {}
     app = base.create_app(bot)
@@ -86,16 +113,142 @@ def create_app(bot):
         )
     app.add_middleware(CloudflareSessionBridge)
 
+    @app.get("/api/premium/plans")
+    async def premium_plans(request: Request):
+        session = await base._session_for(request, bot)
+        if not session:
+            raise HTTPException(status_code=401, detail="تسجيل الدخول مطلوب")
+        return {
+            "plans": [
+                {
+                    "id": "free",
+                    "name": "Ader Free",
+                    "description": "الميزات الأساسية.",
+                    "features": [{"key": f.key, "name": f.name, "free_limit": f.free_limit} for f in FEATURES],
+                },
+                {
+                    "id": "premium",
+                    "name": "Ader Premium",
+                    "description": "جميع ميزات Premium مع الحدود الموسعة.",
+                    "features": [{"key": f.key, "name": f.name, "premium_limit": f.premium_limit} for f in FEATURES],
+                },
+            ]
+        }
+
     @app.get("/api/guilds/{guild_id}/premium")
     async def cloud_premium(request: Request, guild_id: int):
         await _require_guild(bot, request, guild_id)
-        premium = await bot.db.get_server_premium(guild_id) if hasattr(bot.db, "get_server_premium") else None
-        return {
-            "active": bool(premium),
+        payload = await describe_premium(bot.db, guild_id)
+        linked = await bot.db.get_linked_bot(guild_id) if hasattr(bot.db, "get_linked_bot") else None
+        manager = getattr(bot, "linked_bot_manager", None)
+        running = bool(manager and manager.linked_bot(guild_id))
+        payload.update({
             "guild_id": guild_id,
-            "expires_at": premium.get("expires_at") if premium else None,
-            "started_at": premium.get("started_at") if premium else None,
-        }
+            "linked_bot": {
+                "configured": bool(linked),
+                "running": running,
+                "bot_user_id": linked.get("bot_user_id") if linked else None,
+                "status": linked.get("status") if linked else "not_configured",
+                "last_error": linked.get("last_error") if linked else None,
+                "bot_name": linked.get("bot_name") if linked else None,
+                "avatar_url": linked.get("avatar_url") if linked else None,
+                "banner_url": linked.get("banner_url") if linked else None,
+                "bio": linked.get("bio", "") if linked else "",
+                "activity_text": linked.get("activity_text", "Managing your community") if linked else "Managing your community",
+                "activity_type": linked.get("activity_type", "watching") if linked else "watching",
+            },
+        })
+        return payload
+
+    @app.post("/api/guilds/{guild_id}/premium/linked-bot")
+    async def linked_bot_create(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        await _require_feature(bot, guild_id, "linked_bot")
+        manager = getattr(bot, "linked_bot_manager", None)
+        if manager is None:
+            raise HTTPException(status_code=503, detail="مدير البوتات المرتبطة غير متاح حالياً.")
+        if await bot.db.get_linked_bot(guild_id):
+            raise HTTPException(status_code=409, detail="يوجد بوت مرتبط بهذا السيرفر. استعمل تعديل الملف أو احذف الربط أولاً.")
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="بيانات غير صالحة.")
+        token = str(data.get("token") or "").strip()
+        if not token:
+            raise HTTPException(status_code=400, detail="توكن البوت مطلوب.")
+        try:
+            cipher = TokenCipher()
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+        fingerprint = cipher.fingerprint(token)
+        duplicate = await bot.db.get_linked_bot_by_fingerprint(fingerprint)
+        if duplicate:
+            raise HTTPException(status_code=409, detail="هذا البوت مرتبط أصلاً بسيرفر Premium آخر في Ader.")
+        profile = _clean_profile(data)
+        encrypted = cipher.encrypt(token)
+        await bot.db.save_linked_bot(guild_id, encrypted, fingerprint, profile)
+        try:
+            result = await manager.start_for_guild(guild_id)
+        except Exception as exc:
+            await bot.db.delete_linked_bot(guild_id)
+            raise HTTPException(status_code=400, detail=str(exc)[:500])
+        return {"ok": True, **result}
+
+    @app.put("/api/guilds/{guild_id}/premium/linked-bot")
+    async def linked_bot_update(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        await _require_feature(bot, guild_id, "custom_bot_identity")
+        linked = await bot.db.get_linked_bot(guild_id)
+        if not linked:
+            raise HTTPException(status_code=404, detail="لا يوجد بوت مرتبط بهذا السيرفر.")
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="بيانات غير صالحة.")
+        profile = _clean_profile(data)
+        await bot.db.update_linked_bot_profile(guild_id, profile)
+        manager = getattr(bot, "linked_bot_manager", None)
+        instance = manager.linked_bot(guild_id) if manager else None
+        if instance and instance.user:
+            updated = await bot.db.get_linked_bot(guild_id)
+            from utils.linked_bot import apply_linked_profile
+            try:
+                await apply_linked_profile(instance, updated or {})
+                await bot.db.update_linked_bot_status(guild_id, "online", None)
+            except Exception:
+                await bot.db.update_linked_bot_status(guild_id, "error", "تعذر تطبيق إعدادات البوت على Discord.")
+                raise HTTPException(status_code=400, detail="تعذر تطبيق إعدادات البوت على Discord.")
+        return {"ok": True, "linked_bot": await bot.db.get_linked_bot(guild_id)}
+
+    @app.post("/api/guilds/{guild_id}/premium/linked-bot/start")
+    async def linked_bot_start(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        await _require_feature(bot, guild_id, "linked_bot")
+        manager = getattr(bot, "linked_bot_manager", None)
+        if manager is None:
+            raise HTTPException(status_code=503, detail="مدير البوتات المرتبطة غير متاح.")
+        try:
+            return await manager.start_for_guild(guild_id)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)[:500])
+
+    @app.post("/api/guilds/{guild_id}/premium/linked-bot/stop")
+    async def linked_bot_stop(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        await _require_feature(bot, guild_id, "linked_bot")
+        manager = getattr(bot, "linked_bot_manager", None)
+        if manager is None:
+            raise HTTPException(status_code=503, detail="مدير البوتات المرتبطة غير متاح.")
+        await manager.stop_for_guild(guild_id)
+        return {"ok": True}
+
+    @app.delete("/api/guilds/{guild_id}/premium/linked-bot")
+    async def linked_bot_delete(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        await _require_feature(bot, guild_id, "linked_bot")
+        manager = getattr(bot, "linked_bot_manager", None)
+        if manager:
+            await manager.stop_for_guild(guild_id)
+        await bot.db.delete_linked_bot(guild_id)
+        return {"ok": True}
 
     @app.get("/api/guilds/{guild_id}/tickets")
     async def cloud_ticket_data(request: Request, guild_id: int):
@@ -143,7 +296,7 @@ def create_app(bot):
 
     @app.post("/api/guilds/{guild_id}/tickets/panels")
     async def cloud_ticket_panel_create(request: Request, guild_id: int):
-        guild = _require_guild(bot, request, guild_id)
+        guild = await _require_guild(bot, request, guild_id)
         await _require_premium(bot, guild_id)
         data = await request.json()
         panel = normalise_panel_payload(guild, data)
