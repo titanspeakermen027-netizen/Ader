@@ -54,6 +54,9 @@ class ServerPremium(commands.Cog):
         if cmd == "uprme":
             if not await self._allowed(message.author):
                 return await self._reply(message, "❌ صلاحية مرفوضة", "هذا الأمر مخصص لصاحب البوت أو من لديه صلاحية **بوت**.")
+                manager = getattr(self.bot, "linked_bot_manager", None)
+            if manager is not None:
+                await manager.stop_for_guild(message.guild.id)
             await self.db.remove_server_premium(message.guild.id)
             return await self._reply(message, "تم إلغاء البريميوم من سيرفر " + message.guild.name, "**ايدي السيرفر:**\n`" + str(message.guild.id) + "`\n**ايدي صاحب السيرفر:**\n`" + str(message.guild.owner_id) + "`")
         if len(parts) != 2:
