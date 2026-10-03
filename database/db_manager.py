@@ -224,9 +224,42 @@ class DatabaseManager:
             started_at REAL NOT NULL,
             expires_at REAL NOT NULL,
             granted_by INTEGER NOT NULL,
+            updated_at REAL NOT NULL,
+            plan_id TEXT NOT NULL DEFAULT 'premium'
+        )""")
+        premium_columns = {str(row[1]) for row in await self.fetchall("PRAGMA table_info(server_premium)")}
+        if "plan_id" not in premium_columns:
+            await self.connection.execute("ALTER TABLE server_premium ADD COLUMN plan_id TEXT NOT NULL DEFAULT 'premium'")
+        await self.connection.execute("CREATE INDEX IF NOT EXISTS idx_server_premium_expiry ON server_premium(expires_at)")
+
+        await self.connection.execute("""CREATE TABLE IF NOT EXISTS premium_entitlements (
+            guild_id INTEGER NOT NULL,
+            feature TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            limit_value INTEGER,
+            expires_at REAL,
+            updated_at REAL NOT NULL,
+            PRIMARY KEY (guild_id, feature)
+        )""")
+        await self.connection.execute("CREATE INDEX IF NOT EXISTS idx_premium_entitlements_guild ON premium_entitlements(guild_id)")
+
+        await self.connection.execute("""CREATE TABLE IF NOT EXISTS linked_bots (
+            guild_id INTEGER PRIMARY KEY,
+            bot_user_id INTEGER,
+            encrypted_token TEXT NOT NULL,
+            token_fingerprint TEXT NOT NULL UNIQUE,
+            bot_name TEXT,
+            avatar_url TEXT,
+            banner_url TEXT,
+            bio TEXT NOT NULL DEFAULT '',
+            activity_text TEXT NOT NULL DEFAULT 'Managing your community',
+            activity_type TEXT NOT NULL DEFAULT 'watching',
+            status TEXT NOT NULL DEFAULT 'stopped',
+            last_error TEXT,
+            created_at REAL NOT NULL,
             updated_at REAL NOT NULL
         )""")
-        await self.connection.execute("CREATE INDEX IF NOT EXISTS idx_server_premium_expiry ON server_premium(expires_at)")
+        await self.connection.execute("CREATE INDEX IF NOT EXISTS idx_linked_bots_status ON linked_bots(status)")
         await self.connection.commit()
         logger.info("SQLite migration completed successfully")
 
@@ -375,21 +408,139 @@ class DatabaseManager:
     async def is_server_premium(self, guild_id: int) -> bool:
         return await self.get_server_premium(guild_id) is not None
 
-    async def set_server_premium(self, guild_id: int, owner_id: int, started_at: float, expires_at: float, granted_by: int):
+    async def set_server_premium(self, guild_id: int, owner_id: int, started_at: float, expires_at: float, granted_by: int, plan_id: str = "premium"):
         await self.execute(
-            """INSERT INTO server_premium(guild_id,owner_id,started_at,expires_at,granted_by,updated_at)
-               VALUES(?,?,?,?,?,?)
+            """INSERT INTO server_premium(guild_id,owner_id,started_at,expires_at,granted_by,updated_at,plan_id)
+               VALUES(?,?,?,?,?,?,?)
                ON CONFLICT(guild_id) DO UPDATE SET
                owner_id=excluded.owner_id,
                started_at=excluded.started_at,
                expires_at=excluded.expires_at,
                granted_by=excluded.granted_by,
-               updated_at=excluded.updated_at""",
-            (int(guild_id), int(owner_id), float(started_at), float(expires_at), int(granted_by), time.time()),
+               updated_at=excluded.updated_at,
+               plan_id=excluded.plan_id""",
+            (int(guild_id), int(owner_id), float(started_at), float(expires_at), int(granted_by), time.time(), str(plan_id or "premium")),
         )
 
     async def remove_server_premium(self, guild_id: int):
         await self.execute("DELETE FROM server_premium WHERE guild_id=?", (int(guild_id),))
+
+    async def get_premium_entitlement(self, guild_id: int, feature: str):
+        row = await self.fetchone(
+            "SELECT * FROM premium_entitlements WHERE guild_id=? AND feature=?",
+            (int(guild_id), str(feature)),
+        )
+        if not row:
+            return None
+        data = dict(row)
+        if data.get("expires_at") and float(data["expires_at"]) <= time.time():
+            await self.execute(
+                "DELETE FROM premium_entitlements WHERE guild_id=? AND feature=?",
+                (int(guild_id), str(feature)),
+            )
+            return None
+        return data
+
+    async def set_premium_entitlement(self, guild_id: int, feature: str, enabled: bool = True, limit_value: int | None = None, expires_at: float | None = None):
+        await self.execute(
+            """INSERT INTO premium_entitlements(guild_id,feature,enabled,limit_value,expires_at,updated_at)
+               VALUES(?,?,?,?,?,?)
+               ON CONFLICT(guild_id,feature) DO UPDATE SET
+               enabled=excluded.enabled,limit_value=excluded.limit_value,
+               expires_at=excluded.expires_at,updated_at=excluded.updated_at""",
+            (int(guild_id), str(feature), 1 if enabled else 0, limit_value, expires_at, time.time()),
+        )
+
+    async def get_linked_bot(self, guild_id: int):
+        row = await self.fetchone("SELECT * FROM linked_bots WHERE guild_id=?", (int(guild_id),))
+        return dict(row) if row else None
+
+    async def get_linked_bot_by_fingerprint(self, fingerprint: str, exclude_guild_id: int | None = None):
+        if exclude_guild_id is None:
+            row = await self.fetchone("SELECT * FROM linked_bots WHERE token_fingerprint=?", (str(fingerprint),))
+        else:
+            row = await self.fetchone(
+                "SELECT * FROM linked_bots WHERE token_fingerprint=? AND guild_id<>?",
+                (str(fingerprint), int(exclude_guild_id)),
+            )
+        return dict(row) if row else None
+
+    async def save_linked_bot(self, guild_id: int, encrypted_token: str, token_fingerprint: str, profile: Dict[str, Any] | None = None):
+        profile = profile or {}
+        now = time.time()
+        await self.execute(
+            """INSERT INTO linked_bots(
+                guild_id,encrypted_token,token_fingerprint,bot_name,avatar_url,banner_url,bio,
+                activity_text,activity_type,status,last_error,created_at,updated_at
+            ) VALUES(?,?,?,?,?,?,?,?,?,'stopped',NULL,?,?)
+            ON CONFLICT(guild_id) DO UPDATE SET
+                encrypted_token=excluded.encrypted_token,
+                token_fingerprint=excluded.token_fingerprint,
+                bot_name=excluded.bot_name,
+                avatar_url=excluded.avatar_url,
+                banner_url=excluded.banner_url,
+                bio=excluded.bio,
+                activity_text=excluded.activity_text,
+                activity_type=excluded.activity_type,
+                updated_at=excluded.updated_at""",
+            (
+                int(guild_id),
+                str(encrypted_token),
+                str(token_fingerprint),
+                str(profile.get("bot_name") or "")[:32] or None,
+                str(profile.get("avatar_url") or "")[:1000] or None,
+                str(profile.get("banner_url") or "")[:1000] or None,
+                str(profile.get("bio") or "")[:1900],
+                str(profile.get("activity_text") or "Managing your community")[:128],
+                str(profile.get("activity_type") or "watching").lower()[:20],
+                now,
+                now,
+            ),
+        )
+        return await self.get_linked_bot(guild_id)
+
+    async def update_linked_bot_status(self, guild_id: int, status: str, last_error: str | None = None):
+        await self.execute(
+            "UPDATE linked_bots SET status=?,last_error=?,updated_at=? WHERE guild_id=?",
+            (str(status)[:32], str(last_error)[:500] if last_error else None, time.time(), int(guild_id)),
+        )
+
+    async def update_linked_bot_runtime(self, guild_id: int, bot_user_id: int | None):
+        await self.execute(
+            "UPDATE linked_bots SET bot_user_id=?,updated_at=? WHERE guild_id=?",
+            (int(bot_user_id) if bot_user_id else None, time.time(), int(guild_id)),
+        )
+
+    async def update_linked_bot_profile(self, guild_id: int, profile: Dict[str, Any]):
+        allowed = {
+            "bot_name": "bot_name", "avatar_url": "avatar_url", "banner_url": "banner_url",
+            "bio": "bio", "activity_text": "activity_text", "activity_type": "activity_type",
+        }
+        sets, vals = [], []
+        for key, column in allowed.items():
+            if key not in profile:
+                continue
+            value = profile[key]
+            if key == "bot_name":
+                value = str(value or "")[:32] or None
+            elif key in {"avatar_url", "banner_url"}:
+                value = str(value or "")[:1000] or None
+            elif key == "bio":
+                value = str(value or "")[:1900]
+            elif key == "activity_text":
+                value = str(value or "Managing your community")[:128]
+            elif key == "activity_type":
+                value = str(value or "watching").lower()[:20]
+            sets.append(f"{column}=?")
+            vals.append(value)
+        if not sets:
+            return await self.get_linked_bot(guild_id)
+        vals.extend([time.time(), int(guild_id)])
+        await self.execute(f"UPDATE linked_bots SET {', '.join(sets)},updated_at=? WHERE guild_id=?", tuple(vals))
+        return await self.get_linked_bot(guild_id)
+
+    async def delete_linked_bot(self, guild_id: int):
+        await self.execute("DELETE FROM linked_bots WHERE guild_id=?", (int(guild_id),))
 
     async def execute(self, sql: str, params: tuple = ()):
         cur = await self.connection.execute(sql, params)
