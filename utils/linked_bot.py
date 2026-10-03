@@ -24,7 +24,7 @@ class LinkedBotManager:
         self.log = logging.getLogger("Ader.linked_bots")
         self.instances: dict[int, commands.Bot] = {}
         self.tasks: dict[int, asyncio.Task] = {}
-        self.cipher = TokenCipher()
+        self.cipher = None
         self.monitor_task: asyncio.Task | None = None
 
     async def start_monitor(self):
@@ -63,7 +63,8 @@ class LinkedBotManager:
         if not await self.primary.db.is_server_premium(guild_id):
             raise RuntimeError("البوت المرتبط متاح فقط لسيرفرات Premium.")
         try:
-            token = self.cipher.decrypt(str(record["encrypted_token"]))
+            cipher = TokenCipher()
+            token = cipher.decrypt(str(record["encrypted_token"]))
         except Exception as exc:
             raise RuntimeError("تعذر فك تشفير توكن البوت. تأكد من إعداد ADER_TOKEN_ENCRYPTION_KEY.") from exc
 
@@ -117,6 +118,9 @@ class LinkedBotManager:
         if not bot.is_ready():
             await self.stop_for_guild(guild_id)
             raise RuntimeError("انتهت مهلة تشغيل البوت المرتبط. تحقق من التوكن ومن اتصال البوت بالسيرفر.")
+        if bot.get_guild(guild_id) is None:
+            await self.stop_for_guild(guild_id)
+            raise RuntimeError("البوت اشتغل لكن ما لقيتش راسو داخل السيرفر. زيد البوت للسيرفر أولاً ثم عاود الربط.")
 
         await self.primary.db.update_linked_bot_runtime(guild_id, bot.user.id)
         await self.primary.db.update_linked_bot_status(guild_id, "online", None)
