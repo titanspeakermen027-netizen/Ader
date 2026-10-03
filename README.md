@@ -36,6 +36,16 @@ python main.py
 
 ---
 
+### ⭐ Ader Premium 2.0
+
+Premium servers get a dedicated Premium Center in the dashboard, expanded feature entitlements, and support for linking a custom Discord bot.
+
+Linked bots use the **same SQLite database file** as the main Ader process. Guild settings, tickets, economy, levels, logs, analytics and other persisted data therefore remain shared instead of being copied into a second database.
+
+The linked bot token is never returned by the API and is stored encrypted at rest with `ADER_TOKEN_ENCRYPTION_KEY`. Set this environment variable before using the Linked Bot feature. Keep it secret and back it up securely; losing it prevents Ader from decrypting existing linked bot tokens.
+
+Supported custom identity fields are the bot username, avatar, banner and presence/activity. The Bio field is retained by Ader for the linked profile configuration; discord.py 2.4 exposes username/avatar/banner editing but not bot Bio editing through `ClientUser.edit`.
+
 ## ✨ Complete Feature List (MEE6 Alternative)
 
 ### 🔐 Verification System
