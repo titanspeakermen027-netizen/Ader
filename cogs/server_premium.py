@@ -46,19 +46,29 @@ class ServerPremium(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.bot or message.guild is None: return
+        if message.author.bot or message.guild is None:
+            return
         parts = message.content.strip().split()
-        if not parts: return
+        if not parts:
+            return
         cmd = parts[0].lower()
-        if cmd not in {"prme","eprme","uprme"}: return
+        if cmd not in {"prme", "eprme", "uprme"}:
+            return
         if cmd == "uprme":
             if not await self._allowed(message.author):
                 return await self._reply(message, "❌ صلاحية مرفوضة", "هذا الأمر مخصص لصاحب البوت أو من لديه صلاحية **بوت**.")
-                manager = getattr(self.bot, "linked_bot_manager", None)
+            manager = getattr(self.bot, "linked_bot_manager", None)
             if manager is not None:
                 await manager.stop_for_guild(message.guild.id)
             await self.db.remove_server_premium(message.guild.id)
-            return await self._reply(message, "تم إلغاء البريميوم من سيرفر " + message.guild.name, "**ايدي السيرفر:**\n`" + str(message.guild.id) + "`\n**ايدي صاحب السيرفر:**\n`" + str(message.guild.owner_id) + "`")
+            return await self._reply(
+                message,
+                "تم إلغاء البريميوم من سيرفر " + message.guild.name,
+                "**ايدي السيرفر:**
+`" + str(message.guild.id) + "`
+**ايدي صاحب السيرفر:**
+`" + str(message.guild.owner_id) + "`",
+            )
         if len(parts) != 2:
             return await self._reply(message, "❌ الاستعمال الصحيح", "`" + cmd + " 1mo`")
         await self._set(message, parts[1], cmd == "eprme")
