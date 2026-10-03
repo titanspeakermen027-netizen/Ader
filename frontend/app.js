@@ -15,9 +15,9 @@ function selectRoles(id,value){return '<select id="'+id+'"><option value="">اخ
 function selectChannels(id,value){return '<select id="'+id+'"><option value="">اختار قناة…</option>'+s.resources.channels.filter(c=>["text","news"].includes(c.type)).map(c=>'<option value="'+c.id+'" '+(String(value||"")===String(c.id)?"selected":"")+'># '+esc(c.name)+'</option>').join("")+'</select>'}
 async function loadGuild(){try{[s.overview,s.resources]=await Promise.all([api("/api/guilds/"+s.guild.id+"/overview"),api("/api/guilds/"+s.guild.id+"/resources")]);clearWarn()}catch(e){warn("تعذر تحميل بيانات السيرفر: "+e.message)}$("#guildName").textContent=s.guild.name;$("#guildIcon").innerHTML=icon(s.guild)}
 async function pick(id){s.guild=s.guilds.find(g=>String(g.id)===String(id));$("#guildSelect").value=s.guild.id;await loadGuild();render()}
-const titles={overview:"Overview",servers:"السيرفرات",analytics:"Analytics",moderation:"Moderation",automod:"AutoMod",economy:"ANORIS Economy",tickets:"التذاكر",levels:"Levels",giveaways:"Giveaways",welcome:"Welcome",commands:"Commands",shortcuts:"Shortcuts",resources:"القنوات والرتب",teams:"Teams",logs:"Logs",security:"Security",settings:"Settings"};
-const desc={overview:"نظرة شاملة على حالة Ader والسيرفر.",analytics:"إحصائيات النشاط المسجلة فعلياً.",moderation:"الإشراف والتحذيرات والحماية التلقائية.",automod:"إعدادات AutoMod المبنية على نظام Ader.",economy:"إعدادات ANORIS وترتيب الأرصدة.",tickets:"لوحات التذاكر والتذاكر المفتوحة.",levels:"ترتيب XP والمستويات.",giveaways:"بيانات الهدايا المحفوظة.",welcome:"الترحيب والتحقق.",commands:"تحكم مباشر في أوامر Ader.",shortcuts:"إدارة الاختصارات النصية.",resources:"القنوات والرتب المتاحة.",teams:"الفرق الموثقة وإعداداتها.",logs:"سجل الأحداث والتحذيرات.",security:"حالة جلسة الدخول وصلاحياتك.",settings:"تفعيل وتعطيل أنظمة Ader."};
-async function render(){const p=s.page;$("#title").textContent=titles[p]||p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));try{if(p==="overview")overview();else if(p==="servers")servers();else if(p==="resources")resources();else if(p==="analytics")await analytics();else if(p==="moderation"||p==="automod")await moderation();else if(p==="economy")await economy();else if(p==="levels")await levels();else if(p==="tickets")await tickets();else if(p==="welcome")await welcome();else if(p==="commands")await commands();else if(p==="shortcuts")await shortcuts();else if(p==="teams")await teams();else if(p==="logs")await logs();else if(p==="security")security();else if(p==="settings")await settings();else giveaways();}catch(e){if(e.message==="AUTH")showLogin();else warn("تعذر تحميل القسم: "+e.message)}bindCommon()}
+const titles={overview:"Overview",servers:"السيرفرات",analytics:"Analytics",moderation:"Moderation",automod:"AutoMod",economy:"ANORIS Economy",tickets:"التذاكر",levels:"Levels",giveaways:"Giveaways",welcome:"Welcome",commands:"Commands",shortcuts:"Shortcuts",resources:"القنوات والرتب",teams:"Teams",logs:"Logs",security:"Security",premium:"Ader Premium",settings:"Settings"};
+const desc={overview:"نظرة شاملة على حالة Ader والسيرفر.",analytics:"إحصائيات النشاط المسجلة فعلياً.",moderation:"الإشراف والتحذيرات والحماية التلقائية.",automod:"إعدادات AutoMod المبنية على نظام Ader.",economy:"إعدادات ANORIS وترتيب الأرصدة.",tickets:"لوحات التذاكر والتذاكر المفتوحة.",levels:"ترتيب XP والمستويات.",giveaways:"بيانات الهدايا المحفوظة.",welcome:"الترحيب والتحقق.",commands:"تحكم مباشر في أوامر Ader.",shortcuts:"إدارة الاختصارات النصية.",resources:"القنوات والرتب المتاحة.",teams:"الفرق الموثقة وإعداداتها.",logs:"سجل الأحداث والتحذيرات.",security:"حالة جلسة الدخول وصلاحياتك.",premium:"إدارة خطة Premium والـLinked Bot بنفس بيانات Ader.",settings:"تفعيل وتعطيل أنظمة Ader."};
+async function render(){const p=s.page;$("#title").textContent=titles[p]||p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));try{if(p==="overview")overview();else if(p==="servers")servers();else if(p==="resources")resources();else if(p==="analytics")await analytics();else if(p==="moderation"||p==="automod")await moderation();else if(p==="economy")await economy();else if(p==="levels")await levels();else if(p==="tickets")await tickets();else if(p==="welcome")await welcome();else if(p==="commands")await commands();else if(p==="shortcuts")await shortcuts();else if(p==="teams")await teams();else if(p==="logs")await logs();else if(p==="security")security();else if(p==="premium")await premium();else if(p==="settings")await settings();else giveaways();}catch(e){if(e.message==="AUTH")showLogin();else warn("تعذر تحميل القسم: "+e.message)}bindCommon()}
 function overview(){const o=s.overview||{};$("#root").innerHTML=head("مرحباً بك في Ader",desc.overview)+'<div class="stats">'+stat("الأعضاء",o.members||0,"♙")+stat("القنوات",o.channels||0,"#")+stat("الرتب",o.roles||0,"◆")+stat("التذاكر المفتوحة",o.open_tickets||0,"🎫")+'</div><div class="cards">'+card("System Health",'<div class="health"><div>Ader Bot <b>Online</b></div><div>Database <b>Connected</b></div><div>Commands <b>'+(o.commands||0)+'</b></div><div>Guilds <b>'+s.guilds.length+'</b></div></div>')+card("Quick Actions",'<div class="quick"><button class="action" data-go="moderation">🛡 Moderation</button><button class="action" data-go="economy">🪙 Economy</button><button class="action" data-go="tickets">🎫 Tickets</button><button class="action" data-go="settings">⚙ Settings</button></div>')+'</div>'}
 function servers(){$("#root").innerHTML=head("السيرفرات","اختار السيرفر للإدارة.")+'<div class="server-grid">'+s.guilds.map(g=>'<button class="server" data-guild="'+g.id+'"><div class="avatar">'+icon(g)+'</div><b>'+esc(g.name)+'</b><small>'+(g.administrator?"Administrator":"Manage Server")+'</small></button>').join("")+'</div>'}
 function resources(){const r=s.resources||{};$("#root").innerHTML=head("القنوات والرتب",desc.resources)+'<div class="cards">'+card("الرتب",'<div class="list">'+(r.roles||[]).map(x=>'<div><b>'+esc(x.name)+'</b><small>Position '+x.position+'</small></div>').join("")+'</div>')+card("القنوات",'<div class="list">'+(r.channels||[]).map(x=>'<div><b># '+esc(x.name)+'</b><small>'+esc(x.type)+'</small></div>').join("")+'</div>')+'</div>'}
@@ -186,6 +186,86 @@ async function commands(){const d=await api("/api/guilds/"+s.guild.id+"/commands
 async function shortcuts(){const d=await api("/api/guilds/"+s.guild.id+"/shortcuts");$("#root").innerHTML=head("Shortcuts",desc.shortcuts)+card("الاختصارات",'<div class="list">'+(d.shortcuts||[]).map(x=>'<div class="shortcut-row"><span><b>'+esc(x.label)+'</b><small>'+esc(x.name)+'</small></span><input data-alias="'+esc(x.name)+'" value="'+esc(x.alias||"")+'"><label class="switch"><input type="checkbox" data-shortcut="'+esc(x.name)+'" '+(x.enabled?"checked":"")+'><i></i></label><button class="action" data-save-shortcut="'+esc(x.name)+'">حفظ</button></div>').join("")+'</div>');document.querySelectorAll("[data-save-shortcut]").forEach(b=>b.onclick=async()=>{const n=b.dataset.saveShortcut;try{await api("/api/guilds/"+s.guild.id+"/shortcuts/"+encodeURIComponent(n),{method:"PUT",body:JSON.stringify({alias:document.querySelector("[data-alias='"+CSS.escape(n)+"']").value,enabled:document.querySelector("[data-shortcut='"+CSS.escape(n)+"']").checked})});b.textContent="تم"}catch(e){warn(e.message)}})}
 async function teams(){const [d,ts]=await Promise.all([api("/api/guilds/"+s.guild.id+"/teams"),api("/api/guilds/"+s.guild.id+"/teams/settings")]);const cfg=ts.settings||{};$("#root").innerHTML=head("Teams",desc.teams)+'<div class="cards">'+card("Team Settings",'<label>Coach Role'+selectRoles("coach-role",cfg.coach_role_id)+'</label><label>Max Players<input id="max-players" type="number" min="1" max="200" value="'+(cfg.max_players||15)+'"></label><button class="primary smallbtn" id="save-team">حفظ</button>')+card("Verified Teams",'<div class="list">'+(d.teams||[]).map(x=>'<div><b>'+esc(x.emoji||"👥")+' '+esc(x.name)+'</b><small>'+esc(x.team_type)+' · '+x.players+' players · role '+x.role_id+'</small></div>').join("")+'</div>')+'</div>';$("#save-team").onclick=async()=>{await api("/api/guilds/"+s.guild.id+"/teams/settings",{method:"PUT",body:JSON.stringify({coach_role_id:$("#coach-role").value||null,max_players:Number($("#max-players").value)})});await teams()}}
 async function logs(){const d=await api("/api/guilds/"+s.guild.id+"/logs");$("#root").innerHTML=head("Logs",desc.logs)+card("Recent Activity",'<div class="list">'+(d.logs||[]).map(x=>'<div><b>'+esc(x.type)+'</b><small>'+esc(new Date(Number(x.timestamp)*1000).toLocaleString())+' · '+esc(JSON.stringify(x.data||{}))+'</small></div>').join("")+'</div>')}
+async function premium(){
+  const d=await api("/api/guilds/"+s.guild.id+"/premium");
+  const active=Boolean(d.active);
+  const b=d.linked_bot||{};
+  const limit=v=>v===null||v===undefined?"غير محدود":Number(v).toLocaleString();
+  const featureHtml=(d.features||[]).map(f=>'<div class="premium-feature"><span><b>'+esc(f.name)+'</b><small>'+esc(f.description||"")+'</small></span><strong>'+((f.enabled&&active)?"✓":"—")+'</strong></div>').join("");
+  let linkedHtml="";
+  if(!active){
+    linkedHtml=card("Premium مطلوب",'<div class="empty small">ربط البوت وتخصيص هويته يحتاجان سيرفر Premium فعال.</div>');
+  }else if(!b.configured){
+    linkedHtml=card("ربط بوتك الخاص",
+      '<p class="muted">دخل توكن بوت Discord ديالك. Ader ما كيخزنوش كنص عادي: كيتخزن مشفراً في الداتا على السيرفر، وما كنرجعوش للواجهة من بعد الحفظ.</p>'+
+      '<label>توكن البوت<input id="lb-token" type="password" autocomplete="new-password" placeholder="توكن Discord Bot"></label>'+
+      '<div class="form-grid">'+
+      '<label>اسم البوت<input id="lb-name" maxlength="32" placeholder="اسم البوت"></label>'+
+      '<label>Watching<input id="lb-activity" maxlength="128" value="Managing your community"></label>'+
+      '<label>نوع الحالة<select id="lb-type"><option value="watching">Watching</option><option value="playing">Playing</option><option value="listening">Listening</option><option value="streaming">Streaming</option></select></label>'+
+      '</div>'+
+      '<label>رابط الصورة<input id="lb-avatar" type="url" placeholder="https://..."></label>'+
+      '<label>رابط البنر<input id="lb-banner" type="url" placeholder="https://..."></label>'+
+      '<label>Bio<input id="lb-bio" maxlength="1900" placeholder="نبذة البوت"></label>'+
+      '<button class="primary smallbtn" id="lb-link">ربط وتشغيل البوت</button>'
+    );
+  }else{
+    const invite=b.bot_user_id?"https://discord.com/oauth2/authorize?client_id="+encodeURIComponent(b.bot_user_id)+"&scope=bot%20applications.commands":"";
+    linkedHtml=card("Linked Bot",
+      '<div class="kv"><span>Bot ID</span><b>'+esc(b.bot_user_id||"—")+'</b></div>'+
+      '<div class="kv"><span>الحالة</span><b class="'+(b.running?"on":"off")+'">'+(b.running?"Online":"Stopped")+'</b></div>'+
+      (b.last_error?'<div class="warning">'+esc(b.last_error)+'</div>':'')+
+      (invite?'<a class="action" href="'+invite+'" target="_blank" rel="noopener">دعوة البوت للسيرفر</a>':'')+
+      '<div class="form-grid">'+
+      '<label>اسم البوت<input id="lb-name" maxlength="32" value="'+esc(b.bot_name||"")+'"></label>'+
+      '<label>Watching<input id="lb-activity" maxlength="128" value="'+esc(b.activity_text||"Managing your community")+'"></label>'+
+      '<label>نوع الحالة<select id="lb-type"><option value="watching" '+(b.activity_type==="watching"?"selected":"")+'>Watching</option><option value="playing" '+(b.activity_type==="playing"?"selected":"")+'>Playing</option><option value="listening" '+(b.activity_type==="listening"?"selected":"")+'>Listening</option><option value="streaming" '+(b.activity_type==="streaming"?"selected":"")+'>Streaming</option></select></label>'+
+      '</div>'+
+      '<label>رابط الصورة<input id="lb-avatar" type="url" value="'+esc(b.avatar_url||"")+'" placeholder="https://..."></label>'+
+      '<label>رابط البنر<input id="lb-banner" type="url" value="'+esc(b.banner_url||"")+'" placeholder="https://..."></label>'+
+      '<label>Bio<input id="lb-bio" maxlength="1900" value="'+esc(b.bio||"")+'"></label>'+
+      '<p class="muted">التوكن مخفي ومخزن مشفراً؛ ما تحتاجش تعاود تدخلو لتعديل البروفايل.</p>'+
+      '<div class="quick"><button class="primary smallbtn" id="lb-profile">حفظ البروفايل</button><button class="action" id="lb-'+(b.running?"stop":"start")+'">'+(b.running?"إيقاف البوت":"تشغيل البوت")+'</button><button class="action danger" id="lb-delete">فك الربط</button></div>'
+    );
+  }
+  $("#root").innerHTML=head("Ader Premium",desc.premium)+
+    '<div class="stats">'+stat("الخطة",active?(d.plan||"premium").toUpperCase():"FREE","⭐")+stat("الحالة",active?"ACTIVE":"FREE",active?"✓":"—")+stat("تنتهي",d.expires_at?new Date(d.expires_at*1000).toLocaleDateString():"—","⌛")+stat("Linked Bot",b.configured?(b.running?"ONLINE":"STOPPED"):"NONE","🤖")+'</div>'+
+    '<div class="cards">'+card("Premium Features",'<div class="premium-features">'+featureHtml+'</div>')+linkedHtml+'</div>'+
+    (active?card("ملاحظة مهمة",'<div class="empty small">Ader والـLinked Bot كيستعملو نفس قاعدة البيانات ونفس إعدادات السيرفر والاقتصاد والتذاكر والإحصائيات. تغيير الإعدادات من أي جهة كيبان بنفس الشكل للجهة الأخرى.</div>'):card("Ader Premium",'<div class="empty small">السيرفر حالياً خارج Premium. فعّل الاشتراك باش تفتح Linked Bot والتخصيصات المتقدمة.</div>'));
+  if(!active)return;
+  const collectProfile=()=>({
+    bot_name:$("#lb-name")?.value||"",
+    avatar_url:$("#lb-avatar")?.value||"",
+    banner_url:$("#lb-banner")?.value||"",
+    bio:$("#lb-bio")?.value||"",
+    activity_text:$("#lb-activity")?.value||"Managing your community",
+    activity_type:$("#lb-type")?.value||"watching"
+  });
+  document.getElementById("lb-link")?.addEventListener("click",async()=>{
+    const token=$("#lb-token")?.value||"";
+    if(!token)return warn("دخل توكن البوت أولاً.");
+    try{await api("/api/guilds/"+s.guild.id+"/premium/linked-bot",{method:"POST",body:JSON.stringify({...collectProfile(),token})});await premium()}
+    catch(e){warn(e.message)}
+  });
+  document.getElementById("lb-profile")?.addEventListener("click",async()=>{
+    try{await api("/api/guilds/"+s.guild.id+"/premium/linked-bot",{method:"PUT",body:JSON.stringify(collectProfile())});await premium()}
+    catch(e){warn(e.message)}
+  });
+  document.getElementById("lb-start")?.addEventListener("click",async()=>{
+    try{await api("/api/guilds/"+s.guild.id+"/premium/linked-bot/start",{method:"POST"});await premium()}
+    catch(e){warn(e.message)}
+  });
+  document.getElementById("lb-stop")?.addEventListener("click",async()=>{
+    try{await api("/api/guilds/"+s.guild.id+"/premium/linked-bot/stop",{method:"POST"});await premium()}
+    catch(e){warn(e.message)}
+  });
+  document.getElementById("lb-delete")?.addEventListener("click",async()=>{
+    if(!confirm("واش متأكد بغيتي تفك ربط البوت؟"))return;
+    try{await api("/api/guilds/"+s.guild.id+"/premium/linked-bot",{method:"DELETE"});await premium()}
+    catch(e){warn(e.message)}
+  });
+}
+
 function security(){$("#root").innerHTML=head("Security",desc.security)+'<div class="cards">'+card("Session",'<div class="kv"><span>User</span><b>'+esc(s.user?.username||"Discord User")+'</b></div><div class="kv"><span>Managed Servers</span><b>'+s.guilds.length+'</b></div>')+card("OAuth",'<div class="empty small">تسجيل الدخول يمر عبر نفس Cloudflare origin، مع state validation وSession Cookie آمن.</div><a class="btn primary" href="/login?force=1">إعادة تسجيل الدخول بواسطة Discord</a>')+'</div>'}
 async function settings(){
   const [d,core]=await Promise.all([
