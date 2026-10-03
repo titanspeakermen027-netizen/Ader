@@ -64,10 +64,7 @@ class ServerPremium(commands.Cog):
             return await self._reply(
                 message,
                 "تم إلغاء البريميوم من سيرفر " + message.guild.name,
-                "**ايدي السيرفر:**
-`" + str(message.guild.id) + "`
-**ايدي صاحب السيرفر:**
-`" + str(message.guild.owner_id) + "`",
+                "**ايدي السيرفر:**\n`" + str(message.guild.id) + "`\n**ايدي صاحب السيرفر:**\n`" + str(message.guild.owner_id) + "`",
             )
         if len(parts) != 2:
             return await self._reply(message, "❌ الاستعمال الصحيح", "`" + cmd + " 1mo`")
