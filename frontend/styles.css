@@ -22,3 +22,84 @@ input,textarea,select{font:inherit;background:var(--panel2);color:var(--text);bo
 .premium-features{display:grid;gap:8px}.premium-feature{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;background:var(--panel2);border:1px solid var(--line);border-radius:11px}.premium-feature span{display:grid;gap:4px}.premium-feature small{color:var(--muted);line-height:1.5}.premium-feature strong{font-size:18px;color:var(--good)}.premium-feature strong:empty{display:none}
 .premium-feature strong+*{display:none}.premium-feature .off{color:var(--muted)}.premium-hero{display:grid;grid-template-columns:1.5fr 1fr;gap:16px}.premium-badge{display:inline-flex;align-items:center;gap:7px;width:max-content;padding:6px 10px;border-radius:999px;background:rgba(88,101,242,.15);color:#aeb5ff;font-weight:800;font-size:12px}
 @media(max-width:900px){.premium-hero{grid-template-columns:1fr}}
+/* Ader Login Experience */
+.loading-shell{display:grid;place-items:center;gap:12px;color:var(--muted);font-size:12px}
+.loading-logo{width:52px;height:52px;border-radius:18px;display:grid;place-items:center;font-size:24px;font-weight:1000;color:#fff;background:linear-gradient(135deg,#5865f2,#7c5cff);box-shadow:0 20px 60px rgba(88,101,242,.28)}
+.login{position:relative;min-height:100vh;padding:34px;overflow:hidden;background:
+radial-gradient(circle at 12% 8%,rgba(88,101,242,.22),transparent 30%),
+radial-gradient(circle at 88% 20%,rgba(124,92,255,.16),transparent 28%),
+radial-gradient(circle at 50% 100%,rgba(54,123,255,.09),transparent 35%),
+#070914}
+.login:before{content:"";position:absolute;inset:0;background:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);background-size:48px 48px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.42),transparent 90%);pointer-events:none}
+.login-wrap{width:min(1180px,100%);margin:auto;position:relative;z-index:2}
+.login-topbar,.login-footer{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.login-topbar{margin-bottom:44px}
+.login-brand{gap:12px}
+.login-brand>div:last-child{display:grid;gap:3px}
+.login-brand b{font-size:20px;letter-spacing:-.02em}
+.login-brand small{color:#9ba4ff}
+.login-brand span{font-size:8px;letter-spacing:.18em;color:#68748c;font-weight:900}
+.login-status{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid rgba(255,255,255,.08);border-radius:999px;background:rgba(255,255,255,.035);color:#aeb8ca;font-size:11px;font-weight:800;backdrop-filter:blur(12px)}
+.login-status i{width:7px;height:7px;border-radius:50%;background:#43d48c;box-shadow:0 0 14px rgba(67,212,140,.7)}
+.login-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(360px,.88fr);gap:74px;align-items:center}
+.login-hero{padding-right:12px}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:7px 11px;border-radius:999px;background:rgba(88,101,242,.1);border:1px solid rgba(124,92,255,.18);color:#b7bcff;font-size:11px;font-weight:900}
+.eyebrow span{width:7px;height:7px;border-radius:50%;background:#7d75ff;box-shadow:0 0 14px rgba(125,117,255,.8)}
+.login-hero h1{font-size:clamp(44px,5.7vw,76px);line-height:1.02;letter-spacing:-.055em;margin:20px 0 18px;max-width:700px}
+.login-hero h1 strong{background:linear-gradient(90deg,#ffffff,#9da4ff 70%,#7bcfff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.login-lead{max-width:650px;color:#8f9ab0;line-height:1.95;font-size:15px;margin:0}
+.login-features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:30px}
+.login-feature{min-height:132px;padding:16px;border-radius:16px;border:1px solid rgba(255,255,255,.075);background:rgba(15,20,32,.58);backdrop-filter:blur(14px);display:flex;flex-direction:column;gap:13px}
+.feature-icon{width:37px;height:37px;border-radius:11px;display:grid;place-items:center;background:rgba(88,101,242,.13);font-size:17px}
+.login-feature b{display:block;font-size:13px;margin-bottom:5px}
+.login-feature span{display:block;color:#7f8a9f;font-size:10px;line-height:1.6}
+.login-panel{position:relative}
+.login-panel-glow{position:absolute;inset:-18px;background:radial-gradient(circle,rgba(88,101,242,.27),transparent 65%);filter:blur(24px);pointer-events:none}
+.login-panel-inner{position:relative;padding:34px;border-radius:28px;border:1px solid rgba(255,255,255,.1);background:linear-gradient(180deg,rgba(20,27,43,.94),rgba(10,15,26,.96));box-shadow:0 34px 100px rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.05);backdrop-filter:blur(20px)}
+.login-avatar{width:64px;height:64px;border-radius:19px;padding:1px;background:linear-gradient(145deg,#6d6cf9,#8a5cf7 55%,#5abefc);display:grid;place-items:center;margin-bottom:20px;box-shadow:0 18px 45px rgba(88,101,242,.22)}
+.login-avatar span{width:100%;height:100%;border-radius:18px;display:grid;place-items:center;background:#11182a;color:#fff;font-weight:1000;font-size:28px}
+.panel-kicker{font-size:9px;letter-spacing:.18em;color:#7885ff;font-weight:1000}
+.login-panel h2{font-size:29px;letter-spacing:-.03em;margin:10px 0 7px}
+.login-panel p{margin:0;color:#8995aa;line-height:1.8;font-size:12px}
+.discord-login{margin-top:24px;width:100%;min-height:57px;padding:0 17px;border:1px solid rgba(255,255,255,.08);border-radius:15px;background:linear-gradient(135deg,#5967f2,#6959e9);color:#fff;display:flex;align-items:center;gap:12px;font:inherit;font-weight:900;cursor:pointer;box-shadow:0 18px 38px rgba(88,101,242,.24);transition:transform .18s,box-shadow .18s,filter .18s}
+.discord-login:hover{transform:translateY(-2px);box-shadow:0 22px 48px rgba(88,101,242,.32);filter:brightness(1.05)}
+.discord-login:active{transform:translateY(0)}
+.discord-icon{width:25px;height:25px;display:grid;place-items:center}
+.discord-icon svg{width:24px;height:24px}
+.discord-login .arrow{margin-right:auto;font-size:19px;opacity:.72}
+.login-divider{display:flex;align-items:center;gap:10px;margin:22px 0 16px;color:#5e6a80;font-size:9px;font-weight:900;letter-spacing:.16em}
+.login-divider:before,.login-divider:after{content:"";height:1px;flex:1;background:rgba(255,255,255,.06)}
+.login-trust{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.login-trust span{padding:10px 9px;border-radius:11px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.055);color:#8591a6;font-size:10px;text-align:center}
+.login-note{display:flex;gap:9px;align-items:flex-start;margin-top:12px;padding:11px 12px;border-radius:12px;background:rgba(88,101,242,.06);border:1px solid rgba(88,101,242,.12);color:#78859c;font-size:9px;line-height:1.7}
+.note-icon{flex:0 0 auto;width:17px;height:17px;border-radius:50%;display:grid;place-items:center;background:rgba(88,101,242,.16);color:#9da4ff;font-weight:1000}
+.login-footer{margin-top:42px;padding-top:18px;border-top:1px solid rgba(255,255,255,.06);color:#626e83;font-size:10px}
+.login-orbit{position:absolute;border:1px solid rgba(124,92,255,.1);border-radius:50%;filter:blur(.1px);pointer-events:none}
+.orbit-one{width:480px;height:480px;right:-240px;top:-180px}
+.orbit-two{width:330px;height:330px;left:-180px;bottom:-140px}
+@media(max-width:980px){
+  .login{padding:24px}
+  .login-grid{grid-template-columns:1fr;gap:34px}
+  .login-hero{padding:0}
+  .login-hero h1{font-size:clamp(42px,9vw,64px);max-width:780px}
+  .login-features{grid-template-columns:repeat(3,1fr)}
+  .login-panel{width:min(560px,100%);margin:auto}
+  .login-topbar{margin-bottom:32px}
+}
+@media(max-width:650px){
+  .login{padding:16px}
+  .login-topbar{align-items:flex-start}
+  .login-brand span{font-size:7px}
+  .login-status{display:none}
+  .login-hero h1{font-size:41px;line-height:1.05;margin-top:16px}
+  .login-lead{font-size:13px}
+  .login-features{grid-template-columns:1fr;gap:8px}
+  .login-feature{min-height:0;padding:13px;flex-direction:row;align-items:flex-start}
+  .login-panel-inner{padding:24px;border-radius:22px}
+  .login-panel h2{font-size:25px}
+  .login-trust{grid-template-columns:1fr}
+  .login-footer{margin-top:28px;font-size:9px}
+}
+@media(prefers-reduced-motion:reduce){
+  .discord-login{transition:none}
+}
