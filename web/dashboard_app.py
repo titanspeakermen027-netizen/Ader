@@ -213,6 +213,22 @@ def create_app(bot) -> FastAPI:
     @app.get("/login")
     async def login(request: Request, force: int = 0):
         _cleanup_state()
+
+        # OAuth must use one canonical browser origin. A direct visit to the
+        # backend hostname would otherwise create the initial Starlette session
+        # cookie on nova.hatenna.com while Discord returns to the Cloudflare
+        # Worker origin. Redirect direct backend logins to the public origin.
+        if not request.headers.get("x-forwarded-host"):
+            public_url = (
+                os.getenv("DASHBOARD_FRONTEND_URL", "").strip().rstrip("/")
+                or _configured_public_url(cfg)
+            )
+            if public_url:
+                target = public_url + "/login"
+                if force:
+                    target += "?force=1"
+                return RedirectResponse(target, status_code=307)
+
         if force:
             sid = str(request.session.get("sid") or "").strip()
             if sid:
@@ -241,8 +257,11 @@ def create_app(bot) -> FastAPI:
         _cleanup_state()
         if error:
             return HTMLResponse(_error_html("تم إلغاء تسجيل الدخول", error_description or error), status_code=400)
-        expected = request.session.get("oauth_state")
-        if not code or not state or not expected or state != expected or state not in _OAUTH_STATES:
+        # The OAuth state is already stored server-side in this process. Do
+        # not require the browser's pre-login session cookie here: the login
+        # request may have started on the backend hostname while Discord's
+        # callback is intentionally sent to the public Worker hostname.
+        if not code or not state or state not in _OAUTH_STATES:
             request.session.clear()
             return HTMLResponse(_error_html("فشل تسجيل الدخول", "رابط OAuth غير صالح أو انتهت صلاحيته. عاود تسجيل الدخول من زر Discord."), status_code=400)
         _OAUTH_STATES.pop(state, None)
