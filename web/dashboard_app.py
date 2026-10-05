@@ -402,9 +402,10 @@ def create_app(bot) -> FastAPI:
         managed = session.get("managed_guilds", {}) or {}
         oauth_guilds = session.get("oauth_guilds", {}) or {}
 
-        # Rebuild the list from the current Discord member permissions when
-        # possible. This fixes the common case where OAuth was completed before
-        # the user received Administrator/Manage Server.
+        # The dashboard selector must contain only servers where:
+        # 1) the logged-in user can manage the server, and
+        # 2) Ader is actually present, because every dashboard endpoint uses
+        #    the live bot guild as its source of truth.
         result = {}
         user = session.get("discord_user") or {}
         try:
@@ -412,71 +413,67 @@ def create_app(bot) -> FastAPI:
         except (TypeError, ValueError):
             user_id = 0
 
-        for key, item in oauth_guilds.items():
-            if not isinstance(item, dict):
-                continue
-            guild_id = int(item.get("id") or 0)
-            if not guild_id:
-                continue
+        async def add_if_manageable(guild_id: int, item: dict[str, Any]):
             guild = bot.get_guild(guild_id)
+            if guild is None:
+                # Do not put "bot absent" guilds into the active dashboard
+                # selector. They can be added later without creating a fake
+                # 403 state in the UI.
+                return
             allowed = _guild_is_managed(item)
-            if guild is not None and user_id:
-                if guild.owner_id == user_id:
-                    allowed = True
-                    item = {**item, "administrator": True, "manage_guild": True}
-                elif not allowed:
-                    try:
-                        member = guild.get_member(user_id) or await guild.fetch_member(user_id)
-                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                        member = None
-                    perms = getattr(member, "guild_permissions", None) if member else None
-                    allowed = bool(perms and (perms.administrator or perms.manage_guild))
-                    if allowed:
-                        item = {
-                            **item,
-                            "permissions": ADMINISTRATOR | MANAGE_GUILD if perms.administrator else MANAGE_GUILD,
-                            "administrator": bool(perms.administrator),
-                            "manage_guild": bool(perms.administrator or perms.manage_guild),
-                        }
-            if allowed:
-                result[str(guild_id)] = item
-
-        # Backward compatibility for sessions created before oauth_guilds was
-        # introduced. If an old session has no OAuth guild snapshot, validate
-        # the user against the bot's current guild members instead of forcing
-        # a logout just to refresh permissions.
-        for key, item in managed.items():
-            if isinstance(item, dict) and _guild_is_managed(item):
-                result.setdefault(str(key), item)
-
-        if not oauth_guilds and user_id:
-            for guild in getattr(bot, "guilds", ()):
-                if guild.id in {int(v.get("id")) for v in result.values() if isinstance(v, dict) and str(v.get("id", "")).isdigit()}:
-                    continue
-                if guild.owner_id == user_id:
-                    result[str(guild.id)] = {
-                        "id": guild.id,
-                        "name": guild.name,
-                        "icon": str(guild.icon.url) if guild.icon else None,
-                        "permissions": ADMINISTRATOR | MANAGE_GUILD,
-                        "administrator": True,
-                        "manage_guild": True,
-                    }
-                    continue
+            if user_id and guild.owner_id == user_id:
+                allowed = True
+                item = {
+                    **item,
+                    "permissions": ADMINISTRATOR | MANAGE_GUILD,
+                    "administrator": True,
+                    "manage_guild": True,
+                }
+            elif user_id and not allowed:
                 try:
                     member = guild.get_member(user_id) or await guild.fetch_member(user_id)
                 except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                     member = None
                 perms = getattr(member, "guild_permissions", None) if member else None
-                if perms and (perms.administrator or perms.manage_guild):
-                    result[str(guild.id)] = {
-                        "id": guild.id,
-                        "name": guild.name,
-                        "icon": str(guild.icon.url) if guild.icon else None,
+                allowed = bool(perms and (perms.administrator or perms.manage_guild))
+                if allowed:
+                    item = {
+                        **item,
                         "permissions": ADMINISTRATOR if perms.administrator else MANAGE_GUILD,
                         "administrator": bool(perms.administrator),
                         "manage_guild": bool(perms.administrator or perms.manage_guild),
                     }
+            if allowed:
+                result[str(guild_id)] = {
+                    **item,
+                    "id": guild.id,
+                    "name": guild.name,
+                    "icon": item.get("icon") or (str(guild.icon.url) if guild.icon else None),
+                    "bot_in_guild": True,
+                }
+
+        for item in oauth_guilds.values():
+            if not isinstance(item, dict):
+                continue
+            try:
+                guild_id = int(item.get("id") or 0)
+            except (TypeError, ValueError):
+                continue
+            if guild_id:
+                await add_if_manageable(guild_id, item)
+
+        # Backward compatibility for sessions created before oauth_guilds was
+        # introduced.
+        if not oauth_guilds:
+            for item in managed.values():
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    guild_id = int(item.get("id") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if guild_id:
+                    await add_if_manageable(guild_id, item)
 
         session["managed_guilds"] = result
         return {"guilds": list(result.values())}
