@@ -191,6 +191,78 @@ def create_app(bot):
             ]
         }
 
+    @app.get("/api/guilds/{guild_id}/moderation")
+    async def cloud_moderation_get(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        cog = bot.get_cog("ProfessionalCore")
+        if cog is not None and hasattr(cog, "settings"):
+            core = await cog.settings(guild_id)
+            am = core.get("automod", {}) or {}
+            row = await bot.db.fetchone("SELECT COUNT(*) AS n FROM warnings WHERE guild_id=? AND active=1", (guild_id,))
+            warnings = await bot.db.fetchall("SELECT user_id, reason, created_at FROM warnings WHERE guild_id=? AND active=1 ORDER BY id DESC LIMIT 10", (guild_id,))
+            return {"config":{"enabled":bool(am.get("enabled",True)),"auto_mod":{"spam_detection":bool(am.get("spam",True)),"max_mentions":int(am.get("mentions",5) or 5),"toxicity_filter":True}},"warning_count":int(row["n"]) if row else 0,"warnings":[dict(x) for x in warnings]}
+        return {"config":{"enabled":True,"auto_mod":{"spam_detection":True,"max_mentions":5,"toxicity_filter":True}},"warning_count":0,"warnings":[]}
+
+    @app.put("/api/guilds/{guild_id}/modules/moderation")
+    async def cloud_moderation_put(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="إعدادات غير صالحة")
+        cog = bot.get_cog("ProfessionalCore")
+        if cog is None or not hasattr(cog, "settings") or not hasattr(cog, "save"):
+            raise HTTPException(status_code=503, detail="نظام Ader Core غير متاح حالياً")
+        settings = await cog.settings(guild_id)
+        am = settings.setdefault("automod", {})
+        am["enabled"] = bool(data.get("enabled", am.get("enabled", True)))
+        auto = data.get("auto_mod") if isinstance(data.get("auto_mod"), dict) else {}
+        if "spam_detection" in auto:
+            am["spam"] = bool(auto["spam_detection"])
+        if "max_mentions" in auto:
+            try: am["mentions"] = max(0, min(50, int(auto["max_mentions"])))
+            except (TypeError, ValueError): pass
+        await cog.save(guild_id, settings)
+        return {"ok":True,"config":{"enabled":am["enabled"],"auto_mod":{"spam_detection":bool(am.get("spam",True)),"max_mentions":int(am.get("mentions",5) or 5),"toxicity_filter":True}}}
+
+    @app.get("/api/guilds/{guild_id}/economy")
+    async def cloud_economy_get(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        guild_cfg = await bot.db.get_guild(guild_id)
+        modules = (guild_cfg or {}).get("modules", {}) if guild_cfg else {}
+        economy = modules.get("economy", {}) if isinstance(modules, dict) else {}
+        name = str(economy.get("currency_name") or "ANOCoin")
+        symbol = str(economy.get("currency_symbol") or "🪙")
+        leaderboard = await bot.db.fetchall("SELECT user_id, balance FROM global_balances WHERE user_id IN (SELECT user_id FROM users WHERE guild_id=?) ORDER BY balance DESC LIMIT 10", (guild_id,))
+        return {"config":{"currency_name":name,"currency_symbol":symbol},"leaderboard":[dict(x) for x in leaderboard]}
+
+    @app.put("/api/guilds/{guild_id}/modules/economy")
+    async def cloud_economy_put(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="إعدادات غير صالحة")
+        guild_cfg = await bot.db.get_guild(guild_id)
+        modules = dict((guild_cfg or {}).get("modules", {}) if guild_cfg else {})
+        economy = dict(modules.get("economy", {}) if isinstance(modules.get("economy", {}), dict) else {})
+        if "currency_name" in data:
+            name = str(data.get("currency_name") or "").strip()[:32]
+            if name: economy["currency_name"] = name
+        if "currency_symbol" in data:
+            symbol = str(data.get("currency_symbol") or "").strip()[:12]
+            if symbol: economy["currency_symbol"] = symbol
+        await bot.db.update_guild(guild_id, {"economy":economy})
+        return {"ok":True,"config":{"currency_name":economy.get("currency_name","ANOCoin"),"currency_symbol":economy.get("currency_symbol","🪙")}}
+
+    @app.get("/api/guilds/{guild_id}/levels")
+    async def cloud_levels_get(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        cog = bot.get_cog("ProfessionalCore")
+        settings = {}
+        if cog is not None and hasattr(cog, "settings"):
+            settings = (await cog.settings(guild_id)).get("levels", {}) or {}
+        users = await bot.db.get_leaderboard(guild_id, limit=10)
+        return {"settings":settings,"users":[{"user_id":int(x.get("user_id") or 0),"xp":int(x.get("xp") or 0),"level":int(x.get("level") or 0)} for x in users]}
+
     @app.get("/api/guilds/{guild_id}/premium")
     async def cloud_premium(request: Request, guild_id: int):
         await _require_guild(bot, request, guild_id)
