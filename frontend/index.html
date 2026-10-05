@@ -95,13 +95,34 @@
 </section>
 
 <div id="app" class="app hidden">
-  <aside id="sidebar"><div class="brand"><div class="logo">A</div><b>Ader <small>2.0</small></b></div><div class="guild"><div id="guildIcon" class="avatar">A</div><div><b id="guildName">Ader</b><small>Server Control Center</small></div></div><nav>
+  <aside id="sidebar">
+    <div class="brand">
+      <div class="logo">A</div>
+      <div><b>Ader <small>2.0</small></b><small>CONTROL CENTER</small></div>
+    </div>
+    <div class="guild">
+      <div id="guildIcon" class="avatar">A</div>
+      <div><b id="guildName">Ader</b><small>Server Control Center</small></div>
+    </div>
+    <nav>
 <label>الرئيسية</label><button data-page="overview" class="active">⌂ Overview</button><button data-page="servers">▦ السيرفرات</button><button data-page="analytics">◔ Analytics</button>
 <label>BOT SYSTEMS</label><button data-page="moderation">🛡 Moderation</button><button data-page="automod">🤖 AutoMod</button><button data-page="economy">🪙 Economy</button><button data-page="tickets">🎫 التذاكر</button><button data-page="levels">📈 Levels</button><button data-page="giveaways">🎉 Giveaways</button>
 <label>COMMUNITY</label><button data-page="welcome">👋 Welcome</button><button data-page="commands">⌘ Commands</button><button data-page="shortcuts">↯ Shortcuts</button><button data-page="resources">◫ القنوات والرتب</button>
 <label>MANAGEMENT</label><button data-page="teams">👥 Teams</button><button data-page="logs">📜 Logs</button><button data-page="security">🔐 Security</button><button data-page="premium">⭐ Premium</button><label>النظام</label><button data-page="settings">⚙ Settings</button>
-</nav><div class="side-bottom">🟢 Ader Online <button id="logoutBtn">تسجيل الخروج</button></div></aside>
-<main><header><button id="menu">☰</button><div><b id="title">Overview</b><small id="subtitle">Ader Control Center</small></div><div class="actions"><button id="refresh">↻</button><button id="theme">◐</button><select id="guildSelect"></select><div id="user" class="user">U</div></div></header>
+</nav>
+    <div class="side-bottom">🟢 Ader Online <button id="logoutBtn">تسجيل الخروج</button></div>
+  </aside>
+  <main>
+    <header>
+      <button id="menu" aria-label="فتح القائمة">☰</button>
+      <div><b id="title">Overview</b><small id="subtitle">Ader Control Center</small></div>
+      <div class="actions">
+        <button id="refresh" aria-label="تحديث">↻</button>
+        <button id="theme" aria-label="تغيير المظهر">◐</button>
+        <select id="guildSelect" aria-label="اختيار السيرفر"></select>
+        <div id="user" class="user">U</div>
+      </div>
+    </header>
 <div class="content"><div id="apiWarning" class="warning hidden"></div><div id="root"></div></div></main></div>
 <script src="config.js"></script>
 <script src="app.js"></script>
