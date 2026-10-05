@@ -36,6 +36,25 @@ class Economy(commands.Cog):
             language TEXT NOT NULL DEFAULT 'ar'
         )""")
 
+    async def _guild_economy_config(self, guild_id: int) -> dict:
+        try:
+            guild_cfg = await self.db.get_guild(int(guild_id))
+        except Exception:
+            guild_cfg = None
+        modules = (guild_cfg or {}).get("modules", {}) if isinstance(guild_cfg, dict) else {}
+        value = modules.get("economy", {}) if isinstance(modules, dict) else {}
+        value = value if isinstance(value, dict) else {}
+        return {
+            "currency_name": str(value.get("currency_name") or self.currency_name),
+            "currency_symbol": str(value.get("currency_symbol") or self.currency_symbol),
+        }
+
+    async def _currency_name(self, guild_id: int) -> str:
+        return (await self._guild_economy_config(guild_id))["currency_name"]
+
+    async def _currency_symbol(self, guild_id: int) -> str:
+        return (await self._guild_economy_config(guild_id))["currency_symbol"]
+
     async def get_balance_language(self, user_id: int) -> str:
         row = await self.db.fetchone("SELECT language FROM balance_language_preferences WHERE user_id=?", (int(user_id),))
         return str(row["language"]) if row and row["language"] in {"ar", "en"} else "ar"
@@ -250,12 +269,12 @@ class Economy(commands.Cog):
             return
         if member is None:
             balance = await self.db.get_balance(ctx.author.id)
-            return await ctx.send(f"🪙 رصيدك الحالي هو **{balance:,} {self.currency_name}**.")
+            return await ctx.send(f"🪙 رصيدك الحالي هو **{balance:,} {await self._currency_name(interaction.guild.id)}**.")
         if amount is None:
             if member.bot:
                 return await ctx.send(f":thinking: | **{ctx.author.name}، البوتات لا تملك أرصدة !**", allowed_mentions=discord.AllowedMentions.none())
             balance = await self.db.get_balance(member.id)
-            return await ctx.send(f"🪙 رصيد {member.mention} الحالي هو **{balance:,} {self.currency_name}**.")
+            return await ctx.send(f"🪙 رصيد {member.mention} الحالي هو **{balance:,} {await self._currency_name(interaction.guild.id)}**.")
         if member.bot:
             return await ctx.send(f":thinking: | **{ctx.author.name}، البوتات لا تملك أرصدة !**", allowed_mentions=discord.AllowedMentions.none())
         if amount <= 0 or member.id == ctx.author.id:
