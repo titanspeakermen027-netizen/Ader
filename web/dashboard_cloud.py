@@ -59,10 +59,45 @@ async def _require_guild(bot, request: Request, guild_id: int):
     session = await base._session_for(request, bot)
     if not session:
         raise HTTPException(status_code=401, detail="تسجيل الدخول مطلوب")
+
     managed = session.get("managed_guilds", {}) or {}
     data = managed.get(str(guild_id))
     if not isinstance(data, dict) or not base._guild_is_managed(data):
-        raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة هذا الخادم")
+        oauth_guilds = session.get("oauth_guilds", {}) or {}
+        data = oauth_guilds.get(str(guild_id))
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة هذا الخادم")
+
+        permissions = base._guild_permissions(data)
+        if not (permissions & (base.ADMINISTRATOR | base.MANAGE_GUILD)):
+            guild = bot.get_guild(guild_id)
+            if guild is None:
+                raise HTTPException(status_code=404, detail="البوت غير متصل بهذا الخادم حالياً")
+            user_id = int((session.get("discord_user") or {}).get("id") or 0)
+            if guild.owner_id != user_id:
+                try:
+                    member = guild.get_member(user_id) or await guild.fetch_member(user_id)
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    member = None
+                perms = getattr(member, "guild_permissions", None) if member else None
+                if not perms or not (perms.administrator or perms.manage_guild):
+                    raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة هذا الخادم")
+            data = {
+                **data,
+                "permissions": base.ADMINISTRATOR | base.MANAGE_GUILD,
+                "administrator": guild.owner_id == user_id,
+                "manage_guild": guild.owner_id == user_id,
+            }
+        else:
+            data = {
+                **data,
+                "permissions": permissions,
+                "administrator": bool(permissions & base.ADMINISTRATOR),
+                "manage_guild": bool(permissions & base.MANAGE_GUILD),
+            }
+        managed[str(guild_id)] = data
+        session["managed_guilds"] = managed
+
     guild = bot.get_guild(guild_id)
     if guild is None:
         raise HTTPException(status_code=404, detail="البوت غير متصل بهذا الخادم حالياً")
