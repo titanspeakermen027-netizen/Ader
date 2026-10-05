@@ -40,6 +40,12 @@ class Moderation(commands.Cog):
         if message.author.bot or not message.guild:
             return
 
+        # ProfessionalCore is the authoritative AutoMod implementation.
+        # Keep this cog for moderation commands without duplicating its
+        # automatic spam/mention actions.
+        if self.bot.get_cog("ProfessionalCore") is not None:
+            return
+
         # Check spam
         if self.module_config.get('auto_mod', {}).get('spam_detection', True):
             await self._check_spam(message)
