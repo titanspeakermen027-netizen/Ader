@@ -13,8 +13,33 @@ function card(t,b){return '<section class="card"><div class="card-head"><b>'+t+'
 function stat(a,b,c){return '<div class="stat"><span>'+a+'</span><i>'+c+'</i><strong>'+b+'</strong></div>'}
 function selectRoles(id,value){return '<select id="'+id+'"><option value="">اختار رتبة…</option>'+s.resources.roles.map(r=>'<option value="'+r.id+'" '+(String(value||"")===String(r.id)?"selected":"")+'>'+esc(r.name)+'</option>').join("")+'</select>'}
 function selectChannels(id,value){return '<select id="'+id+'"><option value="">اختار قناة…</option>'+s.resources.channels.filter(c=>["text","news"].includes(c.type)).map(c=>'<option value="'+c.id+'" '+(String(value||"")===String(c.id)?"selected":"")+'># '+esc(c.name)+'</option>').join("")+'</select>'}
-async function loadGuild(){try{[s.overview,s.resources]=await Promise.all([api("/api/guilds/"+s.guild.id+"/overview"),api("/api/guilds/"+s.guild.id+"/resources")]);clearWarn()}catch(e){warn("تعذر تحميل بيانات السيرفر: "+e.message)}$("#guildName").textContent=s.guild.name;$("#guildIcon").innerHTML=icon(s.guild)}
-async function pick(id){s.guild=s.guilds.find(g=>String(g.id)===String(id));$("#guildSelect").value=s.guild.id;await loadGuild();render()}
+async function loadGuild(){
+  if(!s.guild?.id)return;
+  const guildId=String(s.guild.id);
+  try{
+    [s.overview,s.resources]=await Promise.all([
+      api("/api/guilds/"+guildId+"/overview"),
+      api("/api/guilds/"+guildId+"/resources")
+    ]);
+    clearWarn();
+    localStorage.setItem("ader_selected_guild_id",guildId);
+  }catch(e){
+    warn("تعذر تحميل بيانات السيرفر: "+e.message);
+  }
+  $("#guildName").textContent=s.guild.name;
+  $("#guildIcon").innerHTML=icon(s.guild);
+}
+async function pick(id){
+  const selected=s.guilds.find(g=>String(g.id)===String(id));
+  if(!selected)return;
+  s.guild=selected;
+  s.overview={};
+  s.resources={roles:[],channels:[]};
+  $("#guildSelect").value=String(selected.id);
+  localStorage.setItem("ader_selected_guild_id",String(selected.id));
+  await loadGuild();
+  await render();
+}
 const titles={overview:"Overview",servers:"السيرفرات",analytics:"Analytics",moderation:"Moderation",automod:"AutoMod",economy:"ANORIS Economy",tickets:"التذاكر",levels:"Levels",giveaways:"Giveaways",welcome:"Welcome",commands:"Commands",shortcuts:"Shortcuts",resources:"القنوات والرتب",teams:"Teams",logs:"Logs",security:"Security",premium:"Ader Premium",settings:"Settings"};
 const desc={overview:"نظرة شاملة على حالة Ader والسيرفر.",analytics:"إحصائيات النشاط المسجلة فعلياً.",moderation:"الإشراف والتحذيرات والحماية التلقائية.",automod:"إعدادات AutoMod المبنية على نظام Ader.",economy:"إعدادات ANORIS وترتيب الأرصدة.",tickets:"لوحات التذاكر والتذاكر المفتوحة.",levels:"ترتيب XP والمستويات.",giveaways:"بيانات الهدايا المحفوظة.",welcome:"الترحيب والتحقق.",commands:"تحكم مباشر في أوامر Ader.",shortcuts:"إدارة الاختصارات النصية.",resources:"القنوات والرتب المتاحة.",teams:"الفرق الموثقة وإعداداتها.",logs:"سجل الأحداث والتحذيرات.",security:"حالة جلسة الدخول وصلاحياتك.",premium:"إدارة خطة Premium والـLinked Bot بنفس بيانات Ader.",settings:"تفعيل وتعطيل أنظمة Ader."};
 async function render(){const p=s.page;$("#title").textContent=titles[p]||p;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));try{if(p==="overview")overview();else if(p==="servers")servers();else if(p==="resources")resources();else if(p==="analytics")await analytics();else if(p==="moderation"||p==="automod")await moderation();else if(p==="economy")await economy();else if(p==="levels")await levels();else if(p==="tickets")await tickets();else if(p==="welcome")await welcome();else if(p==="commands")await commands();else if(p==="shortcuts")await shortcuts();else if(p==="teams")await teams();else if(p==="logs")await logs();else if(p==="security")security();else if(p==="premium")await premium();else if(p==="settings")await settings();else giveaways();}catch(e){if(e.message==="AUTH")showLogin();else warn("تعذر تحميل القسم: "+e.message)}bindCommon()}
@@ -328,6 +353,39 @@ async function settings(){
 }
 function giveaways(){const rows=s.overview||{};$("#root").innerHTML=head("Giveaways",desc.giveaways)+card("Status",'<div class="empty small">قاعدة البيانات فيها جدول giveaways، ولكن main.py حالياً ما كيحملش cog مستقل ديال giveaways؛ لذلك هاد القسم ما غاديش يوهمك بوجود إنشاء غير مربوط.</div>')}
 function bindCommon(){document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{s.page=b.dataset.go;render()});document.querySelectorAll("[data-guild]").forEach(b=>b.onclick=()=>pick(b.dataset.guild))}
-async function boot(){try{const me=await api("/api/me");if(!me.logged_in)return showLogin();s.user=me.user;const g=await api("/api/guilds");s.guilds=g.guilds||[];showApp();if(!s.guilds.length){$("#root").innerHTML='<div class="empty">ما كاين حتى سيرفر متاح للإدارة.</div>';return}s.guild=s.guilds[0];$("#user").textContent=(s.user.username||"U")[0];$("#guildSelect").innerHTML=s.guilds.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");$("#guildSelect").onchange=()=>pick($("#guildSelect").value);await loadGuild();await render()}catch(e){if(e.message==="AUTH")showLogin();else{showLogin();warn("تعذر الاتصال بالـAPI: "+e.message)}}}
+async function boot(){
+  try{
+    const me=await api("/api/me");
+    if(!me.logged_in)return showLogin();
+    s.user=me.user;
+
+    const g=await api("/api/guilds");
+    s.guilds=(g.guilds||[]).filter(x=>x&&x.id);
+
+    showApp();
+    if(!s.guilds.length){
+      $("#root").innerHTML='<div class="empty">ما كاين حتى سيرفر متاح للإدارة ومثبت فيه Ader.</div>';
+      return;
+    }
+
+    const saved=localStorage.getItem("ader_selected_guild_id");
+    const savedGuild=s.guilds.find(x=>String(x.id)===String(saved));
+    s.guild=savedGuild||s.guilds[0];
+
+    $("#user").textContent=(s.user.username||"U")[0];
+    $("#guildSelect").innerHTML=s.guilds.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");
+    $("#guildSelect").value=String(s.guild.id);
+    $("#guildSelect").onchange=()=>pick($("#guildSelect").value);
+
+    await loadGuild();
+    await render();
+  }catch(e){
+    if(e.message==="AUTH")showLogin();
+    else{
+      showLogin();
+      warn("تعذر الاتصال بالـAPI: "+e.message);
+    }
+  }
+}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{s.page=b.dataset.page;render()});$("#loginBtn").onclick=()=>location.assign("/login?force=1");$("#logoutBtn").onclick=()=>location.href=API+"/logout";$("#refresh").onclick=()=>loadGuild().then(render);$("#theme").onclick=()=>document.body.classList.toggle("light");$("#menu").onclick=()=>$("#sidebar").classList.toggle("open");boot();
 })();
