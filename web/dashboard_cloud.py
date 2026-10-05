@@ -60,47 +60,68 @@ async def _require_guild(bot, request: Request, guild_id: int):
     if not session:
         raise HTTPException(status_code=401, detail="تسجيل الدخول مطلوب")
 
-    managed = session.get("managed_guilds", {}) or {}
-    data = managed.get(str(guild_id))
-    if not isinstance(data, dict) or not base._guild_is_managed(data):
-        oauth_guilds = session.get("oauth_guilds", {}) or {}
-        data = oauth_guilds.get(str(guild_id))
-        if not isinstance(data, dict):
-            raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة هذا الخادم")
-
-        permissions = base._guild_permissions(data)
-        if not (permissions & (base.ADMINISTRATOR | base.MANAGE_GUILD)):
-            guild = bot.get_guild(guild_id)
-            if guild is None:
-                raise HTTPException(status_code=404, detail="البوت غير متصل بهذا الخادم حالياً")
-            user_id = int((session.get("discord_user") or {}).get("id") or 0)
-            if guild.owner_id != user_id:
-                try:
-                    member = guild.get_member(user_id) or await guild.fetch_member(user_id)
-                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                    member = None
-                perms = getattr(member, "guild_permissions", None) if member else None
-                if not perms or not (perms.administrator or perms.manage_guild):
-                    raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة هذا الخادم")
-            data = {
-                **data,
-                "permissions": base.ADMINISTRATOR | base.MANAGE_GUILD,
-                "administrator": guild.owner_id == user_id,
-                "manage_guild": guild.owner_id == user_id,
-            }
-        else:
-            data = {
-                **data,
-                "permissions": permissions,
-                "administrator": bool(permissions & base.ADMINISTRATOR),
-                "manage_guild": bool(permissions & base.MANAGE_GUILD),
-            }
-        managed[str(guild_id)] = data
-        session["managed_guilds"] = managed
-
     guild = bot.get_guild(guild_id)
     if guild is None:
         raise HTTPException(status_code=404, detail="البوت غير متصل بهذا الخادم حالياً")
+
+    key = str(guild_id)
+    managed = session.get("managed_guilds", {}) or {}
+    oauth_guilds = session.get("oauth_guilds", {}) or {}
+    current = managed.get(key)
+
+    if isinstance(current, dict) and base._guild_is_managed(current):
+        session["active_guild_id"] = guild_id
+        await base._save_session(request, bot, session)
+        return guild
+
+    user = session.get("discord_user") or {}
+    try:
+        user_id = int(user.get("id") or 0)
+    except (TypeError, ValueError):
+        user_id = 0
+
+    allowed = bool(user_id and guild.owner_id == user_id)
+    live_perms = None
+    if not allowed and user_id:
+        try:
+            member = guild.get_member(user_id) or await guild.fetch_member(user_id)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            member = None
+        live_perms = getattr(member, "guild_permissions", None) if member else None
+        allowed = bool(live_perms and (live_perms.administrator or live_perms.manage_guild))
+
+    oauth_data = oauth_guilds.get(key)
+    oauth_permissions = base._guild_permissions(oauth_data) if isinstance(oauth_data, dict) else 0
+    if not allowed and oauth_permissions & (base.ADMINISTRATOR | base.MANAGE_GUILD):
+        allowed = True
+
+    if not allowed:
+        raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة هذا الخادم")
+
+    permissions = base.ADMINISTRATOR | base.MANAGE_GUILD if guild.owner_id == user_id else (
+        base.ADMINISTRATOR if getattr(live_perms, "administrator", False)
+        else base.MANAGE_GUILD
+    )
+    guild_data = {
+        "id": guild.id,
+        "name": guild.name,
+        "icon": (
+            (current or {}).get("icon")
+            or (oauth_data or {}).get("icon")
+            or (str(guild.icon.url) if guild.icon else None)
+        ),
+        "permissions": permissions,
+        "administrator": bool(permissions & base.ADMINISTRATOR),
+        "manage_guild": bool(permissions & base.MANAGE_GUILD),
+    }
+    managed[key] = guild_data
+    session["managed_guilds"] = managed
+    if isinstance(oauth_data, dict):
+        oauth_guilds[key] = {**oauth_data, **guild_data}
+        session["oauth_guilds"] = oauth_guilds
+
+    session["active_guild_id"] = guild_id
+    await base._save_session(request, bot, session)
     return guild
 
 
