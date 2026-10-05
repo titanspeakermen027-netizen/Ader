@@ -59,13 +59,15 @@ class Economy(commands.Cog):
         row = await self.db.fetchone("SELECT language FROM balance_language_preferences WHERE user_id=?", (int(user_id),))
         return str(row["language"]) if row and row["language"] in {"ar", "en"} else "ar"
 
-    async def format_balance_message(self, viewer_id: int, username: str, balance: int, *, own_balance: bool) -> str:
+    async def format_balance_message(self, viewer_id: int, username: str, balance: int, *, own_balance: bool, guild_id: int | None = None) -> str:
         language = await self.get_balance_language(viewer_id)
+        name = await self._currency_name(guild_id) if guild_id else self.currency_name
+        symbol = await self._currency_symbol(guild_id) if guild_id else self.currency_symbol
         if language == "en":
-            return (f"🪙  | **{username}, your ANORIS balance is `${balance:,}`.**" if own_balance
-                    else f"💳  | **{username} ANORIS account balance is `${balance:,}`.**")
-        return (f"**ـ {username} رصيد حسابك في ANORIS هو `${balance:,}`.** | 🪙" if own_balance
-                else f"**رصيد {username} في ANORIS هو `${balance:,}`.** 💳")
+            return (f"{symbol}  | **{username}, your {name} balance is `${balance:,}`.**" if own_balance
+                    else f"💳  | **{username} {name} account balance is `${balance:,}`.**")
+        return (f"**ـ {username} رصيد حسابك في {name} هو `${balance:,}`.** | {symbol}" if own_balance
+                else f"**رصيد {username} في {name} هو `${balance:,}`.** 💳")
 
     @app_commands.command(name="balance-language", description="اختيار لغة رسائل رصيد ANORIS")
     @app_commands.describe(language="لغة رسائل الرصيد")
@@ -250,13 +252,13 @@ class Economy(commands.Cog):
     async def credits(self, interaction: discord.Interaction, user: discord.Member | None = None, amount: int | None = None):
         if user is None and amount is None:
             balance = await self.db.get_balance(interaction.user.id)
-            text = await self.format_balance_message(interaction.user.id, interaction.user.name, balance, own_balance=True)
+            text = await self.format_balance_message(interaction.user.id, interaction.user.name, balance, own_balance=True, guild_id=interaction.guild.id)
             return await interaction.response.send_message(text, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         if user is not None and amount is None:
             if user.bot:
                 return await interaction.response.send_message(f":thinking: | **{interaction.user.name}، البوتات لا تملك أرصدة !**", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
             balance = await self.db.get_balance(user.id)
-            text = await self.format_balance_message(interaction.user.id, user.name, balance, own_balance=False)
+            text = await self.format_balance_message(interaction.user.id, user.name, balance, own_balance=False, guild_id=interaction.guild.id)
             return await interaction.response.send_message(text, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         if user is None or amount is None:
             return await interaction.response.send_message(embed=EmbedFactory.error("استعمال غير صحيح", "حدد العضو والمبلغ معاً للتحويل."), ephemeral=True)
