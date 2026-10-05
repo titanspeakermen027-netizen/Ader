@@ -47,15 +47,15 @@ def _configured_public_url(cfg: dict[str, Any]) -> str:
 
 
 def _redirect_uri(request: Request, cfg: dict[str, Any]) -> str:
-    """Build the OAuth callback URI for the actual public request origin."""
+    """Build the canonical public OAuth callback URI."""
+    explicit = os.getenv("DASHBOARD_REDIRECT_URI", "").strip()
+    if explicit:
+        return explicit.rstrip("/")
+
     forwarded_host = request.headers.get("x-forwarded-host", "").strip()
     forwarded_proto = request.headers.get("x-forwarded-proto", "").strip() or "https"
     if forwarded_host:
         return f"{forwarded_proto}://{forwarded_host}/callback"
-
-    explicit = os.getenv("DASHBOARD_REDIRECT_URI", "").strip()
-    if explicit:
-        return explicit.rstrip("/")
 
     public_url = _configured_public_url(cfg)
     if public_url:
@@ -65,6 +65,9 @@ def _redirect_uri(request: Request, cfg: dict[str, Any]) -> str:
 
 
 def _cleanup_state() -> None:
+    # Kept for compatibility with older deployments that may still have
+    # transient state entries in memory. OAuth validation itself now uses the
+    # signed browser session, so a backend restart no longer invalidates login.
     now = time.time()
     for key, expires in list(_OAUTH_STATES.items()):
         if expires <= now:
@@ -96,8 +99,6 @@ def _session_secret(bot, cfg: dict[str, Any]) -> str:
     configured = os.getenv("DASHBOARD_SESSION_SECRET", "").strip() or str(cfg.get("session_secret", "")).strip()
     if len(configured) >= 32:
         return configured
-    # Stable fallback prevents every process restart from invalidating the signed sid cookie.
-    # Production deployments should still provide DASHBOARD_SESSION_SECRET explicitly.
     token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
     if not token:
         token = str(cfg.get("session_fallback", "ader-dashboard")).strip()
@@ -214,10 +215,6 @@ def create_app(bot) -> FastAPI:
     async def login(request: Request, force: int = 0):
         _cleanup_state()
 
-        # OAuth must use one canonical browser origin. A direct visit to the
-        # backend hostname would otherwise create the initial Starlette session
-        # cookie on nova.hatenna.com while Discord returns to the Cloudflare
-        # Worker origin. Redirect direct backend logins to the public origin.
         if not request.headers.get("x-forwarded-host"):
             public_url = (
                 os.getenv("DASHBOARD_FRONTEND_URL", "").strip().rstrip("/")
@@ -239,9 +236,11 @@ def create_app(bot) -> FastAPI:
             request.session.clear()
         if not oauth_ready():
             return HTMLResponse(_error_html("إعدادات OAuth2 ناقصة", "خاصك DISCORD_CLIENT_ID و DISCORD_CLIENT_SECRET في متغيرات البيئة."), status_code=503)
+
         state = secrets.token_urlsafe(32)
-        _OAUTH_STATES[state] = time.time() + 600
         request.session["oauth_state"] = state
+        request.session["oauth_state_expires"] = time.time() + 600
+
         redirect_uri = _redirect_uri(request, cfg)
         url = (
             "https://discord.com/oauth2/authorize?client_id=" + quote(os.environ["DISCORD_CLIENT_ID"], safe="")
@@ -254,17 +253,18 @@ def create_app(bot) -> FastAPI:
 
     @app.get("/callback")
     async def callback(request: Request, code: str = "", state: str = "", error: str = "", error_description: str = ""):
-        _cleanup_state()
         if error:
             return HTMLResponse(_error_html("تم إلغاء تسجيل الدخول", error_description or error), status_code=400)
-        # The OAuth state is already stored server-side in this process. Do
-        # not require the browser's pre-login session cookie here: the login
-        # request may have started on the backend hostname while Discord's
-        # callback is intentionally sent to the public Worker hostname.
-        if not code or not state or state not in _OAUTH_STATES:
+
+        expected_state = str(request.session.get("oauth_state") or "").strip()
+        expires_at = float(request.session.get("oauth_state_expires") or 0)
+        if not code or not state or not expected_state or state != expected_state or expires_at <= time.time():
             request.session.clear()
             return HTMLResponse(_error_html("فشل تسجيل الدخول", "رابط OAuth غير صالح أو انتهت صلاحيته. عاود تسجيل الدخول من زر Discord."), status_code=400)
-        _OAUTH_STATES.pop(state, None)
+
+        request.session.pop("oauth_state", None)
+        request.session.pop("oauth_state_expires", None)
+
         redirect_uri = _redirect_uri(request, cfg)
         data = {"client_id": os.environ["DISCORD_CLIENT_ID"], "client_secret": os.environ["DISCORD_CLIENT_SECRET"], "grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri}
         try:
@@ -388,7 +388,7 @@ def create_app(bot) -> FastAPI:
             DEFAULT_ALIASES, SHORTCUTS = {}, {}
         rows = await bot.db.fetchall("SELECT * FROM dashboard_shortcut_settings WHERE guild_id=?", (guild_id,))
         settings = {str(row["shortcut_name"]): dict(row) for row in rows}
-        return {"shortcuts": [{"name": key, "label": label, "alias": (settings.get(key, {}).get("alias") or DEFAULT_ALIASES.get(key, "")), "enabled": bool(settings.get(key, {}).get("enabled", 1)), "allowed_roles": _loads_ids(settings.get(key, {}).get("allowed_roles")) if key in settings else [], "denied_roles": _loads_ids(settings.get(key, {}).get("denied_roles")) if key in settings else [], "allowed_channels": _loads_ids(settings.get(key, {}).get("allowed_channels")) if key in settings else [], "denied_channels": _loads_ids(settings.get(key, {}).get("denied_channels")) if key in settings else []} for key, label in SHORTCUTS.items()]}
+        return {"shortcuts": [{"name": key, "label": label, "alias": (settings.get(key, {}).get("alias") or DEFAULT_ALIASES.get(key, "")), "enabled": bool(settings.get(key, {}).get("enabled", 1)), "allowed_roles": _loads_ids(settings.get(key, {}).get("allowed_roles")) if key in settings else [], "denied_roles": _loads_ids(settings.get(key, {}).get("denied_roles")) if key in settings else [], "allowed_channels": _loads_ids(settings.get(key, {}).get("allowed_channels")) if key in settings else [] , "denied_channels": _loads_ids(settings.get(key, {}).get("denied_channels")) if key in settings else []} for key, label in SHORTCUTS.items()]}
 
     return app
 
