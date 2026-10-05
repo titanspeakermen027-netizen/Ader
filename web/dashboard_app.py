@@ -105,6 +105,18 @@ async def _session_for(request: Request, bot) -> dict[str, Any] | None:
     return session
 
 
+async def _save_session(request: Request, bot, session: dict[str, Any]) -> None:
+    sid = str(request.session.get("sid") or "").strip()
+    if not sid:
+        return
+    expires_at = time.time() + SESSION_TTL
+    session["expires_at"] = expires_at
+    try:
+        await bot.db.create_dashboard_session(sid, session, expires_at)
+    except Exception:
+        pass
+
+
 def _session_secret(bot, cfg: dict[str, Any]) -> str:
     configured = os.getenv("DASHBOARD_SESSION_SECRET", "").strip() or str(cfg.get("session_secret", "")).strip()
     if len(configured) >= 32:
@@ -250,6 +262,8 @@ def create_app(bot) -> FastAPI:
         guild = bot.get_guild(guild_id)
         if guild is None:
             raise HTTPException(status_code=404, detail="البوت غير متصل بهذا الخادم حالياً")
+        session["active_guild_id"] = guild_id
+        await _save_session(request, bot, session)
         return guild, session
 
     @app.get("/healthz")
@@ -476,6 +490,7 @@ def create_app(bot) -> FastAPI:
                     await add_if_manageable(guild_id, item)
 
         session["managed_guilds"] = result
+        await _save_session(request, bot, session)
         return {"guilds": list(result.values())}
 
     @app.get("/api/guilds/{guild_id}/overview")
