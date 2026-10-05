@@ -29,11 +29,21 @@ _OAUTH_STATES: dict[str, float] = {}
 SESSION_TTL = 86400
 
 
+def _guild_permissions(item: dict[str, Any]) -> int:
+    """Normalize Discord OAuth guild permission fields across API versions."""
+    for key in ("permissions", "permissions_new"):
+        value = item.get(key)
+        if value is None or value == "":
+            continue
+        try:
+            return int(str(value))
+        except (TypeError, ValueError):
+            continue
+    return 0
+
+
 def _guild_is_managed(item: dict[str, Any]) -> bool:
-    try:
-        permissions = int(item.get("permissions", 0) or 0)
-    except (TypeError, ValueError):
-        permissions = 0
+    permissions = _guild_permissions(item)
     return bool(permissions & ADMINISTRATOR or permissions & MANAGE_GUILD)
 
 
@@ -192,10 +202,51 @@ def create_app(bot) -> FastAPI:
 
     async def require_guild(request: Request, guild_id: int):
         session = await require_session(request)
-        managed = session.get("managed_guilds", {})
+        managed = session.get("managed_guilds", {}) or {}
         guild_data = managed.get(str(guild_id))
+
+        # OAuth guild permissions are a useful first check, but they can become
+        # stale after role/permission changes. Validate against the live guild
+        # member as a fallback so an Administrator/Manage Server user is not
+        # incorrectly denied by an old OAuth snapshot.
         if not isinstance(guild_data, dict) or not _guild_is_managed(guild_data):
-            raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة هذا الخادم")
+            oauth_guilds = session.get("oauth_guilds", {}) or {}
+            oauth_data = oauth_guilds.get(str(guild_id))
+            if not isinstance(oauth_data, dict):
+                raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة هذا الخادم")
+
+            oauth_permissions = _guild_permissions(oauth_data)
+            if oauth_permissions & (ADMINISTRATOR | MANAGE_GUILD):
+                guild_data = {
+                    **oauth_data,
+                    "permissions": oauth_permissions,
+                    "administrator": bool(oauth_permissions & ADMINISTRATOR),
+                    "manage_guild": bool(oauth_permissions & MANAGE_GUILD),
+                }
+                managed[str(guild_id)] = guild_data
+            else:
+                guild = bot.get_guild(guild_id)
+                if guild is None:
+                    raise HTTPException(status_code=404, detail="البوت غير متصل بهذا الخادم حالياً")
+                user_id = int(session["discord_user"]["id"])
+                if guild.owner_id != user_id:
+                    try:
+                        member = guild.get_member(user_id) or await guild.fetch_member(user_id)
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                        member = None
+                    perms = getattr(member, "guild_permissions", None) if member else None
+                    if not perms or not (perms.administrator or perms.manage_guild):
+                        raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة هذا الخادم")
+                guild_data = {
+                    "id": guild.id,
+                    "name": guild.name,
+                    "icon": str(guild.icon.url) if guild.icon else None,
+                    "permissions": ADMINISTRATOR | MANAGE_GUILD,
+                    "administrator": guild.owner_id == user_id,
+                    "manage_guild": guild.owner_id == user_id,
+                }
+                managed[str(guild_id)] = guild_data
+
         guild = bot.get_guild(guild_id)
         if guild is None:
             raise HTTPException(status_code=404, detail="البوت غير متصل بهذا الخادم حالياً")
@@ -292,15 +343,29 @@ def create_app(bot) -> FastAPI:
             return HTMLResponse(_error_html("استجابة Discord غير صالحة", "تعذر الحصول على بيانات الحساب والخوادم."), status_code=502)
 
         managed = {}
+        oauth_guilds = {}
         for item in user_guilds:
-            if not isinstance(item, dict) or not _guild_is_managed(item):
+            if not isinstance(item, dict):
                 continue
             try:
                 guild_id = int(item["id"])
-                permissions = int(item.get("permissions", 0) or 0)
             except (KeyError, TypeError, ValueError):
                 continue
-            managed[str(guild_id)] = {"id": guild_id, "name": str(item.get("name") or "Unknown Server"), "icon": item.get("icon"), "permissions": permissions, "administrator": bool(permissions & ADMINISTRATOR), "manage_guild": bool(permissions & MANAGE_GUILD)}
+
+            permissions = _guild_permissions(item)
+            record = {
+                "id": guild_id,
+                "name": str(item.get("name") or "Unknown Server"),
+                "icon": item.get("icon"),
+                "permissions": permissions,
+                "administrator": bool(permissions & ADMINISTRATOR),
+                "manage_guild": bool(permissions & MANAGE_GUILD),
+            }
+            # Keep every OAuth-visible guild so the dashboard can re-check
+            # permissions live when the user's roles changed after login.
+            oauth_guilds[str(guild_id)] = record
+            if _guild_is_managed(record):
+                managed[str(guild_id)] = record
 
         sid = secrets.token_urlsafe(32)
         session_data = {
@@ -311,6 +376,7 @@ def create_app(bot) -> FastAPI:
                 "avatar": user.get("avatar"),
             },
             "managed_guilds": managed,
+            "oauth_guilds": oauth_guilds,
         }
         await bot.db.create_dashboard_session(sid, session_data, time.time() + SESSION_TTL)
         request.session.clear()
@@ -333,7 +399,56 @@ def create_app(bot) -> FastAPI:
     @app.get("/api/guilds")
     async def guilds(request: Request):
         session = await require_session(request)
-        return {"guilds": list((session.get("managed_guilds") or {}).values())}
+        managed = session.get("managed_guilds", {}) or {}
+        oauth_guilds = session.get("oauth_guilds", {}) or {}
+
+        # Rebuild the list from the current Discord member permissions when
+        # possible. This fixes the common case where OAuth was completed before
+        # the user received Administrator/Manage Server.
+        result = {}
+        user = session.get("discord_user") or {}
+        try:
+            user_id = int(user.get("id"))
+        except (TypeError, ValueError):
+            user_id = 0
+
+        for key, item in oauth_guilds.items():
+            if not isinstance(item, dict):
+                continue
+            guild_id = int(item.get("id") or 0)
+            if not guild_id:
+                continue
+            guild = bot.get_guild(guild_id)
+            allowed = _guild_is_managed(item)
+            if guild is not None and user_id:
+                if guild.owner_id == user_id:
+                    allowed = True
+                    item = {**item, "administrator": True, "manage_guild": True}
+                elif not allowed:
+                    try:
+                        member = guild.get_member(user_id) or await guild.fetch_member(user_id)
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                        member = None
+                    perms = getattr(member, "guild_permissions", None) if member else None
+                    allowed = bool(perms and (perms.administrator or perms.manage_guild))
+                    if allowed:
+                        item = {
+                            **item,
+                            "permissions": ADMINISTRATOR | MANAGE_GUILD if perms.administrator else MANAGE_GUILD,
+                            "administrator": bool(perms.administrator),
+                            "manage_guild": bool(perms.administrator or perms.manage_guild),
+                        }
+            if allowed:
+                result[str(guild_id)] = item
+
+        # Backward compatibility for sessions created before oauth_guilds was
+        # introduced.
+        for key, item in managed.items():
+            if isinstance(item, dict) and _guild_is_managed(item):
+                result.setdefault(str(key), item)
+
+        session["managed_guilds"] = result
+        return {"guilds": list(result.values())}
 
     @app.get("/api/guilds/{guild_id}/overview")
     async def overview(request: Request, guild_id: int):
