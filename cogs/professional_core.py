@@ -102,6 +102,68 @@ class ProfessionalCore(commands.Cog):
         s=(await self.settings(m.guild.id))["automod"]
         if not s["enabled"] or m.author.guild_permissions.manage_messages: return False
         text=norm(m.content)
+
+        if s.get("spam", True):
+            key = (m.guild.id, m.author.id)
+            now = time.time()
+            q = self.spam[key]
+            q.append(now)
+            window = max(2, int(s.get("window", 5) or 5))
+            while q and now - q[0] > window:
+                q.popleft()
+            threshold = max(3, int(s.get("messages", 6) or 6))
+            if len(q) >= threshold:
+                q.clear()
+                try:
+                    await m.delete()
+                except discord.HTTPException:
+                    pass
+                timeout_minutes = max(1, min(40320, int(s.get("timeout", 5) or 5)))
+                try:
+                    await m.author.timeout(
+                        timedelta(minutes=timeout_minutes),
+                        reason="Ader AutoMod • Spam",
+                    )
+                except discord.HTTPException:
+                    pass
+                await self.case(m.guild, m.author.id, self.bot.user.id, "automod-spam", "Spam detected")
+                await self.log(
+                    m.guild,
+                    "AutoMod",
+                    f"تم اتخاذ إجراء ضد {m.author.mention} بسبب السبام.",
+                    discord.Color.orange(),
+                )
+                return True
+
+        max_mentions = max(0, int(s.get("mentions", 5) or 5))
+        if max_mentions and len(m.mentions) > max_mentions:
+            try:
+                await m.delete()
+            except discord.HTTPException:
+                pass
+            timeout_minutes = max(1, min(40320, int(s.get("timeout", 5) or 5)))
+            try:
+                await m.author.timeout(
+                    timedelta(minutes=timeout_minutes),
+                    reason="Ader AutoMod • Excessive mentions",
+                )
+            except discord.HTTPException:
+                pass
+            await self.case(
+                m.guild,
+                m.author.id,
+                self.bot.user.id,
+                "automod-mentions",
+                f"تجاوز حد المنشنات: {len(m.mentions)}/{max_mentions}",
+            )
+            await self.log(
+                m.guild,
+                "AutoMod",
+                f"تم اتخاذ إجراء ضد {m.author.mention} بسبب كثرة المنشنات.",
+                discord.Color.orange(),
+            )
+            return True
+
         if any(norm(w) and norm(w) in text for w in s["words"]):
             try: await m.delete()
             except discord.HTTPException: pass
