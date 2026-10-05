@@ -4,7 +4,6 @@ aiohttp==3.9.1
 python-dotenv==1.0.0
 PyYAML>=6.0,<7
 Pillow>=10,<12
-audioop-lts
 fastapi>=0.115,<1
 uvicorn>=0.34,<1
 itsdangerous>=2.2,<3
