@@ -200,7 +200,7 @@ def create_app(bot):
             am = core.get("automod", {}) or {}
             row = await bot.db.fetchone("SELECT COUNT(*) AS n FROM warnings WHERE guild_id=? AND active=1", (guild_id,))
             warnings = await bot.db.fetchall("SELECT user_id, reason, created_at FROM warnings WHERE guild_id=? AND active=1 ORDER BY id DESC LIMIT 10", (guild_id,))
-            return {"config":{"enabled":bool(am.get("enabled",True)),"auto_mod":{"spam_detection":bool(am.get("spam",True)),"max_mentions":int(am.get("mentions",5) or 5),"toxicity_filter":True}},"warning_count":int(row["n"]) if row else 0,"warnings":[dict(x) for x in warnings]}
+            return {"config":{"enabled":bool(am.get("enabled",True)),"auto_mod":{"spam_detection":bool(am.get("spam",True)),"max_mentions":int(am.get("mentions",5) or 5),"link_filter":bool(am.get("links",False))}},"warning_count":int(row["n"]) if row else 0,"warnings":[dict(x) for x in warnings]}
         return {"config":{"enabled":True,"auto_mod":{"spam_detection":True,"max_mentions":5,"toxicity_filter":True}},"warning_count":0,"warnings":[]}
 
     @app.put("/api/guilds/{guild_id}/modules/moderation")
@@ -221,8 +221,10 @@ def create_app(bot):
         if "max_mentions" in auto:
             try: am["mentions"] = max(0, min(50, int(auto["max_mentions"])))
             except (TypeError, ValueError): pass
+        if "link_filter" in auto:
+            am["links"] = bool(auto["link_filter"])
         await cog.save(guild_id, settings)
-        return {"ok":True,"config":{"enabled":am["enabled"],"auto_mod":{"spam_detection":bool(am.get("spam",True)),"max_mentions":int(am.get("mentions",5) or 5),"toxicity_filter":True}}}
+        return {"ok":True,"config":{"enabled":am["enabled"],"auto_mod":{"spam_detection":bool(am.get("spam",True)),"max_mentions":int(am.get("mentions",5) or 5),"link_filter":bool(am.get("links",False))}}}
 
     @app.get("/api/guilds/{guild_id}/economy")
     async def cloud_economy_get(request: Request, guild_id: int):
