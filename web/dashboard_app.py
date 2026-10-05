@@ -442,10 +442,41 @@ def create_app(bot) -> FastAPI:
                 result[str(guild_id)] = item
 
         # Backward compatibility for sessions created before oauth_guilds was
-        # introduced.
+        # introduced. If an old session has no OAuth guild snapshot, validate
+        # the user against the bot's current guild members instead of forcing
+        # a logout just to refresh permissions.
         for key, item in managed.items():
             if isinstance(item, dict) and _guild_is_managed(item):
                 result.setdefault(str(key), item)
+
+        if not oauth_guilds and user_id:
+            for guild in getattr(bot, "guilds", ()):
+                if guild.id in {int(v.get("id")) for v in result.values() if isinstance(v, dict) and str(v.get("id", "")).isdigit()}:
+                    continue
+                if guild.owner_id == user_id:
+                    result[str(guild.id)] = {
+                        "id": guild.id,
+                        "name": guild.name,
+                        "icon": str(guild.icon.url) if guild.icon else None,
+                        "permissions": ADMINISTRATOR | MANAGE_GUILD,
+                        "administrator": True,
+                        "manage_guild": True,
+                    }
+                    continue
+                try:
+                    member = guild.get_member(user_id) or await guild.fetch_member(user_id)
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    member = None
+                perms = getattr(member, "guild_permissions", None) if member else None
+                if perms and (perms.administrator or perms.manage_guild):
+                    result[str(guild.id)] = {
+                        "id": guild.id,
+                        "name": guild.name,
+                        "icon": str(guild.icon.url) if guild.icon else None,
+                        "permissions": ADMINISTRATOR if perms.administrator else MANAGE_GUILD,
+                        "administrator": bool(perms.administrator),
+                        "manage_guild": bool(perms.administrator or perms.manage_guild),
+                    }
 
         session["managed_guilds"] = result
         return {"guilds": list(result.values())}
