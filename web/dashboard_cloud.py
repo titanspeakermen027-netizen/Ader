@@ -191,6 +191,104 @@ def create_app(bot):
             ]
         }
 
+    @app.get("/api/guilds/{guild_id}/analytics")
+    async def cloud_analytics(request: Request, guild_id: int, days: int = 7):
+        await _require_guild(bot, request, guild_id)
+        days = max(1, min(365, int(days)))
+        events = await bot.db.get_analytics(guild_id, limit=1000)
+        cutoff = time.time() - days * 86400
+        events = [e for e in events if float(e.get("timestamp") or 0) >= cutoff]
+        counts = {}
+        daily = {}
+        for e in events:
+            kind = str(e.get("type") or "unknown")
+            counts[kind] = counts.get(kind, 0) + 1
+            day = time.strftime("%Y-%m-%d", time.localtime(float(e.get("timestamp") or 0)))
+            daily.setdefault(day, {})
+            daily[day][kind] = daily[day].get(kind, 0) + 1
+        return {"total":len(events),"counts":counts,"daily":daily}
+
+    @app.get("/api/guilds/{guild_id}/welcome")
+    async def cloud_welcome_get(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        cfg = await bot.db.get_guild(guild_id) or {}
+        return {
+            "config": {
+                "verified_role": cfg.get("verified_role"),
+                "welcome_channel": cfg.get("welcome_channel"),
+                "verify_channel": cfg.get("verify_channel"),
+                "verification_method": cfg.get("verification_method", "dm"),
+                "verification_type": cfg.get("verification_type", "button"),
+                "welcome_message": cfg.get("welcome_message", "مرحبا {user} 👋"),
+            },
+            "module": {"enabled": bool((cfg.get("modules") or {}).get("verification", {}).get("enabled", True))},
+        }
+
+    @app.put("/api/guilds/{guild_id}/settings")
+    async def cloud_settings_legacy_put(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="إعدادات غير صالحة")
+        modules = data.get("modules") if isinstance(data.get("modules"), dict) else {}
+        verification = data.get("verification") if isinstance(data.get("verification"), dict) else {}
+        patch = dict(verification)
+        if "enabled" in modules.get("verification", {}):
+            current = await bot.db.get_guild(guild_id) or {}
+            mod = dict((current.get("modules") or {}).get("verification", {}) if current else {})
+            mod["enabled"] = bool(modules["verification"]["enabled"])
+            await bot.db.update_guild(guild_id, {"verification": mod})
+        if patch:
+            await bot.db.update_guild(guild_id, patch)
+        return {"ok":True}
+
+    @app.get("/api/guilds/{guild_id}/settings")
+    async def cloud_settings_get(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        cfg = await bot.db.get_guild(guild_id) or {}
+        return {"modules":cfg.get("modules", {}) if isinstance(cfg.get("modules"), dict) else {}}
+
+    @app.get("/api/guilds/{guild_id}/teams")
+    async def cloud_teams_get(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        rows = await bot.db.fetchall("SELECT * FROM verified_teams WHERE guild_id=? AND active=1 ORDER BY team_type,id", (guild_id,))
+        teams=[]
+        for row in rows:
+            count=await bot.db.fetchone("SELECT COUNT(*) AS n FROM team_members WHERE team_id=?", (row["id"],))
+            teams.append({"name":row["name"],"emoji":row["emoji"],"team_type":row["team_type"],"role_id":row["role_id"],"players":int(count["n"]) if count else 0})
+        return {"teams":teams}
+
+    @app.get("/api/guilds/{guild_id}/teams/settings")
+    async def cloud_teams_settings_get(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        row=await bot.db.fetchone("SELECT * FROM team_settings WHERE guild_id=?", (guild_id,))
+        if not row:
+            return {"settings":{"coach_role_id":None,"max_players":15}}
+        return {"settings":dict(row)}
+
+    @app.put("/api/guilds/{guild_id}/teams/settings")
+    async def cloud_teams_settings_put(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        data=await request.json()
+        if not isinstance(data,dict): raise HTTPException(status_code=400,detail="إعدادات غير صالحة")
+        coach=data.get("coach_role_id")
+        max_players=max(1,min(50,int(data.get("max_players",15))))
+        guild=bot.get_guild(guild_id)
+        if coach and (not guild or not guild.get_role(int(coach))): coach=None
+        await bot.db.execute("INSERT INTO team_settings(guild_id,coach_role_id,max_players,updated_at) VALUES(?,?,?,?) ON CONFLICT(guild_id) DO UPDATE SET coach_role_id=excluded.coach_role_id,max_players=excluded.max_players,updated_at=excluded.updated_at",(guild_id,int(coach) if coach else None,max_players,time.time()))
+        row=await bot.db.fetchone("SELECT * FROM team_settings WHERE guild_id=?", (guild_id,))
+        return {"ok":True,"settings":dict(row) if row else {"coach_role_id":coach,"max_players":max_players}}
+
+    @app.get("/api/guilds/{guild_id}/logs")
+    async def cloud_logs(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        cases=await bot.db.fetchall("SELECT action AS type, user_id, moderator_id, reason, created_at FROM ader_mod_cases WHERE guild_id=? ORDER BY id DESC LIMIT 50",(guild_id,))
+        tickets=await bot.db.fetchall("SELECT id,user_id,status,created_at,closed_at FROM tickets WHERE guild_id=? ORDER BY id DESC LIMIT 50",(guild_id,))
+        logs=[{"type":"moderation:"+str(x["type"]),"timestamp":float(x["created_at"] or 0),"data":{"user_id":x["user_id"],"moderator_id":x["moderator_id"],"reason":x["reason"]}} for x in cases]
+        logs += [{"type":"ticket","timestamp":float(x["created_at"] or 0),"data":{"ticket_id":x["id"],"user_id":x["user_id"],"status":x["status"]}} for x in tickets]
+        logs.sort(key=lambda x:x["timestamp"],reverse=True)
+        return {"logs":logs[:100]}
+
     @app.get("/api/guilds/{guild_id}/moderation")
     async def cloud_moderation_get(request: Request, guild_id: int):
         await _require_guild(bot, request, guild_id)
