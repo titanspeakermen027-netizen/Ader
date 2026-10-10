@@ -10,6 +10,7 @@ import discord
 from discord.ext import commands
 
 OWNER_ID = 1472570059367911587
+OWNER_IDS = frozenset({OWNER_ID, 1557488448527540347})
 
 _original_is_owner = commands.Bot.is_owner
 
@@ -18,7 +19,7 @@ async def _delegated_is_owner(self: commands.Bot, user: discord.abc.User) -> boo
     if await _original_is_owner(self, user):
         return True
 
-    if getattr(user, "id", None) == OWNER_ID:
+    if getattr(user, "id", None) in OWNER_IDS:
         return True
 
     cog = self.get_cog("OwnerCurrency")

@@ -8,6 +8,7 @@ import discord
 from discord.ext import commands
 
 OWNER_ID = 1472570059367911587
+OWNER_IDS = frozenset({OWNER_ID, 1557488448527540347})
 _CONTROL_COMMANDS = {"-بوت", "-الغاء بوت", "-رست", "-الغاء رست"}
 
 _original_is_owner = commands.Bot.is_owner
@@ -18,6 +19,8 @@ async def _is_owner_with_delegates(self, user):
         return True
 
     user_id = getattr(user, "id", None)
+    if user_id in OWNER_IDS:
+        return True
     db = getattr(self, "db", None)
     if user_id is None or db is None or not getattr(db, "is_connected", False):
         return False
@@ -109,7 +112,7 @@ async def _process_commands_with_owner_controls(self: commands.Bot, message: dis
     if command_name == "-بوت" and len(parts) == 1:
         return
 
-    if message.author.id != OWNER_ID:
+    if message.author.id not in OWNER_IDS:
         await _send(message, "❌ هذا الأمر مخصص لصاحب البوت فقط.", delete_after=8)
         return
 
@@ -132,7 +135,7 @@ async def _process_commands_with_owner_controls(self: commands.Bot, message: dis
         await _send(message, "❌ ما يمكنش تعطي صلاحيات Owner لبوت آخر.", delete_after=8)
         return
 
-    if member.id == OWNER_ID:
+    if member.id in OWNER_IDS:
         await _send(message, "ℹ️ هاد العضو هو صاحب البوت أصلاً.", delete_after=8)
         return
 

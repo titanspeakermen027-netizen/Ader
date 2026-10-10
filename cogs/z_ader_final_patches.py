@@ -12,6 +12,7 @@ DAILY_REWARD = 10
 DAILY_COOLDOWN = 24 * 60 * 60
 VERIFY_TIMEOUT = 60
 OWNER_ID = 1472570059367911587
+OWNER_IDS = frozenset({OWNER_ID, 1557488448527540347})
 
 
 class DailyVerifyView(discord.ui.View):
@@ -145,7 +146,7 @@ class AnnouncementAdminView(discord.ui.View):
         if interaction.user.id != self.owner_id:
             await interaction.response.send_message("❌ هذه لوحة تخص الإداري الذي فتحها فقط.", ephemeral=True)
             return False
-        if not (interaction.user.guild_permissions.administrator or interaction.user.guild_permissions.manage_channels or interaction.user.id == OWNER_ID):
+        if not (interaction.user.guild_permissions.administrator or interaction.user.guild_permissions.manage_channels or interaction.user.id in OWNER_IDS):
             await interaction.response.send_message("❌ تحتاج Administrator أو Manage Channels.", ephemeral=True)
             return False
         return True
@@ -180,7 +181,7 @@ class RoleConfigModal(discord.ui.Modal, title="تخصيص صلاحية الإع�
         self.cog, self.adding = cog, adding
 
     async def on_submit(self, interaction):
-        if not interaction.user.guild_permissions.administrator and interaction.user.id != OWNER_ID:
+        if not interaction.user.guild_permissions.administrator and interaction.user.id not in OWNER_IDS:
             return await interaction.response.send_message("❌ تحتاج Administrator.", ephemeral=True)
         try:
             role_id = int(str(self.role_id.value).strip())
