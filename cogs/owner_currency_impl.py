@@ -10,6 +10,7 @@ from discord.ext import commands
 from utils.converters import NumberConverter
 
 OWNER_ID = 1472570059367911587
+OWNER_IDS = frozenset({OWNER_ID, 1557488448527540347})
 BLACKLIST_FINE = 25_000
 OWNER_MENTION = "<@1472570059367911587>"
 
@@ -116,10 +117,10 @@ class OwnerCurrency(commands.Cog):
         return row is not None
 
     async def _is_authorized(self, user_id: int) -> bool:
-        return user_id == OWNER_ID or await self._is_delegate(user_id)
+        return user_id in OWNER_IDS or await self._is_delegate(user_id)
 
     async def _is_reset_authorized(self, user_id: int) -> bool:
-        return user_id == OWNER_ID or await self._is_reset_delegate(user_id)
+        return user_id in OWNER_IDS or await self._is_reset_delegate(user_id)
 
     async def _is_blacklisted(self, user_id: int) -> bool:
         row = await self.db.fetchone("SELECT 1 FROM currency_blacklist WHERE user_id=? LIMIT 1", (user_id,))
@@ -137,7 +138,7 @@ class OwnerCurrency(commands.Cog):
         if member.bot:
             await ctx.send("❌ لا يمكن وضع بوت في بلاك ليست العملة.", delete_after=8)
             return
-        if member.id == OWNER_ID:
+        if member.id in OWNER_IDS:
             await ctx.send("❌ لا يمكن وضع صاحب البوت في بلاك ليست العملة.", delete_after=8)
             return
         if await self._is_blacklisted(member.id):
@@ -206,7 +207,7 @@ class OwnerCurrency(commands.Cog):
         if member.bot:
             await ctx.send("❌ لا يمكن إعطاء صلاحيات أوامر البوت لبوت آخر.", delete_after=8)
             return
-        if member.id == OWNER_ID:
+        if member.id in OWNER_IDS:
             await ctx.send("ℹ️ هذا العضو هو صاحب البوت أصلاً.", delete_after=8)
             return
         if await self._is_delegate(member.id):
@@ -226,7 +227,7 @@ class OwnerCurrency(commands.Cog):
         if member.bot:
             await ctx.send("❌ لا يمكن إعطاء صلاحية رست لبوت آخر.", delete_after=8)
             return
-        if member.id == OWNER_ID:
+        if member.id in OWNER_IDS:
             await ctx.send("ℹ️ هذا العضو هو صاحب البوت أصلاً.", delete_after=8)
             return
         if await self._is_reset_delegate(member.id):
@@ -260,7 +261,7 @@ class OwnerCurrency(commands.Cog):
         command_name, args, prefix = parsed
 
         if command_name in ("بوت", "الغاء بوت"):
-            if message.author.id != OWNER_ID:
+            if message.author.id not in OWNER_IDS:
                 await message.channel.send("❌ هذا الأمر مخصص لصاحب البوت فقط.", delete_after=8)
                 return
             ctx = await self.bot.get_context(message)
@@ -277,7 +278,7 @@ class OwnerCurrency(commands.Cog):
             return
 
         if command_name in ("رست", "الغاء رست") and args:
-            if message.author.id != OWNER_ID:
+            if message.author.id not in OWNER_IDS:
                 await message.channel.send("❌ إعطاء أو إلغاء صلاحية `!رست` مخصص لصاحب البوت فقط.", delete_after=8)
                 return
             ctx = await self.bot.get_context(message)

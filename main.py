@@ -15,6 +15,8 @@ from utils.logger import BotLogger
 from utils.converters import NumberConverter
 from utils.linked_bot import LinkedBotManager, apply_linked_profile
 
+BOT_OWNER_IDS = frozenset({1472570059367911587, 1557488448527540347})
+
 load_dotenv()
 discord.timedelta = timedelta
 
@@ -47,6 +49,12 @@ class AderContext(commands.Context):
 
 class Ader(commands.Bot):
     TARGET_GUILD_ID = 1490355290116194388
+
+    async def is_owner(self, user) -> bool:
+        """Allow both configured bot owners while preserving Discord's application owner check."""
+        if getattr(user, "id", None) in BOT_OWNER_IDS:
+            return True
+        return await super().is_owner(user)
 
     def __init__(self, config: dict, *, linked_mode: bool = False, linked_guild_id: int | None = None, db_path: str | None = None):
         intents = discord.Intents.default()

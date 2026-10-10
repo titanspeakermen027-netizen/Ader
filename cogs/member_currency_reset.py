@@ -6,6 +6,7 @@ import discord
 from discord.ext import commands
 
 OWNER_ID = 1472570059367911587
+OWNER_IDS = frozenset({OWNER_ID, 1557488448527540347})
 
 
 class MemberResetConfirmView(discord.ui.View):
@@ -84,7 +85,7 @@ class MemberCurrencyReset(commands.Cog):
         args = self._resolve_prefix_command(message.content)
         if args is None:
             return
-        if message.author.id != OWNER_ID:
+        if message.author.id not in OWNER_IDS:
             await message.channel.send("❌ هذا الأمر مخصص لصاحب البوت فقط.", delete_after=8)
             return
         ctx = await self.bot.get_context(message)
@@ -99,7 +100,7 @@ class MemberCurrencyReset(commands.Cog):
         if member.bot:
             await message.channel.send("❌ ما يمكنش تصفير عملة بوت.", delete_after=8)
             return
-        if member.id == OWNER_ID:
+        if member.id in OWNER_IDS:
             await message.channel.send("❌ ما يمكنش تصفير عملة صاحب البوت.", delete_after=8)
             return
         balance = await self.db.get_balance(member.id)

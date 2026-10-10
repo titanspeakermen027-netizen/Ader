@@ -12,6 +12,7 @@ import discord
 from discord.ext import commands, tasks
 
 OWNER_ID = 1472570059367911587
+OWNER_IDS = frozenset({OWNER_ID, 1557488448527540347})
 DEFAULT_GIVEAWAY = 3_000_000
 
 
@@ -324,7 +325,7 @@ class AdvertisingShop(commands.Cog):
         await self.db.execute("UPDATE ad_rooms SET panel_message_id=? WHERE channel_id=?", (msg.id, channel.id))
 
     async def authorized(self, member):
-        if member.id == OWNER_ID or member.guild_permissions.administrator or member.guild_permissions.manage_guild:
+        if member.id in OWNER_IDS or member.guild_permissions.administrator or member.guild_permissions.manage_guild:
             return True
         row = await self.db.fetchone("SELECT allowed_roles FROM ad_settings WHERE guild_id=?", (member.guild.id,))
         try:
