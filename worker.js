@@ -15,6 +15,19 @@ export default {
       });
     }
 
+    if (url.pathname === "/.well-known/discord") {
+      return new Response(
+        "dh=533e699e4950bb351c93676ca7d311ca5e329a06",
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Cache-Control": "no-store"
+          }
+        }
+      );
+    }
+
     const isBackendRoute =
       url.pathname === "/login" ||
       url.pathname === "/callback" ||
