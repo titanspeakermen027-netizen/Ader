@@ -345,7 +345,7 @@ class DatabaseManager:
             raise
         logger.info("users duplicate rows merged: groups=%d rows_removed=%d unique_index=created_or_present", merged, removed)
 
-    async def get_analytics(self, guild_id: int | None = None, limit: int = 100, event_type: str | None = None) -> List[Dict[str, Any]]:
+    async def get_analytics(self, guild_id: int | None = None, limit: int = 100, event_type: str | None = None, start_time: float | None = None, end_time: float | None = None) -> List[Dict[str, Any]]:
         """Return analytics without relying on legacy runtime monkey patches."""
         clauses, params = [], []
         if guild_id is not None:
@@ -354,6 +354,12 @@ class DatabaseManager:
         if event_type:
             clauses.append("type=?")
             params.append(str(event_type))
+        if start_time is not None:
+            clauses.append("timestamp>=?")
+            params.append(float(start_time))
+        if end_time is not None:
+            clauses.append("timestamp<=?")
+            params.append(float(end_time))
         limit = max(1, min(int(limit), 1000))
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
         rows = await self.fetchall(f"SELECT id,guild_id,type,timestamp,data FROM analytics{where} ORDER BY timestamp DESC LIMIT ?", tuple(params + [limit]))
@@ -370,7 +376,7 @@ class DatabaseManager:
     async def record_analytics(self, guild_id: int | None, event_type: str, data: Dict[str, Any] | None = None) -> None:
         await self.execute("INSERT INTO analytics(guild_id,type,timestamp,data) VALUES(?,?,?,?)", (guild_id, event_type, time.time(), json.dumps(data or {}, ensure_ascii=False)))
 
-    async def get_analytics(self, guild_id: int | None = None, limit: int = 100, event_type: str | None = None) -> List[Dict[str, Any]]:
+    async def get_analytics(self, guild_id: int | None = None, limit: int = 100, event_type: str | None = None, start_time: float | None = None, end_time: float | None = None) -> List[Dict[str, Any]]:
         """Return analytics without relying on legacy runtime monkey patches."""
         clauses, params = [], []
         if guild_id is not None:
@@ -379,6 +385,12 @@ class DatabaseManager:
         if event_type:
             clauses.append("type=?")
             params.append(str(event_type))
+        if start_time is not None:
+            clauses.append("timestamp>=?")
+            params.append(float(start_time))
+        if end_time is not None:
+            clauses.append("timestamp<=?")
+            params.append(float(end_time))
         limit = max(1, min(int(limit), 1000))
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
         rows = await self.fetchall(f"SELECT id,guild_id,type,timestamp,data FROM analytics{where} ORDER BY timestamp DESC LIMIT ?", tuple(params + [limit]))
