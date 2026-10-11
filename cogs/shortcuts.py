@@ -23,15 +23,15 @@ SHORTCUTS = {
     "member_info": "معلومات العضو",
 }
 DEFAULT_ALIASES = {
-    "give_role": "!رتبة",
-    "lock": "!قفل",
-    "unlock": "!فتح",
-    "timeout": "!تايم اوت",
-    "untimeout": "!الغاء تايم اوت",
-    "kick": "!طرد",
-    "ban": "!بان",
-    "warn": "!تحذير",
-    "member_info": "!معلومات العضو",
+    "give_role": "رتبة",
+    "lock": "قفل",
+    "unlock": "فتح",
+    "timeout": "تايم_اوت",
+    "untimeout": "الغاء_تايم_اوت",
+    "kick": "طرد",
+    "ban": "بان",
+    "warn": "تحذير",
+    "member_info": "معلومات_العضو",
 }
 
 
@@ -101,9 +101,9 @@ class AliasModal(discord.ui.Modal, title="تعديل الاختصار"):
         if not self.cog.can_manage(interaction):
             return await interaction.response.send_message("❌ تحتاج إلى Manage Server أو Administrator.", ephemeral=True)
         value = self.alias.value.strip()
-        if len(value) < 2 or any(char.isspace() for char in value):
+        if not value or any(char.isspace() for char in value):
             return await interaction.response.send_message(
-                "❌ الاختصار خاصو يكون كلمة وحدة بلا مسافات. تقدر تستعمل `!` أو تخليه بلا `!`.",
+                "❌ الاختصار خاصو يكون كلمة وحدة بلا مسافات. حتى حرف واحد مسموح، وتقدر تستعمله بـ `!` أو بلا `!`.",
                 ephemeral=True,
             )
         self.cog.set_alias(interaction.guild.id, self.key, value)
@@ -389,8 +389,13 @@ class Shortcuts(commands.Cog):
         if message.author.bot or not message.guild or not message.content.strip():
             return
         raw = message.content.strip().split()[0]
+        # The leading "!" is optional on both saved shortcuts and messages.
+        # This also keeps older saved aliases such as "!قفل" working as "قفل".
+        normalized_raw = raw.removeprefix("!")
         for key in SHORTCUTS:
-            if raw == self.get_alias(message.guild.id, key):
+            alias = self.get_alias(message.guild.id, key)
+            normalized_alias = alias.removeprefix("!")
+            if raw == alias or normalized_raw == normalized_alias:
                 ctx = await self.bot.get_context(message)
                 member = message.mentions[0] if message.mentions else None
                 try:
