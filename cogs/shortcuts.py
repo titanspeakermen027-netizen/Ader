@@ -101,10 +101,10 @@ class AliasModal(discord.ui.Modal, title="تعديل الاختصار"):
         if not self.cog.can_manage(interaction):
             return await interaction.response.send_message("❌ تحتاج إلى Manage Server أو Administrator.", ephemeral=True)
         value = self.alias.value.strip()
-        value = value if value.startswith("!") else "!" + value
-        if len(value) < 2 or " " in value:
+        if len(value) < 2 or any(char.isspace() for char in value):
             return await interaction.response.send_message(
-                "❌ الاختصار خاصو يبدأ بـ `!` وما يكونش فيه مسافات.", ephemeral=True
+                "❌ الاختصار خاصو يكون كلمة وحدة بلا مسافات. تقدر تستعمل `!` أو تخليه بلا `!`.",
+                ephemeral=True,
             )
         self.cog.set_alias(interaction.guild.id, self.key, value)
         await interaction.response.send_message(f"✅ تم تغيير الاختصار إلى `{value}`", ephemeral=True)
@@ -314,16 +314,23 @@ class Shortcuts(commands.Cog):
     async def execute(self, ctx, key, argument: Optional[discord.Member] = None, reason=""):
         if not ctx.guild or not isinstance(ctx.author, discord.Member):
             return
-        if not (ctx.author.guild_permissions.manage_guild or ctx.author.guild_permissions.administrator):
-            return await ctx.send("❌ ما عندكش صلاحية استعمال هاد الاختصار.", delete_after=5)
-
+        author_permissions = ctx.author.guild_permissions
         if key in ("lock", "unlock"):
+            if not (author_permissions.manage_channels or author_permissions.administrator):
+                return await ctx.send("❌ ما عندكش صلاحية قفل وفتح الروم.", delete_after=5)
             if not ctx.channel.permissions_for(ctx.guild.me).manage_channels:
                 return await ctx.send("❌ البوت ما عندوش Manage Channels.", delete_after=5)
+
+            everyone_can_send = ctx.channel.permissions_for(ctx.guild.default_role).send_messages
+            if key == "lock" and not everyone_can_send:
+                return await ctx.send(f"**الروم مقفلة بالفعل {ctx.channel.mention}**")
+            if key == "unlock" and everyone_can_send:
+                return await ctx.send(f"**الروم مفتوحة بالفعل {ctx.channel.mention}**")
+
             try:
                 await ctx.channel.set_permissions(
                     ctx.guild.default_role,
-                    send_messages=False if key == "lock" else None,
+                    send_messages=False if key == "lock" else True,
                     reason=f"Shortcut by {ctx.author}",
                 )
             except discord.HTTPException as exc:
@@ -333,7 +340,13 @@ class Shortcuts(commands.Cog):
                         delete_after=10,
                     )
                 return await ctx.send("❌ تعذر تعديل صلاحيات الروم حالياً.", delete_after=7)
-            return await ctx.send("🔒 تم قفل الروم." if key == "lock" else "🔓 تم فتح الروم.")
+
+            if key == "lock":
+                return await ctx.send(f"**<:truee:1545109160956264501> تم قفل الروم {ctx.channel.mention}**")
+            return await ctx.send(f"**<:truee:1545109160956264501> تم فتح الروم {ctx.channel.mention}**")
+
+        if not (author_permissions.manage_guild or author_permissions.administrator):
+            return await ctx.send("❌ ما عندكش صلاحية استعمال هاد الاختصار.", delete_after=5)
 
         if not argument:
             return await ctx.send("❌ خاصك تحدد العضو، مثال: `!معلومات العضو @عضو`", delete_after=6)
@@ -373,9 +386,9 @@ class Shortcuts(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.bot or not message.guild or not message.content.startswith("!"):
+        if message.author.bot or not message.guild or not message.content.strip():
             return
-        raw = message.content.split()[0]
+        raw = message.content.strip().split()[0]
         for key in SHORTCUTS:
             if raw == self.get_alias(message.guild.id, key):
                 ctx = await self.bot.get_context(message)
