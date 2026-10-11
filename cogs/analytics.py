@@ -35,8 +35,7 @@ class Analytics(commands.Cog):
         if message.author.bot or not message.guild:
             return
 
-        await self.db.log_event('message', {
-            'guild_id': message.guild.id,
+        await self.db.record_analytics(message.guild.id, 'message', {
             'user_id': message.author.id,
             'channel_id': message.channel.id
         })
@@ -47,8 +46,7 @@ class Analytics(commands.Cog):
         if not self.module_config.get('enabled', True):
             return
 
-        await self.db.log_event('member_join', {
-            'guild_id': member.guild.id,
+        await self.db.record_analytics(member.guild.id, 'member_join', {
             'user_id': member.id
         })
 
@@ -58,8 +56,7 @@ class Analytics(commands.Cog):
         if not self.module_config.get('enabled', True):
             return
 
-        await self.db.log_event('member_leave', {
-            'guild_id': member.guild.id,
+        await self.db.record_analytics(member.guild.id, 'member_leave', {
             'user_id': member.id
         })
 
@@ -78,12 +75,13 @@ class Analytics(commands.Cog):
         await interaction.response.defer()
 
         # Calculate time range
-        end_time = datetime.utcnow().timestamp()
-        start_time = (datetime.utcnow() - timedelta(days=days)).timestamp()
+        end_time = discord.utils.utcnow().timestamp()
+        start_time = (discord.utils.utcnow() - timedelta(days=days)).timestamp()
 
         # Get analytics data
         messages = await self.db.get_analytics(
             interaction.guild.id,
+            limit=1000,
             event_type='message',
             start_time=start_time,
             end_time=end_time
@@ -91,6 +89,7 @@ class Analytics(commands.Cog):
 
         joins = await self.db.get_analytics(
             interaction.guild.id,
+            limit=1000,
             event_type='member_join',
             start_time=start_time,
             end_time=end_time
@@ -98,6 +97,7 @@ class Analytics(commands.Cog):
 
         leaves = await self.db.get_analytics(
             interaction.guild.id,
+            limit=1000,
             event_type='member_leave',
             start_time=start_time,
             end_time=end_time
@@ -112,8 +112,10 @@ class Analytics(commands.Cog):
         # Most active users
         user_message_counts = {}
         for msg in messages:
-            user_id = msg.get('user_id')
-            user_message_counts[user_id] = user_message_counts.get(user_id, 0) + 1
+            event_data = msg.get('data') or {}
+            user_id = event_data.get('user_id') if isinstance(event_data, dict) else None
+            if user_id is not None:
+                user_message_counts[user_id] = user_message_counts.get(user_id, 0) + 1
 
         top_users = sorted(user_message_counts.items(), key=lambda x: x[1], reverse=True)[:5]
         top_users_text = "\n".join([
@@ -142,12 +144,19 @@ class Analytics(commands.Cog):
     @is_admin()
     async def activity(self, interaction: discord.Interaction):
         """View recent activity"""
+        if interaction.guild is None:
+            return await interaction.response.send_message(
+                embed=EmbedFactory.error("Server Only", "This command must be used inside a server."),
+                ephemeral=True
+            )
+
         # Get last 24 hours of activity
-        end_time = datetime.utcnow().timestamp()
-        start_time = (datetime.utcnow() - timedelta(hours=24)).timestamp()
+        end_time = discord.utils.utcnow().timestamp()
+        start_time = end_time - (24 * 60 * 60)
 
         events = await self.db.get_analytics(
             interaction.guild.id,
+            limit=1000,
             start_time=start_time,
             end_time=end_time
         )
@@ -168,7 +177,7 @@ class Analytics(commands.Cog):
         # Create activity chart (text-based)
         chart_text = ""
         for hour, count in sorted(hourly_activity.items())[-12:]:  # Last 12 hours
-            bar = "█" * min(count // 10, 20)
+            bar = "█" * min(max(1, count // 5), 20)
             chart_text += f"{hour}: {bar} ({count})\n"
 
         embed = EmbedFactory.create(
