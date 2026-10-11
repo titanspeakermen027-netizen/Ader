@@ -333,9 +333,12 @@ class Shortcuts(commands.Cog):
                 return await ctx.send(f"**الروم مفتوحة بالفعل {ctx.channel.mention}**")
 
             try:
+                # Preserve every existing @everyone channel overwrite and
+                # change only the Send Messages permission.
+                everyone_overwrite.send_messages = False if key == "lock" else True
                 await ctx.channel.set_permissions(
                     ctx.guild.default_role,
-                    send_messages=False if key == "lock" else True,
+                    overwrite=everyone_overwrite,
                     reason=f"Shortcut by {ctx.author}",
                 )
             except discord.HTTPException as exc:
