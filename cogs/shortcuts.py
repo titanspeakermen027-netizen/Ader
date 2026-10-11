@@ -321,10 +321,15 @@ class Shortcuts(commands.Cog):
             if not ctx.channel.permissions_for(ctx.guild.me).manage_channels:
                 return await ctx.send("❌ البوت ما عندوش Manage Channels.", delete_after=5)
 
-            everyone_can_send = ctx.channel.permissions_for(ctx.guild.default_role).send_messages
-            if key == "lock" and not everyone_can_send:
+            # Read @everyone's explicit overwrite on this channel, not the
+            # combined/effective permissions. None means "inherit"; in that
+            # case, apply the requested state instead of claiming it is already set.
+            everyone_overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
+            everyone_send_state = everyone_overwrite.send_messages
+
+            if key == "lock" and everyone_send_state is False:
                 return await ctx.send(f"**الروم مقفلة بالفعل {ctx.channel.mention}**")
-            if key == "unlock" and everyone_can_send:
+            if key == "unlock" and everyone_send_state is True:
                 return await ctx.send(f"**الروم مفتوحة بالفعل {ctx.channel.mention}**")
 
             try:
