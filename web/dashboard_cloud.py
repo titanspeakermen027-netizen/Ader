@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from typing import Any
 
 import discord
@@ -444,7 +445,9 @@ def create_app(bot):
             except Exception:
                 await bot.db.update_linked_bot_status(guild_id, "error", "تعذر تطبيق إعدادات البوت على Discord.")
                 raise HTTPException(status_code=400, detail="تعذر تطبيق إعدادات البوت على Discord.")
-        return {"ok": True, "linked_bot": await bot.db.get_linked_bot(guild_id)}
+        # Never serialize the database record here: it contains the encrypted
+        # bot token and its fingerprint. The UI refreshes the safe profile via GET.
+        return {"ok": True}
 
     @app.post("/api/guilds/{guild_id}/premium/linked-bot/start")
     async def linked_bot_start(request: Request, guild_id: int):
@@ -542,7 +545,7 @@ def create_app(bot):
 
     @app.put("/api/guilds/{guild_id}/tickets/panels/{panel_id}")
     async def cloud_ticket_panel_update(request: Request, guild_id: int, panel_id: int):
-        guild = _require_guild(bot, request, guild_id)
+        guild = await _require_guild(bot, request, guild_id)
         await _require_premium(bot, guild_id)
         existing = await bot.db.get_ticket_panel(panel_id)
         if not existing or int(existing["guild_id"]) != guild_id:
@@ -562,7 +565,7 @@ def create_app(bot):
 
     @app.delete("/api/guilds/{guild_id}/tickets/panels/{panel_id}")
     async def cloud_ticket_panel_delete(request: Request, guild_id: int, panel_id: int):
-        guild = _require_guild(bot, request, guild_id)
+        guild = await _require_guild(bot, request, guild_id)
         await _require_premium(bot, guild_id)
         panel = await bot.db.get_ticket_panel(panel_id)
         if not panel or int(panel["guild_id"]) != guild_id:
@@ -576,6 +579,57 @@ def create_app(bot):
                 pass
         await bot.db.delete_ticket_panel(panel_id)
         return {"ok": True}
+
+    @app.put("/api/guilds/{guild_id}/shortcuts/{shortcut_name}")
+    async def cloud_shortcut_update(request: Request, guild_id: int, shortcut_name: str):
+        await _require_guild(bot, request, guild_id)
+        try:
+            from cogs.shortcuts import SHORTCUTS, DEFAULT_ALIASES
+        except Exception:
+            SHORTCUTS, DEFAULT_ALIASES = {}, {}
+        if shortcut_name not in SHORTCUTS:
+            raise HTTPException(status_code=404, detail="الاختصار غير موجود.")
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="بيانات غير صالحة.")
+        alias = str(data.get("alias") or "").strip().removeprefix("!")
+        if not alias or len(alias) > 50 or any(char.isspace() for char in alias):
+            raise HTTPException(status_code=400, detail="الاختصار خاصو يكون كلمة وحدة بلا مسافات، وبحد أقصى 50 حرفاً.")
+        if not isinstance(data.get("enabled", True), bool):
+            raise HTTPException(status_code=400, detail="قيمة enabled غير صالحة.")
+        shortcut_cog = bot.get_cog("Shortcuts")
+        if shortcut_cog is None or not hasattr(shortcut_cog, "set_alias"):
+            raise HTTPException(status_code=503, detail="نظام الاختصارات غير متاح حالياً.")
+        shortcut_cog.set_alias(guild_id, shortcut_name, alias)
+        enabled = data.get("enabled", True)
+        await bot.db.execute(
+            """INSERT INTO dashboard_shortcut_settings
+               (guild_id, shortcut_name, alias, enabled, updated_at)
+               VALUES(?,?,?,?,?)
+               ON CONFLICT(guild_id, shortcut_name) DO UPDATE SET
+                 alias=excluded.alias, enabled=excluded.enabled, updated_at=excluded.updated_at""",
+            (guild_id, shortcut_name, alias, int(enabled), time.time()),
+        )
+        return {"ok": True, "shortcut": shortcut_name, "alias": alias, "enabled": enabled}
+
+    @app.put("/api/guilds/{guild_id}/module-enabled/{module_name}")
+    async def cloud_module_enabled_put(request: Request, guild_id: int, module_name: str):
+        await _require_guild(bot, request, guild_id)
+        allowed_modules = {"moderation", "verification", "analytics", "leveling", "roles", "tickets", "games"}
+        if module_name not in allowed_modules:
+            raise HTTPException(status_code=404, detail="النظام غير موجود.")
+        data = await request.json()
+        if not isinstance(data, dict) or not isinstance(data.get("enabled"), bool):
+            raise HTTPException(status_code=400, detail="خاصك ترسل enabled بقيمة true أو false.")
+        guild_config = await bot.db.get_guild(guild_id) or {}
+        root_config = guild_config.get("modules", {})
+        if not isinstance(root_config, dict):
+            root_config = {}
+        module_config = root_config.get(module_name, {})
+        module_config = dict(module_config) if isinstance(module_config, dict) else {}
+        module_config["enabled"] = data["enabled"]
+        await bot.db.update_guild(guild_id, {module_name: module_config})
+        return {"ok": True, "module": module_name, "enabled": data["enabled"]}
 
     @app.get("/api/guilds/{guild_id}/core-settings")
     async def core_settings_get(request: Request, guild_id: int):
