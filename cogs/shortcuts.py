@@ -346,7 +346,7 @@ class Shortcuts(commands.Cog):
                 # On lock, deny sending/creating threads. On unlock, restore
                 # the thread-related permissions to None (inherit), as requested.
                 # Every unrelated @everyone permission remains unchanged.
-                everyone_overwrite.send_messages = False if key == "lock" else True
+                everyone_overwrite.send_messages = False if key == "lock" else None
                 everyone_overwrite.send_messages_in_threads = False if key == "lock" else None
                 everyone_overwrite.create_private_threads = False if key == "lock" else None
                 everyone_overwrite.create_public_threads = False if key == "lock" else None
