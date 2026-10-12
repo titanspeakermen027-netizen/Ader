@@ -224,43 +224,61 @@ def create_app(bot) -> FastAPI:
             raise HTTPException(status_code=404, detail="البوت غير متصل بهذا الخادم حالياً")
 
         current = managed.get(key)
-        if isinstance(current, dict) and _guild_is_managed(current):
-            session["active_guild_id"] = guild_id
-            await _save_session(request, bot, session)
-            return guild, session
-
+        oauth_data = oauth_guilds.get(key)
         user = session.get("discord_user") or {}
         try:
             user_id = int(user.get("id") or 0)
         except (TypeError, ValueError):
             user_id = 0
 
-        # Always prefer the live Discord member permissions when the stored
-        # OAuth snapshot is missing, stale, or comes from an older session.
-        allowed = bool(user_id and guild.owner_id == user_id)
+        # Do not trust a previously cached "managed" result by itself. Guild
+        # permissions can change after OAuth login, so use the live member
+        # permissions whenever the bot can resolve the member. The OAuth
+        # snapshot is a fallback for deployments without member-cache access.
+        is_owner = bool(user_id and guild.owner_id == user_id)
+        member = None
         live_perms = None
-        if not allowed and user_id:
-            try:
-                member = guild.get_member(user_id) or await guild.fetch_member(user_id)
-            except Exception:
-                member = None
+        if user_id and not is_owner:
+            member = guild.get_member(user_id)
+            if member is None:
+                try:
+                    member = await guild.fetch_member(user_id)
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    member = None
             live_perms = getattr(member, "guild_permissions", None) if member else None
-            allowed = bool(
-                live_perms and (live_perms.administrator or live_perms.manage_guild)
-            )
 
-        oauth_data = oauth_guilds.get(key)
-        oauth_permissions = _guild_permissions(oauth_data) if isinstance(oauth_data, dict) else 0
-        if not allowed and oauth_permissions & (ADMINISTRATOR | MANAGE_GUILD):
+        if is_owner:
             allowed = True
+        elif live_perms is not None:
+            # A resolved member is authoritative: don't let stale OAuth data
+            # grant access after Manage Server/Administrator was revoked.
+            allowed = bool(live_perms.administrator or live_perms.manage_guild)
+        else:
+            permission_source = oauth_data if isinstance(oauth_data, dict) else current
+            allowed = (
+                _guild_is_managed(permission_source)
+                if isinstance(permission_source, dict)
+                else False
+            )
 
         if not allowed:
             raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة هذا الخادم")
 
-        permissions = ADMINISTRATOR | MANAGE_GUILD if guild.owner_id == user_id else (
-            ADMINISTRATOR if getattr(live_perms, "administrator", False)
-            else MANAGE_GUILD
-        )
+        if is_owner:
+            permissions = ADMINISTRATOR | MANAGE_GUILD
+        elif live_perms is not None:
+            permissions = (
+                ADMINISTRATOR
+                if live_perms.administrator
+                else MANAGE_GUILD
+            )
+        else:
+            permission_source = oauth_data if isinstance(oauth_data, dict) else current
+            permissions = (
+                _guild_permissions(permission_source)
+                if isinstance(permission_source, dict)
+                else 0
+            )
         guild_data = {
             "id": guild.id,
             "name": guild.name,
