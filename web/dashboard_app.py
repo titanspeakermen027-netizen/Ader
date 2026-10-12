@@ -16,6 +16,7 @@ import time
 from typing import Any
 from urllib.parse import quote
 
+import discord
 import aiohttp
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -562,7 +563,17 @@ def create_app(bot) -> FastAPI:
             DEFAULT_ALIASES, SHORTCUTS = {}, {}
         rows = await bot.db.fetchall("SELECT * FROM dashboard_shortcut_settings WHERE guild_id=?", (guild_id,))
         settings = {str(row["shortcut_name"]): dict(row) for row in rows}
-        return {"shortcuts": [{"name": key, "label": label, "alias": (settings.get(key, {}).get("alias") or DEFAULT_ALIASES.get(key, "")), "enabled": bool(settings.get(key, {}).get("enabled", 1)), "allowed_roles": _loads_ids(settings.get(key, {}).get("allowed_roles")) if key in settings else [], "denied_roles": _loads_ids(settings.get(key, {}).get("denied_roles")) if key in settings else [], "allowed_channels": _loads_ids(settings.get(key, {}).get("allowed_channels")) if key in settings else [] , "denied_channels": _loads_ids(settings.get(key, {}).get("denied_channels")) if key in settings else []} for key, label in SHORTCUTS.items()]}
+        shortcut_cog = bot.get_cog("Shortcuts")
+
+        def live_alias(key: str) -> str:
+            if shortcut_cog is not None and hasattr(shortcut_cog, "get_alias"):
+                try:
+                    return str(shortcut_cog.get_alias(guild_id, key) or DEFAULT_ALIASES.get(key, ""))
+                except Exception:
+                    pass
+            return str(settings.get(key, {}).get("alias") or DEFAULT_ALIASES.get(key, ""))
+
+        return {"shortcuts": [{"name": key, "label": label, "alias": live_alias(key), "enabled": bool(settings.get(key, {}).get("enabled", 1)), "allowed_roles": _loads_ids(settings.get(key, {}).get("allowed_roles")) if key in settings else [], "denied_roles": _loads_ids(settings.get(key, {}).get("denied_roles")) if key in settings else [], "allowed_channels": _loads_ids(settings.get(key, {}).get("allowed_channels")) if key in settings else [] , "denied_channels": _loads_ids(settings.get(key, {}).get("denied_channels")) if key in settings else []} for key, label in SHORTCUTS.items()]
 
     return app
 
