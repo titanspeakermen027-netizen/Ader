@@ -293,7 +293,7 @@ async function premium(){
       '</div>'+
       '<label>رابط الصورة<input id="lb-avatar" type="url" placeholder="https://..."></label>'+
       '<label>رابط البنر<input id="lb-banner" type="url" placeholder="https://..."></label>'+
-      '<label>Bio<input id="lb-bio" maxlength="1900" placeholder="نبذة البوت"></label>'+
+      '<label>Bio — محفوظ داخل Ader فقط، ما كيبدلش البايو العام<input id="lb-bio" maxlength="1900" placeholder="نبذة البوت"></label>'+
       '<button class="primary smallbtn" id="lb-link">ربط وتشغيل البوت</button>'
     );
   }else{
@@ -310,7 +310,7 @@ async function premium(){
       '</div>'+
       '<label>رابط الصورة<input id="lb-avatar" type="url" value="'+esc(b.avatar_url||"")+'" placeholder="https://..."></label>'+
       '<label>رابط البنر<input id="lb-banner" type="url" value="'+esc(b.banner_url||"")+'" placeholder="https://..."></label>'+
-      '<label>Bio<input id="lb-bio" maxlength="1900" value="'+esc(b.bio||"")+'"></label>'+
+      '<label>Bio — محفوظ داخل Ader فقط، ما كيبدلش البايو العام<input id="lb-bio" maxlength="1900" value="'+esc(b.bio||"")+'"></label>'+
       '<p class="muted">التوكن مخفي ومخزن مشفراً؛ ما تحتاجش تعاود تدخلو لتعديل البروفايل.</p>'+
       '<div class="quick"><button class="primary smallbtn" id="lb-profile">حفظ البروفايل</button><button class="action" id="lb-'+(b.running?"stop":"start")+'">'+(b.running?"إيقاف البوت":"تشغيل البوت")+'</button><button class="action danger" id="lb-delete">فك الربط</button></div>'
     );
