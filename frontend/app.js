@@ -17,7 +17,7 @@ async function api(p,o={}){
     let d={};
     try{d=t?JSON.parse(t):{}}catch{d={detail:t}}
     if(r.status===401)throw Error("AUTH");
-    if(!r.ok)throw Error(d.detail||d.message||"HTTP "+r.status);
+    if(!r.ok){const err=Error(d.detail||d.message||"HTTP "+r.status);err.status=r.status;err.path=p;throw err;}
     return d;
   }catch(e){
     if(e.name==="AbortError")throw Error("انتهت مهلة الاتصال بخادم Ader بعد 15 ثانية.");
@@ -61,7 +61,12 @@ async function loadGuild(){
     clearWarn();
     localStorage.setItem("ader_selected_guild_id",guildId);
   }catch(e){
-    warn("تعذر تحميل بيانات السيرفر: "+e.message);
+    const reason=e.status===403
+      ? "ما قدرناش نتحقق من صلاحية Manage Server حالياً. حدّث الصفحة، وإذا استمر المشكل سجّل الخروج ثم الدخول من Discord."
+      : e.status===404
+        ? "البوت غير متصل بهذا السيرفر حالياً. تأكد من إضافته للسيرفر ثم حدّث الصفحة."
+        : e.message;
+    warn("تعذر تحميل بيانات السيرفر: "+reason);
   }
   $("#guildName").textContent=s.guild.name;
   $("#guildIcon").innerHTML=icon(s.guild);
