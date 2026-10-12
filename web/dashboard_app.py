@@ -611,7 +611,7 @@ def create_app(bot) -> FastAPI:
                     pass
             return str(settings.get(key, {}).get("alias") or DEFAULT_ALIASES.get(key, ""))
 
-        return {"shortcuts": [{"name": key, "label": label, "alias": live_alias(key), "enabled": bool(settings.get(key, {}).get("enabled", 1)), "allowed_roles": _loads_ids(settings.get(key, {}).get("allowed_roles")) if key in settings else [], "denied_roles": _loads_ids(settings.get(key, {}).get("denied_roles")) if key in settings else [], "allowed_channels": _loads_ids(settings.get(key, {}).get("allowed_channels")) if key in settings else [] , "denied_channels": _loads_ids(settings.get(key, {}).get("denied_channels")) if key in settings else []} for key, label in SHORTCUTS.items()]
+        return {"shortcuts": [{"name": key, "label": label, "alias": live_alias(key), "enabled": bool(settings.get(key, {}).get("enabled", 1)), "allowed_roles": _loads_ids(settings.get(key, {}).get("allowed_roles")) if key in settings else [], "denied_roles": _loads_ids(settings.get(key, {}).get("denied_roles")) if key in settings else [], "allowed_channels": _loads_ids(settings.get(key, {}).get("allowed_channels")) if key in settings else [] , "denied_channels": _loads_ids(settings.get(key, {}).get("denied_channels")) if key in settings else []} for key, label in SHORTCUTS.items()]}
 
     return app
 
