@@ -465,12 +465,13 @@ def create_app(bot) -> FastAPI:
         async def add_if_manageable(guild_id: int, item: dict[str, Any]):
             guild = bot.get_guild(guild_id)
             if guild is None:
-                # Do not put "bot absent" guilds into the active dashboard
-                # selector. They can be added later without creating a fake
-                # 403 state in the UI.
+                # The bot must be in the guild before it can be managed here.
+                # Keep absent-bot guilds out of the active dashboard selector.
                 return
-            allowed = _guild_is_managed(item)
-            if user_id and guild.owner_id == user_id:
+
+            is_owner = bool(user_id and guild.owner_id == user_id)
+            live_perms = None
+            if is_owner:
                 allowed = True
                 item = {
                     **item,
@@ -478,20 +479,39 @@ def create_app(bot) -> FastAPI:
                     "administrator": True,
                     "manage_guild": True,
                 }
-            elif user_id and not allowed:
-                try:
-                    member = guild.get_member(user_id) or await guild.fetch_member(user_id)
-                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                    member = None
-                perms = getattr(member, "guild_permissions", None) if member else None
-                allowed = bool(perms and (perms.administrator or perms.manage_guild))
-                if allowed:
-                    item = {
-                        **item,
-                        "permissions": ADMINISTRATOR if perms.administrator else MANAGE_GUILD,
-                        "administrator": bool(perms.administrator),
-                        "manage_guild": bool(perms.administrator or perms.manage_guild),
-                    }
+            else:
+                member = guild.get_member(user_id) if user_id else None
+                if user_id and member is None:
+                    try:
+                        member = await guild.fetch_member(user_id)
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                        member = None
+                live_perms = getattr(member, "guild_permissions", None) if member else None
+
+                if live_perms is not None:
+                    # Live permissions override stale OAuth session values.
+                    allowed = bool(live_perms.administrator or live_perms.manage_guild)
+                    if allowed:
+                        permission_bits = (
+                            ADMINISTRATOR if live_perms.administrator else 0
+                        ) | (
+                            MANAGE_GUILD
+                            if live_perms.administrator or live_perms.manage_guild
+                            else 0
+                        )
+                        item = {
+                            **item,
+                            "permissions": permission_bits,
+                            "administrator": bool(live_perms.administrator),
+                            "manage_guild": bool(
+                                live_perms.administrator or live_perms.manage_guild
+                            ),
+                        }
+                else:
+                    # If the bot cannot resolve the member, fall back to the
+                    # user's Discord OAuth guild permission snapshot.
+                    allowed = _guild_is_managed(item)
+
             if allowed:
                 result[str(guild_id)] = {
                     **item,
