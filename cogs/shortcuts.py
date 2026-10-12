@@ -321,21 +321,35 @@ class Shortcuts(commands.Cog):
             if not ctx.channel.permissions_for(ctx.guild.me).manage_channels:
                 return await ctx.send("❌ البوت ما عندوش Manage Channels.", delete_after=5)
 
-            # Read @everyone's explicit overwrite on this channel, not the
-            # combined/effective permissions. None means "inherit"; in that
-            # case, apply the requested state instead of claiming it is already set.
+            # Keep the existing @everyone overwrite and change only these
+            # four permissions. A partially applied/older lock is repaired rather
+            # than being reported as already locked or unlocked.
             everyone_overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
             everyone_send_state = everyone_overwrite.send_messages
 
-            if key == "lock" and everyone_send_state is False:
+            if key == "lock" and all((
+                everyone_send_state is False,
+                everyone_overwrite.send_messages_in_threads is False,
+                everyone_overwrite.create_private_threads is False,
+                everyone_overwrite.create_public_threads is False,
+            )):
                 return await ctx.send(f"**الروم مقفلة بالفعل {ctx.channel.mention}**")
-            if key == "unlock" and everyone_send_state is True:
+            if key == "unlock" and all((
+                everyone_send_state is True,
+                everyone_overwrite.send_messages_in_threads is None,
+                everyone_overwrite.create_private_threads is None,
+                everyone_overwrite.create_public_threads is None,
+            )):
                 return await ctx.send(f"**الروم مفتوحة بالفعل {ctx.channel.mention}**")
 
             try:
-                # Preserve every existing @everyone channel overwrite and
-                # change only the Send Messages permission.
+                # On lock, deny sending/creating threads. On unlock, restore
+                # the thread-related permissions to None (inherit), as requested.
+                # Every unrelated @everyone permission remains unchanged.
                 everyone_overwrite.send_messages = False if key == "lock" else True
+                everyone_overwrite.send_messages_in_threads = False if key == "lock" else None
+                everyone_overwrite.create_private_threads = False if key == "lock" else None
+                everyone_overwrite.create_public_threads = False if key == "lock" else None
                 await ctx.channel.set_permissions(
                     ctx.guild.default_role,
                     overwrite=everyone_overwrite,
