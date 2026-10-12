@@ -414,7 +414,20 @@ class Shortcuts(commands.Cog):
         # The leading "!" is optional on both saved shortcuts and messages.
         # This also keeps older saved aliases such as "!قفل" working as "قفل".
         normalized_raw = raw.removeprefix("!")
+        # Dashboard enable flags are optional for older installations. If the
+        # table or query is unavailable, keep existing shortcuts working.
+        try:
+            rows = await self.bot.db.fetchall(
+                "SELECT shortcut_name, enabled FROM dashboard_shortcut_settings WHERE guild_id=?",
+                (message.guild.id,),
+            )
+            shortcut_enabled = {str(row["shortcut_name"]): bool(row["enabled"]) for row in rows}
+        except Exception:
+            shortcut_enabled = {}
+
         for key in SHORTCUTS:
+            if shortcut_enabled.get(key) is False:
+                continue
             alias = self.get_alias(message.guild.id, key)
             normalized_alias = alias.removeprefix("!")
             if raw == alias or normalized_raw == normalized_alias:
