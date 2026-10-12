@@ -2,11 +2,48 @@
 const API=String((window.ADER_CONFIG||{}).API_BASE||"").replace(/\/$/,"");
 const s={user:null,guilds:[],guild:null,overview:{},resources:{roles:[],channels:[]},page:"overview"};
 const $=x=>document.querySelector(x),esc=x=>String(x??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-async function api(p,o={}){const r=await fetch(API+p,{credentials:"include",cache:"no-store",headers:{"Content-Type":"application/json",...(o.headers||{})},...o});let t=await r.text(),d={};try{d=t?JSON.parse(t):{}}catch{d={detail:t}}if(r.status===401)throw Error("AUTH");if(!r.ok)throw Error(d.detail||d.message||"HTTP "+r.status);return d}
+async function api(p,o={}){
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),15000);
+  try{
+    const r=await fetch(API+p,{
+      credentials:"include",
+      cache:"no-store",
+      headers:{"Content-Type":"application/json",...(o.headers||{})},
+      ...o,
+      signal:controller.signal
+    });
+    const t=await r.text();
+    let d={};
+    try{d=t?JSON.parse(t):{}}catch{d={detail:t}}
+    if(r.status===401)throw Error("AUTH");
+    if(!r.ok)throw Error(d.detail||d.message||"HTTP "+r.status);
+    return d;
+  }catch(e){
+    if(e.name==="AbortError")throw Error("انتهت مهلة الاتصال بخادم Ader بعد 15 ثانية.");
+    if(e instanceof TypeError)throw Error("تعذر الاتصال بالـAPI. تحقق من تشغيل Backend وعنوانه.");
+    throw e;
+  }finally{
+    clearTimeout(timeout);
+  }
+}
 function icon(g){return g&&g.icon?'<img src="https://cdn.discordapp.com/icons/'+g.id+'/'+g.icon+'.png?size=128" alt="">':esc((g?.name||"A")[0])}
 function showLogin(){ $("#loading").classList.add("hidden");$("#app").classList.add("hidden");$("#login").classList.remove("hidden")}
 function showApp(){ $("#loading").classList.add("hidden");$("#login").classList.add("hidden");$("#app").classList.remove("hidden")}
 function warn(m){$("#apiWarning").textContent=m;$("#apiWarning").classList.remove("hidden")}
+function loginError(m){
+  const host=$("#login .login-panel-inner");
+  if(!host)return;
+  let box=$("#loginApiError");
+  if(!box){
+    box=document.createElement("div");
+    box.id="loginApiError";
+    box.className="login-note";
+    host.appendChild(box);
+  }
+  box.textContent=m;
+  box.classList.remove("hidden");
+}
 function clearWarn(){$("#apiWarning").classList.add("hidden")}
 function head(t,d){return '<div class="page-head"><div class="page-head-copy"><div class="page-kicker">ADER CONTROL CENTER</div><h1>'+t+'</h1><p>'+d+'</p></div>'+(s.guild?'<div class="page-meta"><span class="status-dot"></span><span>'+esc(s.guild.name)+'</span></div>':'')+'</div>'}
 function card(t,b){return '<section class="card"><div class="card-head"><b>'+t+'</b></div><div class="card-body">'+b+'</div></section>'}
@@ -383,7 +420,7 @@ async function boot(){
     if(e.message==="AUTH")showLogin();
     else{
       showLogin();
-      warn("تعذر الاتصال بالـAPI: "+e.message);
+      loginError("تعذر تشغيل لوحة Ader: "+e.message);
     }
   }
 }
