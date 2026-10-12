@@ -312,7 +312,7 @@ async function settings(){
     '</div>'+
     '<button class="primary smallbtn" id="save-core">حفظ إعدادات الأنظمة</button>';
   document.querySelectorAll("[data-module]").forEach(x=>x.onchange=async()=>{
-    try{await api("/api/guilds/"+s.guild.id+"/modules/"+x.dataset.module,{method:"PUT",body:JSON.stringify({enabled:x.checked})})}
+    try{await api("/api/guilds/"+s.guild.id+"/module-enabled/"+x.dataset.module,{method:"PUT",body:JSON.stringify({enabled:x.checked})})}
     catch(e){x.checked=!x.checked;warn(e.message)}
   });
   $("#save-core").onclick=async()=>{
