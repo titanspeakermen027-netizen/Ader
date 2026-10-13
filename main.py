@@ -192,7 +192,7 @@ class Ader(commands.Bot):
             "cogs.moderation", "cogs.roles", "cogs.ticket_manager", "cogs.utility",
             "cogs.verification", "cogs.games", "cogs.teams_v2", "cogs.temp_voice",
             "cogs.dashboard_config", "cogs.dashboard_server", "cogs.owner_currency", "cogs.profile_card",
-            "cogs.bot_edit",
+            "cogs.bot_edit", "cogs.line",
             "cogs.member_currency_reset", "cogs.server_premium", "cogs.professional_core",
         )
         if self.linked_mode:
