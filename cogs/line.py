@@ -201,7 +201,7 @@ class Line(commands.Cog):
         if not row:
             return
         keyword = str(row["keyword"] or "").strip()
-        if not keyword or keyword.casefold() not in message.content.casefold():
+        if not keyword or message.content.strip().casefold() != keyword.casefold():
             return
 
         try:
