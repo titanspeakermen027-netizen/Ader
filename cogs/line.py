@@ -75,7 +75,7 @@ class Line(commands.Cog):
         keyword = keyword.strip()
         if not keyword:
             return await interaction.response.send_message(
-                "❌ خاصك تحدد الكلمة أو العبارة اللي غادي تفعّل الصورة.",
+                "❌ يجب تحديد الكلمة أو العبارة التي ستفعّل الصورة.",
                 ephemeral=True,
             )
         if len(keyword) > 100:
@@ -85,7 +85,7 @@ class Line(commands.Cog):
             )
         if role.is_default():
             return await interaction.response.send_message(
-                "❌ ما يمكنش تختار رتبة @everyone. اختار رتبة محددة.",
+                "❌ لا يمكن اختيار رتبة @everyone. اختر رتبة محددة.",
                 ephemeral=True,
             )
         if image.size > MAX_IMAGE_BYTES:
@@ -119,7 +119,7 @@ class Line(commands.Cog):
             missing.append("Attach Files")
         if missing:
             return await interaction.response.send_message(
-                "❌ البوت خاصو الصلاحيات التالية باش يخدم /line: "
+                "❌ يحتاج البوت إلى الصلاحيات التالية لتشغيل /line: "
                 + ", ".join(missing)
                 + ".",
                 ephemeral=True,
@@ -171,8 +171,8 @@ class Line(commands.Cog):
             f"✅ تفعّل /line بنجاح.\n"
             f"**الكلمة:** `{keyword}`\n"
             f"**الرتبة المسموح لها:** {role.mention}\n"
-            "أي عضو عنده هاد الرتبة وكتب الكلمة، البوت غادي يحذف رسالته ويرسل الصورة. "
-            "اللي ما عندوش الرتبة، ما غادي يوقع ليه والو.",
+            "أي عضو يمتلك هذه الرتبة ويكتب الكلمة المحددة، سيحذف البوت رسالته ويرسل الصورة. "
+            "أما العضو الذي لا يمتلك الرتبة، فلن يحدث له أي شيء.",
             ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none(),
         )
