@@ -354,11 +354,11 @@ class Verification(commands.Cog):
 
     @app_commands.command(name="setup-verification", description="إعداد نظام التحقق (للمسؤولين)")
     @app_commands.describe(
-        role="Role to assign upon verification",
-        welcome_channel="Channel to send welcome messages",
-        method="Verification method: 'dm' or 'channel'",
-        verify_channel="Channel for verification (REQUIRED if method is 'channel')",
-        verification_type="Type of verification (button/captcha)"
+        role="الرتبة التي ستُمنح بعد إتمام التحقق",
+        welcome_channel="القناة التي ستُرسل فيها رسائل الترحيب",
+        method="طريقة التحقق: رسالة خاصة (dm) أو قناة (channel)",
+        verify_channel="قناة التحقق (مطلوبة عند اختيار الطريقة channel)",
+        verification_type="نوع التحقق: زر (button) أو رمز CAPTCHA (captcha)"
     )
     @is_admin()
     async def setup_verification(
