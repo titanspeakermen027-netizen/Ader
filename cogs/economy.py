@@ -57,7 +57,7 @@ class Economy(commands.Cog):
 
     async def get_balance_language(self, user_id: int) -> str:
         row = await self.db.fetchone("SELECT language FROM balance_language_preferences WHERE user_id=?", (int(user_id),))
-        return str(row["language"]) if row and row["language"] in {"ar", "en"} else "ar"
+        return "ar"
 
     async def format_balance_message(self, viewer_id: int, username: str, balance: int, *, own_balance: bool, guild_id: int | None = None) -> str:
         language = await self.get_balance_language(viewer_id)
@@ -73,14 +73,14 @@ class Economy(commands.Cog):
     @app_commands.describe(language="لغة رسائل الرصيد")
     @app_commands.choices(language=[
         app_commands.Choice(name="العربية", value="ar"),
-        app_commands.Choice(name="English", value="en"),
+        # تظل رسائل الرصيد بالعربية الفصحى فقط.
     ])
     async def balance_language(self, interaction: discord.Interaction, language: app_commands.Choice[str]):
         await self.db.execute(
             "INSERT INTO balance_language_preferences(user_id, language) VALUES(?, ?) ON CONFLICT(user_id) DO UPDATE SET language=excluded.language",
             (interaction.user.id, language.value),
         )
-        text = "✅ تم تغيير لغة رسائل الرصيد إلى العربية." if language.value == "ar" else "✅ Balance messages language changed to English."
+        text = "✅ تم ضبط رسائل الرصيد على العربية الفصحى."
         await interaction.response.send_message(text, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
     @staticmethod
@@ -102,7 +102,7 @@ class Economy(commands.Cog):
         image = Image.new("RGB", (width, height), (20, 20, 28))
         draw = ImageDraw.Draw(image)
         draw.rounded_rectangle((18, 18, width - 18, height - 18), radius=28, fill=(30, 30, 42), outline=(90, 90, 115), width=3)
-        draw.text((width // 2, 72), "CONFIRM TRANSACTION", font=cls._font(38, True), fill=(245, 245, 250), anchor="mm")
+        draw.text((width // 2, 72), "تأكيد العملية", font=cls._font(38, True), fill=(245, 245, 250), anchor="mm")
         rng = random.Random(code)
         for _ in range(70):
             x1 = rng.randint(60, width - 60)
@@ -197,7 +197,7 @@ class Economy(commands.Cog):
     async def _send_transfer_dm(self, recipient: discord.Member, amount: int, sender: discord.Member):
         try:
             await recipient.send(
-                f"<:atm:1553743679431254026> | إيصال التحويل `(ID: {sender.id})` لقد استلمت `${amount:,}` من المستخدم {sender.name}"
+                f"<:atm:1553743679431254026> | إيصال التحويل (معرّف المرسل: {sender.id}) — استلمت مبلغًا قدره `${amount:,}` من {sender.name}."
             )
         except (discord.Forbidden, discord.HTTPException):
             logger.info("Could not send transfer DM to %s", recipient.id)
@@ -207,14 +207,14 @@ class Economy(commands.Cog):
             return False, "❌ حدد مبلغاً موجباً وعضواً آخر غير البوتات."
         balance = await self.db.get_balance(sender.id)
         if balance < amount:
-            return False, f"**ـ {sender.name} رصيدك غير كافي لهذا!** :thinking:"
+            return False, f"**ـ {sender.name} رصيدك غير كافٍ لإتمام هذه العملية.** :thinking:"
         if not await self.db.remove_balance(sender.id, guild.id, amount):
             return False, "❌ تعذر خصم المبلغ من رصيدك. لم يتم التحويل."
         if not await self.db.add_balance(recipient.id, guild.id, amount):
             await self.db.add_balance(sender.id, guild.id, amount)
             return False, "❌ تعذر إضافة المبلغ للمستلم؛ تمت إعادة الرصيد."
         await self._send_transfer_dm(recipient, amount, sender)
-        return True, f"**ـ {sender.name}, قام بتحويل `${amount:,}` لـ {recipient.mention} ** | 💰"
+        return True, f"**ـ حوّل {sender.name} مبلغ `${amount:,}` إلى {recipient.mention}.** | 💰"
     async def _transfer_interaction(self, interaction: discord.Interaction, recipient: discord.Member, amount: int):
         if amount <= 0 or recipient.id == interaction.user.id:
             return await interaction.response.send_message(embed=EmbedFactory.error("مبلغ غير صالح", "حدد مبلغاً موجباً وعضواً آخر."), ephemeral=True)
