@@ -167,19 +167,19 @@ class AutoReply(commands.Cog):
         reply_to_bots: bool = False,
     ):
         if not await self._can_manage(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            return await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         trigger = trigger.strip()
         response = response.strip()
         matching = matching_type.value if matching_type else "contains"
         reply = reply_type.value if reply_type else "reply"
         if not trigger or not response:
-            return await interaction.response.send_message("❌ يجب إدخال عبارة التفعيل ونص الرد.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> يجب إدخال عبارة التفعيل ونص الرد.", ephemeral=True)
         if len(trigger) > 200:
-            return await interaction.response.send_message("❌ عبارة التفعيل طويلة جدًا (الحد الأقصى 200 حرف).", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> عبارة التفعيل طويلة جدًا (الحد الأقصى 200 حرف).", ephemeral=True)
         if len(response) > 4000:
-            return await interaction.response.send_message("❌ نص الرد طويل جدًا (الحد الأقصى 4000 حرف).", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> نص الرد طويل جدًا (الحد الأقصى 4000 حرف).", ephemeral=True)
         if matching not in MATCHING_TYPES or reply not in REPLY_TYPES:
-            return await interaction.response.send_message("❌ إعدادات المطابقة غير صالحة.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> إعدادات المطابقة غير صالحة.", ephemeral=True)
         try:
             await self.db.execute(
                 """INSERT INTO autoreplies(
@@ -200,17 +200,17 @@ class AutoReply(commands.Cog):
                 ),
             )
         except Exception:
-            return await interaction.response.send_message("❌ يوجد رد تلقائي بالإشارة والإعدادات نفسها بالفعل.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> يوجد رد تلقائي بالإشارة والإعدادات نفسها بالفعل.", ephemeral=True)
 
-        bot_text = "✅ نعم" if reply_to_bots else "❌ لا"
+        bot_text = "<:success:1560285005018566757> نعم" if reply_to_bots else "<:failure:1560286464892469380> لا"
         role_text = role.mention if role else "الجميع"
-        embed = discord.Embed(title="✅ تم إضافة الرد التلقائي", colour=discord.Colour.green())
+        embed = discord.Embed(title="<:success:1560285005018566757> تم إضافة الرد التلقائي", colour=discord.Colour.green())
         embed.add_field(name="عبارة التفعيل", value=f"`{trigger}`", inline=False)
         embed.add_field(name="نص الرد", value=response, inline=False)
         embed.add_field(name="نوع المطابقة", value=MATCHING_TYPES[matching], inline=True)
         embed.add_field(name="نوع الرد", value=REPLY_TYPES[reply], inline=True)
         embed.add_field(name="الرتبة", value=role_text, inline=True)
-        embed.add_field(name="مراعاة حالة الأحرف", value="✅ نعم" if case_sensitive else "❌ لا", inline=True)
+        embed.add_field(name="مراعاة حالة الأحرف", value="<:success:1560285005018566757> نعم" if case_sensitive else "<:failure:1560286464892469380> لا", inline=True)
         embed.add_field(name="الرد على رسائل البوتات", value=bot_text, inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -219,23 +219,23 @@ class AutoReply(commands.Cog):
     @app_commands.default_permissions(manage_guild=True)
     async def remove(self, interaction: discord.Interaction, id: int):
         if not await self._can_manage(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            return await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         cur = await self.db.execute("DELETE FROM autoreplies WHERE id=? AND guild_id=?", (id, interaction.guild.id))
         if cur.rowcount != 1:
-            return await interaction.response.send_message("❌ لم يتم العثور على هذا الرد التلقائي.", ephemeral=True)
-        await interaction.response.send_message("✅ تم حذف الرد التلقائي.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> لم يتم العثور على هذا الرد التلقائي.", ephemeral=True)
+        await interaction.response.send_message("<:success:1560285005018566757> تم حذف الرد التلقائي.", ephemeral=True)
 
     @autoreply.command(name="list", description="عرض الردود التلقائية")
     @app_commands.default_permissions(manage_guild=True)
     async def list_rules(self, interaction: discord.Interaction):
         if not await self._can_manage(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            return await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         rows = await self.db.fetchall(
             "SELECT id,trigger,response,matching_type,reply_type,role_id,case_sensitive,reply_to_bots,enabled FROM autoreplies WHERE guild_id=? ORDER BY id ASC",
             (interaction.guild.id,),
         )
         if not rows:
-            return await interaction.response.send_message("ℹ️ لا توجد ردود تلقائية مسجلة.", ephemeral=True)
+            return await interaction.response.send_message("<:required:1558907460763525182> لا توجد ردود تلقائية مسجلة.", ephemeral=True)
         lines = []
         for row in rows[:25]:
             role_text = f"<@&{row['role_id']}>" if row["role_id"] else "الجميع"
