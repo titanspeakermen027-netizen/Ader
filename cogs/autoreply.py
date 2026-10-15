@@ -200,7 +200,7 @@ class AutoReply(commands.Cog):
                 ),
             )
         except Exception:
-            return await interaction.response.send_message("❌ كاين Auto Reply بنفس الـtrigger والإعدادات ديالو مسبقاً.", ephemeral=True)
+            return await interaction.response.send_message("❌ يوجد رد تلقائي بالإشارة والإعدادات نفسها بالفعل.", ephemeral=True)
 
         bot_text = "✅ نعم" if reply_to_bots else "❌ لا"
         role_text = role.mention if role else "الجميع"
@@ -215,14 +215,14 @@ class AutoReply(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @autoreply.command(name="remove", description="حذف رد تلقائي")
-    @app_commands.describe(id="ID ديال الرد التلقائي")
+    @app_commands.describe(id="معرّف الرد التلقائي")
     @app_commands.default_permissions(manage_guild=True)
     async def remove(self, interaction: discord.Interaction, id: int):
         if not await self._can_manage(interaction):
             return await interaction.response.send_message("❌ تحتاج إلى Manage Server أو Administrator.", ephemeral=True)
         cur = await self.db.execute("DELETE FROM autoreplies WHERE id=? AND guild_id=?", (id, interaction.guild.id))
         if cur.rowcount != 1:
-            return await interaction.response.send_message("❌ ما لقيتش هاد الرد التلقائي.", ephemeral=True)
+            return await interaction.response.send_message("❌ لم يتم العثور على هذا الرد التلقائي.", ephemeral=True)
         await interaction.response.send_message("✅ تم حذف الرد التلقائي.", ephemeral=True)
 
     @autoreply.command(name="list", description="عرض الردود التلقائية")
@@ -235,7 +235,7 @@ class AutoReply(commands.Cog):
             (interaction.guild.id,),
         )
         if not rows:
-            return await interaction.response.send_message("ℹ️ ما كاين حتى رد تلقائي متسجل.", ephemeral=True)
+            return await interaction.response.send_message("ℹ️ لا توجد ردود تلقائية مسجلة.", ephemeral=True)
         lines = []
         for row in rows[:25]:
             role_text = f"<@&{row['role_id']}>" if row["role_id"] else "الجميع"
