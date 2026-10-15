@@ -93,7 +93,7 @@ class AdModal(discord.ui.Modal, title="اكتب إعلانك"):
 
 
 class GiveawayAmountModal(discord.ui.Modal, title="إنشاء السحب"):
-    amount = discord.ui.TextInput(label="مبلغ الالسحب بـ ANORIS", default=str(DEFAULT_GIVEAWAY), max_length=15)
+    amount = discord.ui.TextInput(label="مبلغ السحب بـ ANORIS", default=str(DEFAULT_GIVEAWAY), max_length=15)
     duration = discord.ui.TextInput(label="المدة بالدقائق", default="60", max_length=7)
 
     def __init__(self, cog, owner_id: int, channel_id: int):
@@ -125,14 +125,14 @@ class GiveawayView(discord.ui.View):
     async def enter(self, interaction: discord.Interaction):
         row = await self.cog.db.fetchone("SELECT * FROM ad_giveaways WHERE id=? AND ended=0", (self.giveaway_id,))
         if not row or float(row["ends_at"]) <= time.time():
-            return await interaction.response.send_message("❌ انتهى الالسحب.", ephemeral=True)
+            return await interaction.response.send_message("❌ انتهى السحب.", ephemeral=True)
         try:
             await self.cog.db.execute(
                 "INSERT INTO ad_giveaway_entries(giveaway_id,user_id) VALUES(?,?)",
                 (self.giveaway_id, interaction.user.id),
             )
         except Exception:
-            return await interaction.response.send_message("ℹ️ أنت مسجل بالفعل في الالسحب.", ephemeral=True)
+            return await interaction.response.send_message("ℹ️ أنت مسجل بالفعل في السحب.", ephemeral=True)
         await interaction.response.send_message("🎉 تم تسجيل مشاركتك بنجاح.", ephemeral=True)
 
 
@@ -367,7 +367,7 @@ class AdvertisingShop(commands.Cog):
             view.control_message_id = control.id
             return
         message = await ctx.reply(
-            f"{member.mention}\n**اختر قناة الإعلان اللي بغيتي تنشر فيه**",
+            f"{member.mention}\n**اختر قناة الإعلان التي تريد النشر فيها**",
             mention_author=False,
             view=RoomSelectView(self, ctx.author.id, member.id, rows),
             allowed_mentions=discord.AllowedMentions(users=True),
@@ -423,7 +423,7 @@ class AdvertisingShop(commands.Cog):
         if not row:
             return False, "❌ هذه ليست قناتك الإعلانية."
         if await self.db.get_balance(owner.id) < amount:
-            return False, f"❌ يجب أن يكون لديك **{amount:,} ANORIS** لبدء الالسحب."
+            return False, f"❌ يجب أن يكون لديك **{amount:,} ANORIS** لبدء السحب."
         settings = await self.db.fetchone("SELECT giveaway_enabled,required_guild_id FROM ad_settings_v2 WHERE guild_id=?", (guild.id,))
         required_guild_id = int(settings["required_guild_id"]) if settings and settings["required_guild_id"] else None
         if not await self.db.remove_balance(owner.id, guild.id, amount):
@@ -433,7 +433,7 @@ class AdvertisingShop(commands.Cog):
         gid = int(cur.lastrowid)
         channel = guild.get_channel(channel_id)
         try:
-            embed = discord.Embed(title="🎁 السحب ANORIS", description=f"الجائزة: **{amount:,} ANORIS**\nينتهي: <t:{int(ends)}:R>\nاضغط على 🎉 للمشاركة.", colour=discord.Colour.green())
+            embed = discord.Embed(title="🎁 سحب ANORIS", description=f"الجائزة: **{amount:,} ANORIS**\nينتهي: <t:{int(ends)}:R>\nاضغط على 🎉 للمشاركة.", colour=discord.Colour.green())
             message = await channel.send(embed=embed, view=GiveawayView(self, gid))
             await self.db.execute("UPDATE ad_giveaways SET message_id=? WHERE id=?", (message.id, gid))
             self.bot.add_view(GiveawayView(self, gid))
@@ -441,8 +441,8 @@ class AdvertisingShop(commands.Cog):
         except discord.HTTPException:
             await self.db.execute("UPDATE ad_giveaways SET ended=1 WHERE id=?", (gid,))
             await self.db.add_balance(owner.id, guild.id, amount)
-            return False, "❌ تعذر نشر الالسحب؛ تمت إعادة المبلغ."
-        return True, f"✅ تم إنشاء الالسحب **#{gid}** وخصم **{amount:,} ANORIS** من رصيدك."
+            return False, "❌ تعذر نشر السحب؛ تمت إعادة المبلغ."
+        return True, f"✅ تم إنشاء السحب **#{gid}** وخصم **{amount:,} ANORIS** من رصيدك."
 
     async def process_view_membership(self, row, user_id: int):
         required = row["required_guild_id"]
@@ -482,7 +482,7 @@ class AdvertisingShop(commands.Cog):
         if not entries:
             await self.db.add_balance(int(row["owner_id"]), int(row["guild_id"]), int(row["amount"]))
             if channel:
-                await channel.send("**لا يوجد اي فائز بسبب ان لا احد شارك بالالسحب**")
+                await channel.send("**لا يوجد فائز لأن أحدًا لم يشارك في السحب**")
             return
         eligible = []
         for entry in entries:
