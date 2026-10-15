@@ -80,7 +80,7 @@ class Economy(commands.Cog):
             "INSERT INTO balance_language_preferences(user_id, language) VALUES(?, ?) ON CONFLICT(user_id) DO UPDATE SET language=excluded.language",
             (interaction.user.id, language.value),
         )
-        text = "✅ تم ضبط رسائل الرصيد على العربية الفصحى."
+        text = "<:success:1560285005018566757> تم ضبط رسائل الرصيد على العربية الفصحى."
         await interaction.response.send_message(text, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
     @staticmethod
@@ -176,14 +176,14 @@ class Economy(commands.Cog):
                 await self._delete_message(confirmation_message)
                 try:
                     await user_code_message.reply(
-                        "❌ رمز التأكيد غير صحيح. العملية **لم تتم**.",
+                        "<:failure:1560286464892469380> رمز التأكيد غير صحيح. العملية **لم تتم**.",
                         mention_author=False,
                         allowed_mentions=discord.AllowedMentions.none(),
                         delete_after=8,
                     )
                 except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                     await channel.send(
-                        "❌ رمز التأكيد غير صحيح. العملية **لم تتم**.",
+                        "<:failure:1560286464892469380> رمز التأكيد غير صحيح. العملية **لم تتم**.",
                         delete_after=8,
                         allowed_mentions=discord.AllowedMentions.none(),
                     )
@@ -204,15 +204,15 @@ class Economy(commands.Cog):
 
     async def _transfer_amount(self, guild: discord.Guild, sender: discord.Member, recipient: discord.Member, amount: int) -> tuple[bool, str]:
         if amount <= 0 or recipient.bot or recipient.id == sender.id:
-            return False, "❌ حدد مبلغاً موجباً وعضواً آخر غير البوتات."
+            return False, "<:failure:1560286464892469380> حدد مبلغاً موجباً وعضواً آخر غير البوتات."
         balance = await self.db.get_balance(sender.id)
         if balance < amount:
             return False, f"**ـ {sender.name} رصيدك غير كافٍ لإتمام هذه العملية.** :thinking:"
         if not await self.db.remove_balance(sender.id, guild.id, amount):
-            return False, "❌ تعذر خصم المبلغ من رصيدك. لم يتم التحويل."
+            return False, "<:failure:1560286464892469380> تعذر خصم المبلغ من رصيدك. لم يتم التحويل."
         if not await self.db.add_balance(recipient.id, guild.id, amount):
             await self.db.add_balance(sender.id, guild.id, amount)
-            return False, "❌ تعذر إضافة المبلغ للمستلم؛ تمت إعادة الرصيد."
+            return False, "<:failure:1560286464892469380> تعذر إضافة المبلغ للمستلم؛ تمت إعادة الرصيد."
         await self._send_transfer_dm(recipient, amount, sender)
         return True, f"**ـ حوّل {sender.name} مبلغ `${amount:,}` إلى {recipient.mention}.** | 💰"
     async def _transfer_interaction(self, interaction: discord.Interaction, recipient: discord.Member, amount: int):
@@ -280,7 +280,7 @@ class Economy(commands.Cog):
         if member.bot:
             return await ctx.send(f":thinking: | **{ctx.author.name}، البوتات لا تملك أرصدة !**", allowed_mentions=discord.AllowedMentions.none())
         if amount <= 0 or member.id == ctx.author.id:
-            return await ctx.send("❌ يجب تحديد مبلغ موجب وعضواً آخر غير البوتات.")
+            return await ctx.send("<:failure:1560286464892469380> يجب تحديد مبلغ موجب وعضواً آخر غير البوتات.")
         balance = await self.db.get_balance(ctx.author.id)
         if balance < amount:
             return await ctx.send(f"**ـ {ctx.author.name} رصيدك غير كافٍ لإتمام هذه العملية.** :thinking:", allowed_mentions=discord.AllowedMentions.none())
