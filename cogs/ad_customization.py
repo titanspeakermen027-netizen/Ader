@@ -11,7 +11,7 @@ from discord.ext import commands
 
 EVENTS = {
     "after_ad": "بعد الإعلان",
-    "after_giveaway": "بعد الالسحب",
+    "after_giveaway": "بعد السحب",
     "after_image": "بعد الصورة",
     "after_all": "بعد الاكتمال",
 }
@@ -37,7 +37,7 @@ def parse_duration(value: str) -> int:
     return seconds
 
 
-class GiveawaySettingsModal(discord.ui.Modal, title="إعدادات الالسحب"):
+class GiveawaySettingsModal(discord.ui.Modal, title="إعدادات السحب"):
     enabled = discord.ui.TextInput(label="التفعيل", default="نعم", max_length=10)
     amount = discord.ui.TextInput(label="المبلغ الافتراضي", default="3000000", max_length=20)
     duration = discord.ui.TextInput(label="المدة", default="1h", max_length=20)
@@ -78,7 +78,7 @@ class GiveawaySettingsModal(discord.ui.Modal, title="إعدادات الالسح
             ON CONFLICT(guild_id) DO UPDATE SET giveaway_enabled=excluded.giveaway_enabled,giveaway_amount=excluded.giveaway_amount,giveaway_duration=excluded.giveaway_duration,giveaway_sponsor_id=excluded.giveaway_sponsor_id,updated_at=excluded.updated_at,required_guild_id=excluded.required_guild_id""",
             (interaction.guild.id, "", enabled, value, duration, interaction.user.id, None, time.time(), server_id),
         )
-        await interaction.response.send_message("✅ تم حفظ إعدادات الالسحب وشرط دخول السيرفر.", ephemeral=True)
+        await interaction.response.send_message("✅ تم حفظ إعدادات السحب وشرط دخول السيرفر.", ephemeral=True)
 
 
 class MessageModal(discord.ui.Modal):
@@ -292,15 +292,15 @@ class AdCustomization(commands.Cog):
     async def show_panel(self, interaction, edit=False):
         rows = await self.db.fetchall("SELECT * FROM ad_custom_messages WHERE guild_id=? ORDER BY position,id", (interaction.guild.id,))
         settings = await self.db.fetchone("SELECT giveaway_enabled,giveaway_amount,giveaway_duration,required_guild_id FROM ad_settings_v2 WHERE guild_id=?", (interaction.guild.id,))
-        embed = discord.Embed(title="⚙️ إعدادات الإعلان", description="إدارة الرسائل، توقيتها، الـReply، الرتب، وإعدادات الالسحب.", colour=discord.Colour.blurple())
-        for event, label, emoji in (("after_ad", "بعد الإعلان", "📢"), ("after_giveaway", "بعد الالسحب", "🎁"), ("after_image", "بعد الصورة", "🖼️"), ("after_all", "بعد الاكتمال", "🔗")):
+        embed = discord.Embed(title="⚙️ إعدادات الإعلان", description="إدارة الرسائل، توقيتها، الـReply، الرتب، وإعدادات السحب.", colour=discord.Colour.blurple())
+        for event, label, emoji in (("after_ad", "بعد الإعلان", "📢"), ("after_giveaway", "بعد السحب", "🎁"), ("after_image", "بعد الصورة", "🖼️"), ("after_all", "بعد الاكتمال", "🔗")):
             count = sum(str(row["event"]) == event and int(row["enabled"]) for row in rows)
             embed.add_field(name=f"{emoji} {label}", value=f"{count} رسالة", inline=True)
         giveaway = "معطل"
         if settings and int(settings["giveaway_enabled"] or 0):
             server = f"\nشرط الدخول: `{settings['required_guild_id']}`" if settings["required_guild_id"] else "\nشرط الدخول: لا يوجد"
             giveaway = f"{int(settings['giveaway_amount']):,} ANOCoin لمدة {int(settings['giveaway_duration']):,}s{server}"
-        embed.add_field(name="🎁 الالسحب", value=giveaway, inline=False)
+        embed.add_field(name="🎁 السحب", value=giveaway, inline=False)
         if edit:
             await interaction.response.edit_message(embed=embed, view=SettingsView(self, rows))
         else:
