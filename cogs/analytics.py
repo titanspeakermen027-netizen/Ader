@@ -60,14 +60,14 @@ class Analytics(commands.Cog):
             'user_id': member.id
         })
 
-    @app_commands.command(name="analytics", description="View server analytics")
-    @app_commands.describe(days="Number of days to analyze (default: 7)")
+    @app_commands.command(name="analytics", description="عرض إحصاءات الخادم")
+    @app_commands.describe(days="عدد الأيام المراد تحليلها (الافتراضي: 7)")
     @is_admin()
     async def analytics(self, interaction: discord.Interaction, days: int = 7):
         """View server analytics"""
         if days < 1 or days > 365:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Invalid Range", "Days must be between 1 and 365"),
+                embed=EmbedFactory.error("نطاق غير صالح", "يجب أن يكون عدد الأيام بين 1 و365."),
                 ephemeral=True
             )
             return
@@ -124,7 +124,7 @@ class Analytics(commands.Cog):
         ]) if top_users else "No data"
 
         embed = EmbedFactory.create(
-            title=f"📊 Server Analytics - Last {days} Days",
+            title=f"📊 إحصاءات الخادم خلال آخر {days} يومًا",
             color=EmbedColor.INFO,
             fields=[
                 {"name": "💬 Total Messages", "value": str(total_messages), "inline": True},
@@ -140,13 +140,13 @@ class Analytics(commands.Cog):
         await interaction.followup.send(embed=embed)
         logger.info(f"Analytics generated for {interaction.guild}")
 
-    @app_commands.command(name="activity", description="View recent server activity")
+    @app_commands.command(name="activity", description="عرض نشاط الخادم الأخير")
     @is_admin()
     async def activity(self, interaction: discord.Interaction):
         """View recent activity"""
         if interaction.guild is None:
             return await interaction.response.send_message(
-                embed=EmbedFactory.error("Server Only", "This command must be used inside a server."),
+                embed=EmbedFactory.error("أمر خاص بالخوادم", "يجب استخدام هذا الأمر داخل خادم."),
                 ephemeral=True
             )
 
@@ -163,7 +163,7 @@ class Analytics(commands.Cog):
 
         if not events:
             await interaction.response.send_message(
-                embed=EmbedFactory.info("No Activity", "No recent activity data available"),
+                embed=EmbedFactory.info("لا يوجد نشاط", "لا تتوفر بيانات حديثة عن النشاط."),
                 ephemeral=True
             )
             return
@@ -181,11 +181,11 @@ class Analytics(commands.Cog):
             chart_text += f"{hour}: {bar} ({count})\n"
 
         embed = EmbedFactory.create(
-            title="📈 Server Activity (Last 24 Hours)",
+            title="📈 نشاط الخادم خلال آخر 24 ساعة",
             description=f"```\n{chart_text}\n```",
             color=EmbedColor.INFO
         )
-        embed.set_footer(text=f"Total events: {len(events)}")
+        embed.set_footer(text=f"إجمالي الأحداث: {len(events)}")
 
         await interaction.response.send_message(embed=embed)
 
