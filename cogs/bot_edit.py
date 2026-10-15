@@ -19,8 +19,8 @@ class BotEditTextModal(discord.ui.Modal):
         titles = {
             "name": "تغيير اسم ANO BOT",
             "avatar": "تغيير صورة ANO BOT",
-            "banner": "تغيير بنر ANO BOT",
-            "bio": "تغيير بايو ANO BOT",
+            "banner": "تغيير صورة غلاف ANO BOT",
+            "bio": "تغيير وصف ANO BOT",
         }
         super().__init__(title=titles[mode], timeout=180)
         self.cog = cog
@@ -44,7 +44,7 @@ class BotEditTextModal(discord.ui.Modal):
         else:
             self.value = discord.ui.TextInput(
                 label="البايو الجديدة",
-                placeholder="Your server. Your vision. ANO BOT.",
+                placeholder="خادمك، رؤيتك، ANO BOT.",
                 style=discord.TextStyle.paragraph,
                 max_length=190,
                 required=True,
@@ -85,12 +85,12 @@ class BotEditTextModal(discord.ui.Modal):
 
         if self.mode == "banner":
             return await interaction.response.send_message(
-                "ℹ️ زر البانر موجود في اللوحة، لكن Discord لا يوفّر عبر واجهة Bot API العامة طريقة مدعومة لتغيير بانر حساب البوت. ما نقدرش نغيّرو بطريقة غير رسمية.",
+                "ℹ️ زر صورة الغلاف موجود في اللوحة، لكن واجهة Discord الرسمية لا تتيح تغيير صورة غلاف حساب البوت. لا يمكن تغييرها باستخدام طريقة غير رسمية.",
                 ephemeral=True,
             )
 
         return await interaction.response.send_message(
-            "ℹ️ زر البايو موجود في اللوحة، لكن Discord لا يوفّر عبر واجهة Bot API العامة طريقة مدعومة لتعديل About Me لحساب البوت. ما نقدرش نغيّرو بطريقة غير رسمية.",
+            "ℹ️ زر الوصف موجود في اللوحة، لكن واجهة Discord الرسمية لا تتيح تعديل قسم «نبذة عني» لحساب البوت. لا يمكن تغييره باستخدام طريقة غير رسمية.",
             ephemeral=True,
         )
 
@@ -123,10 +123,10 @@ class BotEditView(discord.ui.LayoutView):
         self.owner_id = owner_id
 
         container = discord.ui.Container(
-            discord.ui.TextDisplay("# ✦ ANO BOT — Bot Editor"),
+            discord.ui.TextDisplay("# ✦ ANO BOT — محرر البوت"),
             discord.ui.TextDisplay(
                 "تحكم في هوية البوت من لوحة واحدة. اختَر الخاصية التي تريد تعديلها.\n"
-                "-# Powered by Ader Dashboard • Owner controls"
+                "-# بواسطة لوحة تحكم Ader • أدوات المالك"
             ),
             discord.ui.Separator(),
             discord.ui.ActionRow(
@@ -134,8 +134,8 @@ class BotEditView(discord.ui.LayoutView):
                 BotEditButton(cog, "avatar", "تغيير الصورة", "🖼️"),
             ),
             discord.ui.ActionRow(
-                BotEditButton(cog, "banner", "تغيير البانر", "🌌"),
-                BotEditButton(cog, "bio", "تغيير البايو", "✍️"),
+                BotEditButton(cog, "banner", "تغيير صورة الغلاف", "🌌"),
+                BotEditButton(cog, "bio", "تغيير الوصف", "✍️"),
             ),
             accent_colour=discord.Colour(PURPLE),
         )
@@ -166,7 +166,7 @@ class BotEdit(commands.Cog):
     async def download_image(url: str) -> bytes:
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise ValueError("دخل رابط صورة صحيح يبدأ بـ https:// أو http://.")
+            raise ValueError("أدخل رابط صورة صالحًا يبدأ بـ https:// أو http://.")
         timeout = aiohttp.ClientTimeout(total=20)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url, allow_redirects=True) as response:
@@ -184,7 +184,7 @@ class BotEdit(commands.Cog):
 
     @app_commands.command(
         name="botedit",
-        description="تعديل البوت الاسم و الصورة و البانر و البايو [لمالك البوت فقط]",
+        description="تعديل اسم البوت وصورته وصورة غلافه ووصفه [لمالك البوت فقط]",
     )
     async def botedit(self, interaction: discord.Interaction):
         if not await self.authorized(interaction.user):
