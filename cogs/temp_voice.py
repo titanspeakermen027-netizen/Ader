@@ -129,7 +129,7 @@ class TempVoice(commands.Cog):
             })
 
             embed = EmbedFactory.success(
-                "✅ Temporary Voice Setup",
+                "<:success:1560285005018566757> Temporary Voice Setup",
                 f"**Category:** {category.mention}\n"
                 f"**Creator Channel:** {creator_channel.mention}\n\n"
                 "Users can join the creator channel to automatically create their own temporary voice channel!"
