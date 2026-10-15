@@ -54,7 +54,7 @@ class BotEditTextModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         if not await self.cog.authorized(interaction.user):
             return await interaction.response.send_message(
-                "❌ هذه اللوحة مخصصة لمالك البوت أو لشخص مخوّل باستخدام أوامر المالك.",
+                "<:failure:1560286464892469380> هذه اللوحة مخصصة لمالك البوت أو لشخص مخوّل باستخدام أوامر المالك.",
                 ephemeral=True,
             )
 
@@ -62,10 +62,10 @@ class BotEditTextModal(discord.ui.Modal):
             await interaction.response.defer(ephemeral=True, thinking=True)
             try:
                 await self.cog.bot.user.edit(username=str(self.value.value).strip())
-                return await interaction.followup.send("✅ تم تحديث اسم البوت.", ephemeral=True)
+                return await interaction.followup.send("<:success:1560285005018566757> تم تحديث اسم البوت.", ephemeral=True)
             except discord.HTTPException as exc:
                 return await interaction.followup.send(
-                    f"❌ تعذر تغيير الاسم. قد تكون هناك قيود مؤقتة من Discord. ({getattr(exc, 'status', 'HTTP error')})",
+                    f"<:failure:1560286464892469380> تعذر تغيير الاسم. قد تكون هناك قيود مؤقتة من Discord. ({getattr(exc, 'status', 'HTTP error')})",
                     ephemeral=True,
                 )
 
@@ -74,23 +74,23 @@ class BotEditTextModal(discord.ui.Modal):
             try:
                 image_bytes = await self.cog.download_image(str(self.value.value).strip())
                 await self.cog.bot.user.edit(avatar=image_bytes)
-                return await interaction.followup.send("✅ تم تحديث صورة البوت.", ephemeral=True)
+                return await interaction.followup.send("<:success:1560285005018566757> تم تحديث صورة البوت.", ephemeral=True)
             except ValueError as exc:
-                return await interaction.followup.send(f"❌ {exc}", ephemeral=True)
+                return await interaction.followup.send(f"<:failure:1560286464892469380> {exc}", ephemeral=True)
             except discord.HTTPException:
                 return await interaction.followup.send(
-                    "❌ رفض Discord تحديث الصورة. جرّب صورة PNG أو JPG أو GIF بحجم أصغر.",
+                    "<:failure:1560286464892469380> رفض Discord تحديث الصورة. جرّب صورة PNG أو JPG أو GIF بحجم أصغر.",
                     ephemeral=True,
                 )
 
         if self.mode == "banner":
             return await interaction.response.send_message(
-                "ℹ️ زر صورة الغلاف موجود في اللوحة، لكن واجهة Discord الرسمية لا تتيح تغيير صورة غلاف حساب البوت. لا يمكن تغييرها باستخدام طريقة غير رسمية.",
+                "<:required:1558907460763525182> زر صورة الغلاف موجود في اللوحة، لكن واجهة Discord الرسمية لا تتيح تغيير صورة غلاف حساب البوت. لا يمكن تغييرها باستخدام طريقة غير رسمية.",
                 ephemeral=True,
             )
 
         return await interaction.response.send_message(
-            "ℹ️ زر الوصف موجود في اللوحة، لكن واجهة Discord الرسمية لا تتيح تعديل قسم «نبذة عني» لحساب البوت. لا يمكن تغييره باستخدام طريقة غير رسمية.",
+            "<:required:1558907460763525182> زر الوصف موجود في اللوحة، لكن واجهة Discord الرسمية لا تتيح تعديل قسم «نبذة عني» لحساب البوت. لا يمكن تغييره باستخدام طريقة غير رسمية.",
             ephemeral=True,
         )
 
@@ -110,7 +110,7 @@ class BotEditButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         if not await self.cog.authorized(interaction.user):
             return await interaction.response.send_message(
-                "❌ ليست لديك صلاحية استخدام إعدادات البوت.",
+                "<:no_access:1560284872403062904> ليست لديك صلاحية استخدام إعدادات البوت.",
                 ephemeral=True,
             )
         await interaction.response.send_modal(BotEditTextModal(self.cog, self.mode))
@@ -145,7 +145,7 @@ class BotEditView(discord.ui.LayoutView):
         if await self.cog.authorized(interaction.user):
             return True
         await interaction.response.send_message(
-            "❌ ليست لديك صلاحية استخدام هذه اللوحة.",
+            "<:no_access:1560284872403062904> ليست لديك صلاحية استخدام هذه اللوحة.",
             ephemeral=True,
         )
         return False
@@ -189,7 +189,7 @@ class BotEdit(commands.Cog):
     async def botedit(self, interaction: discord.Interaction):
         if not await self.authorized(interaction.user):
             return await interaction.response.send_message(
-                "❌ هذا الأمر مخصص لمالك البوت والأشخاص الذين منحهم صلاحيات المالك.",
+                "<:failure:1560286464892469380> هذا الأمر مخصص لمالك البوت والأشخاص الذين منحهم صلاحيات المالك.",
                 ephemeral=True,
             )
         await interaction.response.send_message(
