@@ -222,9 +222,9 @@ class Ader(commands.Bot):
     async def _dashboard_deny(self, interaction, text):
         try:
             if interaction.response.is_done():
-                await interaction.followup.send(f"❌ {text}", ephemeral=True)
+                await interaction.followup.send(f"<:failure:1560286464892469380> {text}", ephemeral=True)
             else:
-                await interaction.response.send_message(f"❌ {text}", ephemeral=True)
+                await interaction.response.send_message(f"<:failure:1560286464892469380> {text}", ephemeral=True)
         except Exception:
             pass
 
@@ -255,19 +255,19 @@ class Ader(commands.Bot):
         if not parts or parts[0].lower() != "a":
             return False
         if len(parts) > 3:
-            await message.reply("❌ الاستعمال: `A` أو `A @العضو` أو `A @العضو المبلغ`", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+            await message.reply("<:failure:1560286464892469380> الاستعمال: `A` أو `A @العضو` أو `A @العضو المبلغ`", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
         economy = self.get_cog("Economy")
         if economy is None:
-            await message.reply("❌ نظام الاقتصاد غير متوفر حالياً.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+            await message.reply("<:failure:1560286464892469380> نظام الاقتصاد غير متوفر حالياً.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
         owner_currency = self.get_cog("OwnerCurrency")
         if owner_currency is not None and await owner_currency._is_blacklisted(message.author.id):
-            await message.reply("❌ أنت مدرج في قائمة حظر نظام العملة، ولا يمكنك استخدامه.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+            await message.reply("<:no_access:1560284872403062904> أنت مدرج في قائمة حظر نظام العملة، ولا يمكنك استخدامه.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
         mentions = list(message.mentions)
         if len(mentions) > 1:
-            await message.reply("❌ يرجى تحديد عضو واحد فقط.", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+            await message.reply("<:failure:1560286464892469380> يرجى تحديد عضو واحد فقط.", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
 
         member = mentions[0] if mentions else None
@@ -291,7 +291,7 @@ class Ader(commands.Bot):
                 text = await economy.format_balance_message(message.author.id, message.author.name, balance, own_balance=True)
                 await message.reply(text, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             else:
-                await message.reply("❌ الاستعمال: `A` أو `A @العضو/المعرّف` أو `A @العضو/المعرّف المبلغ`", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+                await message.reply("<:failure:1560286464892469380> الاستعمال: `A` أو `A @العضو/المعرّف` أو `A @العضو/المعرّف المبلغ`", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
 
         amount = None
@@ -309,10 +309,10 @@ class Ader(commands.Bot):
             await message.reply(text, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
         else:
-            await message.reply("❌ الاستعمال: `A` أو `A @العضو/المعرّف` أو `A @العضو/المعرّف المبلغ`", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+            await message.reply("<:failure:1560286464892469380> الاستعمال: `A` أو `A @العضو/المعرّف` أو `A @العضو/المعرّف المبلغ`", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
         if amount <= 0 or member.bot or member.id == message.author.id:
-            await message.reply("❌ يجب تحديد مبلغ موجب وعضو آخر غير البوتات.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+            await message.reply("<:failure:1560286464892469380> يجب تحديد مبلغ موجب وعضو آخر غير البوتات.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
         balance = await self.db.get_balance(message.author.id)
         if balance < amount:
@@ -366,12 +366,12 @@ class Ader(commands.Bot):
     async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
         self.logger.error(f"Prefix command error command={getattr(ctx.command, 'qualified_name', 'unknown')} guild={getattr(ctx.guild, 'id', None)} user={ctx.author.id}", exc_info=(type(error), error, error.__traceback__))
         if not isinstance(error, commands.CommandNotFound):
-            await ctx.send("❌ وقع خطأ أثناء تنفيذ الأمر. تم تسجيل التفاصيل.", delete_after=8)
+            await ctx.send("<:failure:1560286464892469380> وقع خطأ أثناء تنفيذ الأمر. تم تسجيل التفاصيل.", delete_after=8)
 
     async def _tree_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
         command = getattr(getattr(interaction, "command", None), "qualified_name", "unknown")
         self.logger.error(f"Application command error command={command} guild={interaction.guild_id} user={interaction.user.id}", exc_info=(type(error), error, error.__traceback__))
-        text = "❌ وقع خطأ أثناء تنفيذ الأمر. تم تسجيل التفاصيل."
+        text = "<:failure:1560286464892469380> وقع خطأ أثناء تنفيذ الأمر. تم تسجيل التفاصيل."
         if interaction.response.is_done():
             await interaction.followup.send(text, ephemeral=True)
         else:
