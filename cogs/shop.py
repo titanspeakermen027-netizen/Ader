@@ -24,7 +24,7 @@ class ShopSelect(discord.ui.Select):
             options.append(
                 discord.SelectOption(
                     label=str(item["name"])[:100],
-                    description=f"{int(item['price']):,} ANOCoin • المخزون: {stock_text}"[:100],
+                    description=f"{int(item['price']):,} ANORIS • المخزون: {stock_text}"[:100],
                     value=str(item["id"]),
                     emoji="🛒",
                 )
