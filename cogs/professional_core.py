@@ -254,7 +254,7 @@ class ProfessionalCore(commands.Cog):
         await self.log(
             guild,
             "AutoMod",
-            f"تمت معاقبة {member.mention} بسبب استخدام رياكتشن ممنوع على رسالة.\\n"
+            f"تمت معاقبة {member.mention} بسبب استخدام تفاعل غير مسموح به على إحدى الرسائل.\\n"
             f"**الرياكتشن:** {emoji}\\n**المدة:** {timeout_minutes} دقيقة.",
             discord.Color.orange(),
         )
