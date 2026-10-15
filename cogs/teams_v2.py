@@ -18,9 +18,9 @@ class OfferView(discord.ui.View):
         super().__init__(timeout=None); self.cog=cog; self.offer_id=offer_id
         for item in self.children:
             item.custom_id=f"teamoffer:{offer_id}:{'accept' if item.label == 'قبول العرض' else 'reject'}"
-    @discord.ui.button(label="قبول العرض", style=discord.ButtonStyle.success, emoji="✅")
+    @discord.ui.button(label="قبول العرض", style=discord.ButtonStyle.success, emoji="<:success:1560285005018566757>")
     async def accept(self, i: discord.Interaction, _: discord.ui.Button): await self.cog.process_offer(i,self.offer_id,True)
-    @discord.ui.button(label="رفض العرض", style=discord.ButtonStyle.danger, emoji="❌")
+    @discord.ui.button(label="رفض العرض", style=discord.ButtonStyle.danger, emoji="<:failure:1560286464892469380>")
     async def reject(self, i: discord.Interaction, _: discord.ui.Button): await self.cog.process_offer(i,self.offer_id,False)
 
 class ListView(discord.ui.View):
@@ -29,14 +29,14 @@ class ListView(discord.ui.View):
         self.children[0].custom_id=f"teamlist:{guild_id}"
     @discord.ui.button(label="تحديث",style=discord.ButtonStyle.secondary,emoji="🔄")
     async def update(self,i:discord.Interaction,_:discord.ui.Button):
-        if i.guild_id != self.guild_id: return await i.response.send_message("❌ هذه اللوحة لا تخص هذا الخادم.",ephemeral=True)
+        if i.guild_id != self.guild_id: return await i.response.send_message("<:failure:1560286464892469380> هذه اللوحة لا تخص هذا الخادم.",ephemeral=True)
         await i.response.edit_message(embed=await self.cog.list_embed(self.guild_id),view=self)
 
 class SettingsView(discord.ui.View):
     def __init__(self,cog,guild_id:int,user_id:int): super().__init__(timeout=300); self.cog=cog; self.guild_id=guild_id; self.user_id=user_id
     async def interaction_check(self,i):
         if i.user.id!=self.user_id or not i.user.guild_permissions.administrator:
-            await i.response.send_message("❌ لا يمكنك تعديل هذه الإعدادات.",ephemeral=True); return False
+            await i.response.send_message("<:failure:1560286464892469380> لا يمكنك تعديل هذه الإعدادات.",ephemeral=True); return False
         return True
     @discord.ui.button(label="تحديد رتبة المدربين",style=discord.ButtonStyle.primary,emoji="🎯")
     async def coach(self,i,_): await i.response.send_modal(CoachModal(self.cog,self.guild_id))
@@ -52,19 +52,19 @@ class CoachModal(discord.ui.Modal,title="رتبة المدربين"):
     def __init__(self,cog,guild_id): super().__init__(); self.cog=cog; self.guild_id=guild_id
     async def on_submit(self,i):
         try: rid=int(str(self.role_id.value).strip())
-        except ValueError: return await i.response.send_message("❌ معرّف الرتبة غير صالح.",ephemeral=True)
+        except ValueError: return await i.response.send_message("<:failure:1560286464892469380> معرّف الرتبة غير صالح.",ephemeral=True)
         role=i.guild.get_role(rid) if i.guild else None
-        if not role: return await i.response.send_message("❌ لم يتم العثور على الرتبة.",ephemeral=True)
-        await self.cog.set_coach(self.guild_id,rid); await i.response.send_message("✅ تم حفظ رتبة المدربين.",ephemeral=True)
+        if not role: return await i.response.send_message("<:failure:1560286464892469380> لم يتم العثور على الرتبة.",ephemeral=True)
+        await self.cog.set_coach(self.guild_id,rid); await i.response.send_message("<:success:1560285005018566757> تم حفظ رتبة المدربين.",ephemeral=True)
 
 class LimitModal(discord.ui.Modal,title="حد اللاعبين"):
     value=discord.ui.TextInput(label="العدد",placeholder="15",min_length=1,max_length=2)
     def __init__(self,cog,guild_id): super().__init__(); self.cog=cog; self.guild_id=guild_id
     async def on_submit(self,i):
         try: n=int(str(self.value.value).strip())
-        except ValueError: return await i.response.send_message("❌ أدخل رقمًا صحيحًا.",ephemeral=True)
-        if not 1<=n<=50: return await i.response.send_message("❌ يجب أن يكون العدد بين 1 و50.",ephemeral=True)
-        await self.cog.set_limit(self.guild_id,n); await i.response.send_message(f"✅ تم تحديد الحد الأقصى بـ **{n}** لاعبًا.",ephemeral=True)
+        except ValueError: return await i.response.send_message("<:failure:1560286464892469380> أدخل رقمًا صحيحًا.",ephemeral=True)
+        if not 1<=n<=50: return await i.response.send_message("<:failure:1560286464892469380> يجب أن يكون العدد بين 1 و50.",ephemeral=True)
+        await self.cog.set_limit(self.guild_id,n); await i.response.send_message(f"<:success:1560285005018566757> تم تحديد الحد الأقصى بـ **{n}** لاعبًا.",ephemeral=True)
 
 class TeamsV2(commands.Cog):
     def __init__(self,bot): self.bot=bot; self.db=bot.db; self.lock=asyncio.Lock()
@@ -101,19 +101,19 @@ class TeamsV2(commands.Cog):
     @app_commands.choices(team_type=[app_commands.Choice(name="نادي",value="club"),app_commands.Choice(name="منتخب وطني",value="national")])
     @app_commands.checks.has_permissions(administrator=True)
     async def addteam(self,i,role:discord.Role,emoji:str,team_type:app_commands.Choice[str],logo_url:Optional[str]=None):
-        if not emoji.strip() or len(emoji.strip())>16:return await i.response.send_message("❌ رمز الفريق غير صالح.",ephemeral=True)
-        if role.is_default() or role.managed:return await i.response.send_message("❌ لا يمكن استخدام هذه الرتبة.",ephemeral=True)
-        if not i.guild.me or role>=i.guild.me.top_role:return await i.response.send_message("❌ يجب أن تكون رتبة الفريق أسفل أعلى رتبة للبوت.",ephemeral=True)
+        if not emoji.strip() or len(emoji.strip())>16:return await i.response.send_message("<:failure:1560286464892469380> رمز الفريق غير صالح.",ephemeral=True)
+        if role.is_default() or role.managed:return await i.response.send_message("<:failure:1560286464892469380> لا يمكن استخدام هذه الرتبة.",ephemeral=True)
+        if not i.guild.me or role>=i.guild.me.top_role:return await i.response.send_message("<:failure:1560286464892469380> يجب أن تكون رتبة الفريق أسفل أعلى رتبة للبوت.",ephemeral=True)
         try: await self.db.execute("INSERT INTO verified_teams(guild_id,role_id,name,emoji,team_type,logo_url,created_at) VALUES(?,?,?,?,?,?,?)",(i.guild.id,role.id,role.name,emoji.strip(),team_type.value,logo_url,time.time()))
-        except Exception:return await i.response.send_message("❌ هذه الرتبة مسجلة بالفعل كفريق موثق.",ephemeral=True)
-        await i.response.send_message(f"✅ تم توثيق {label(team_type.value)} **{role.name}** {emoji.strip()} بنجاح.",ephemeral=True)
+        except Exception:return await i.response.send_message("<:failure:1560286464892469380> هذه الرتبة مسجلة بالفعل كفريق موثق.",ephemeral=True)
+        await i.response.send_message(f"<:success:1560285005018566757> تم توثيق {label(team_type.value)} **{role.name}** {emoji.strip()} بنجاح.",ephemeral=True)
 
     @app_commands.command(name="removeteam",description="إزالة فريق موثق")
     @app_commands.checks.has_permissions(administrator=True)
     async def removeteam(self,i,role:discord.Role):
         r=await self.db.fetchone("SELECT id,name FROM verified_teams WHERE guild_id=? AND role_id=? AND active=1",(i.guild.id,role.id))
-        if not r:return await i.response.send_message("❌ هذا الفريق غير موثق.",ephemeral=True)
-        await self.db.execute("UPDATE verified_teams SET active=0 WHERE id=?",(r[0],)); await self.db.execute("UPDATE team_offers SET status='cancelled' WHERE team_id=? AND status='pending'",(r[0],)); await i.response.send_message(f"✅ تمت إزالة توثيق **{r[1]}** وإلغاء عروضه المعلقة.",ephemeral=True)
+        if not r:return await i.response.send_message("<:failure:1560286464892469380> هذا الفريق غير موثق.",ephemeral=True)
+        await self.db.execute("UPDATE verified_teams SET active=0 WHERE id=?",(r[0],)); await self.db.execute("UPDATE team_offers SET status='cancelled' WHERE team_id=? AND status='pending'",(r[0],)); await i.response.send_message(f"<:success:1560285005018566757> تمت إزالة توثيق **{r[1]}** وإلغاء عروضه المعلقة.",ephemeral=True)
 
     @app_commands.command(name="verifiedteams",description="عرض الأندية والمنتخبات الموثقة")
     async def verifiedteams(self,i):
@@ -122,22 +122,22 @@ class TeamsV2(commands.Cog):
     @app_commands.command(name="offer",description="إرسال عرض انضمام للاعب")
     @app_commands.describe(player="اللاعب",role="رتبة الفريق")
     async def offer(self,i,player:discord.Member,role:discord.Role):
-        if not await self.coach_ok(i):return await i.response.send_message("❌ هذا الأمر متاح فقط لمن يملك رتبة المدربين المحددة من الإدارة.",ephemeral=True)
-        if player.bot or player.id==i.user.id:return await i.response.send_message("❌ لا يمكن إرسال عرض إلى هذا الحساب.",ephemeral=True)
+        if not await self.coach_ok(i):return await i.response.send_message("<:failure:1560286464892469380> هذا الأمر متاح فقط لمن يملك رتبة المدربين المحددة من الإدارة.",ephemeral=True)
+        if player.bot or player.id==i.user.id:return await i.response.send_message("<:failure:1560286464892469380> لا يمكن إرسال عرض إلى هذا الحساب.",ephemeral=True)
         t=await self.db.fetchone("SELECT * FROM verified_teams WHERE guild_id=? AND role_id=? AND active=1",(i.guild.id,role.id))
-        if not t:return await i.response.send_message("❌ هذه الرتبة ليست لفريق موثق.",ephemeral=True)
+        if not t:return await i.response.send_message("<:failure:1560286464892469380> هذه الرتبة ليست لفريق موثق.",ephemeral=True)
         member=await self.db.fetchone("SELECT t.name FROM team_members m JOIN verified_teams t ON t.id=m.team_id WHERE m.guild_id=? AND m.user_id=? AND t.active=1",(i.guild.id,player.id))
-        if member:return await i.response.send_message(f"❌ هذا اللاعب مرتبط بالفعل بـ **{member[0]}**.",ephemeral=True)
+        if member:return await i.response.send_message(f"<:failure:1560286464892469380> هذا اللاعب مرتبط بالفعل بـ **{member[0]}**.",ephemeral=True)
         c=await self.db.fetchone("SELECT COUNT(*) FROM team_members WHERE team_id=?",(t['id'],)); cfg=await self.cfg(i.guild.id); lim=int(cfg.get('max_players') or DEFAULT_LIMIT)
-        if int(c[0])>=lim:return await i.response.send_message(f"❌ قائمة الفريق مكتملة ({lim} لاعبًا).",ephemeral=True)
+        if int(c[0])>=lim:return await i.response.send_message(f"<:failure:1560286464892469380> قائمة الفريق مكتملة ({lim} لاعبًا).",ephemeral=True)
         old=await self.db.fetchone("SELECT id FROM team_offers WHERE team_id=? AND player_id=? AND status='pending' AND expires_at>?",(t['id'],player.id,time.time()))
-        if old:return await i.response.send_message("❌ يوجد بالفعل عرض نشط لهذا اللاعب.",ephemeral=True)
+        if old:return await i.response.send_message("<:failure:1560286464892469380> يوجد بالفعل عرض نشط لهذا اللاعب.",ephemeral=True)
         await i.response.defer(ephemeral=True); cur=await self.db.execute("INSERT INTO team_offers(team_id,guild_id,player_id,offered_by,created_at,expires_at) VALUES(?,?,?,?,?,?)",(t['id'],i.guild.id,player.id,i.user.id,time.time(),time.time()+TTL)); oid=int(cur.lastrowid)
         e=EmbedFactory.create("📩 عرض انضمام إلى فريق",f"تلقيت عرضًا للانضمام إلى **{t['name']}** {t['emoji']}.",color=EmbedColor.ECONOMY); e.add_field(name="النوع",value=label(t['team_type'])); e.add_field(name="المرسل",value=i.user.mention); e.add_field(name="الصلاحية",value="48 ساعة")
         if t['logo_url']:e.set_thumbnail(url=t['logo_url'])
         try: await player.send(embed=e,view=OfferView(self,oid))
-        except discord.Forbidden: await self.db.execute("UPDATE team_offers SET status='failed' WHERE id=?",(oid,)); return await i.followup.send("❌ تعذر إرسال رسالة خاصة للاعب.",ephemeral=True)
-        self.bot.add_view(OfferView(self,oid)); await i.followup.send(f"✅ تم إرسال العرض إلى {player.mention} في الخاص.",ephemeral=True)
+        except discord.Forbidden: await self.db.execute("UPDATE team_offers SET status='failed' WHERE id=?",(oid,)); return await i.followup.send("<:failure:1560286464892469380> تعذر إرسال رسالة خاصة للاعب.",ephemeral=True)
+        self.bot.add_view(OfferView(self,oid)); await i.followup.send(f"<:success:1560285005018566757> تم إرسال العرض إلى {player.mention} في الخاص.",ephemeral=True)
 
     @app_commands.command(name="teamsettings",description="إعدادات الأندية والمنتخبات")
     @app_commands.checks.has_permissions(administrator=True)
@@ -146,23 +146,23 @@ class TeamsV2(commands.Cog):
     async def process_offer(self,i,oid,accept):
         async with self.lock:
             o=await self.db.fetchone("SELECT o.*,t.name,t.emoji,t.role_id,t.active FROM team_offers o JOIN verified_teams t ON t.id=o.team_id WHERE o.id=?",(oid,))
-            if not o or o['status']!='pending' or int(o['player_id'])!=i.user.id:return await i.response.send_message("❌ هذا العرض غير صالح أو تم التعامل معه مسبقًا.",ephemeral=True)
-            if o['expires_at']<=time.time():await self.db.execute("UPDATE team_offers SET status='expired' WHERE id=?",(oid,)); return await i.response.send_message("❌ انتهت صلاحية العرض.",ephemeral=True)
-            if not accept:await self.db.execute("UPDATE team_offers SET status='rejected' WHERE id=? AND status='pending'",(oid,)); return await i.response.edit_message(content="❌ تم رفض عرض الانضمام.",embed=None,view=None)
-            if not o['active']:await self.db.execute("UPDATE team_offers SET status='cancelled' WHERE id=? AND status='pending'",(oid,)); return await i.response.send_message("❌ لم يعد الفريق موثقًا.",ephemeral=True)
-            if await self.db.fetchone("SELECT 1 FROM team_members WHERE guild_id=? AND user_id=?",(o['guild_id'],i.user.id)):await self.db.execute("UPDATE team_offers SET status='conflict' WHERE id=?",(oid,)); return await i.response.send_message("❌ أنت مرتبط بالفعل بفريق آخر.",ephemeral=True)
+            if not o or o['status']!='pending' or int(o['player_id'])!=i.user.id:return await i.response.send_message("<:failure:1560286464892469380> هذا العرض غير صالح أو تم التعامل معه مسبقًا.",ephemeral=True)
+            if o['expires_at']<=time.time():await self.db.execute("UPDATE team_offers SET status='expired' WHERE id=?",(oid,)); return await i.response.send_message("<:no_access:1560284872403062904> انتهت صلاحية العرض.",ephemeral=True)
+            if not accept:await self.db.execute("UPDATE team_offers SET status='rejected' WHERE id=? AND status='pending'",(oid,)); return await i.response.edit_message(content="<:failure:1560286464892469380> تم رفض عرض الانضمام.",embed=None,view=None)
+            if not o['active']:await self.db.execute("UPDATE team_offers SET status='cancelled' WHERE id=? AND status='pending'",(oid,)); return await i.response.send_message("<:failure:1560286464892469380> لم يعد الفريق موثقًا.",ephemeral=True)
+            if await self.db.fetchone("SELECT 1 FROM team_members WHERE guild_id=? AND user_id=?",(o['guild_id'],i.user.id)):await self.db.execute("UPDATE team_offers SET status='conflict' WHERE id=?",(oid,)); return await i.response.send_message("<:failure:1560286464892469380> أنت مرتبط بالفعل بفريق آخر.",ephemeral=True)
             cfg=await self.cfg(o['guild_id']); lim=int(cfg.get('max_players') or DEFAULT_LIMIT); c=await self.db.fetchone("SELECT COUNT(*) FROM team_members WHERE team_id=?",(o['team_id'],))
-            if int(c[0])>=lim:await self.db.execute("UPDATE team_offers SET status='full' WHERE id=?",(oid,)); return await i.response.send_message("❌ اكتملت قائمة الفريق.",ephemeral=True)
+            if int(c[0])>=lim:await self.db.execute("UPDATE team_offers SET status='full' WHERE id=?",(oid,)); return await i.response.send_message("<:failure:1560286464892469380> اكتملت قائمة الفريق.",ephemeral=True)
             cur=await self.db.execute("INSERT OR IGNORE INTO team_members(team_id,guild_id,user_id,joined_at) VALUES(?,?,?,?)",(o['team_id'],o['guild_id'],i.user.id,time.time()))
-            if cur.rowcount!=1:return await i.response.send_message("❌ تعذر تسجيل انضمامك؛ ربما تم قبول عرض آخر.",ephemeral=True)
+            if cur.rowcount!=1:return await i.response.send_message("<:failure:1560286464892469380> تعذر تسجيل انضمامك؛ ربما تم قبول عرض آخر.",ephemeral=True)
             cur=await self.db.execute("UPDATE team_offers SET status='accepted' WHERE id=? AND status='pending'",(oid,))
-            if cur.rowcount!=1:await self.db.execute("DELETE FROM team_members WHERE team_id=? AND guild_id=? AND user_id=?",(o['team_id'],o['guild_id'],i.user.id)); return await i.response.send_message("❌ تعذر إتمام العرض.",ephemeral=True)
+            if cur.rowcount!=1:await self.db.execute("DELETE FROM team_members WHERE team_id=? AND guild_id=? AND user_id=?",(o['team_id'],o['guild_id'],i.user.id)); return await i.response.send_message("<:failure:1560286464892469380> تعذر إتمام العرض.",ephemeral=True)
         g=self.bot.get_guild(int(o['guild_id']))
         if g:
             m=g.get_member(i.user.id); r=g.get_role(int(o['role_id']))
             if m and r:
                 try: await m.add_roles(r,reason="قبول عرض فريق موثق")
                 except discord.Forbidden: return await i.response.edit_message(content=f"⚠️ تم تسجيل انضمامك إلى **{o['name']}**، لكن تعذر إعطاؤك رتبة الفريق. يجب رفع رتبة البوت فوق رتبة الفريق.",embed=None,view=None)
-        await i.response.edit_message(content=f"✅ تم قبول العرض والانضمام إلى **{o['name']}** {o['emoji']} بنجاح.",embed=None,view=None)
+        await i.response.edit_message(content=f"<:success:1560285005018566757> تم قبول العرض والانضمام إلى **{o['name']}** {o['emoji']} بنجاح.",embed=None,view=None)
 
 async def setup(bot): await bot.add_cog(TeamsV2(bot))
