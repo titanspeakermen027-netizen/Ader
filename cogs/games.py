@@ -24,14 +24,14 @@ class DiceGameView(discord.ui.View):
         super().__init__(timeout=None)
         self.cog = cog
 
-    @discord.ui.button(label="🎲 Roll Dice", style=discord.ButtonStyle.primary, custom_id="dice_roll")
+    @discord.ui.button(label="🎲 رمي النرد", style=discord.ButtonStyle.primary, custom_id="dice_roll")
     async def roll_dice(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Roll a dice"""
         result = random.randint(1, 6)
 
         embed = EmbedFactory.create(
-            title="🎲 Dice Roll",
-            description=f"{interaction.user.mention} rolled:\n\n# {result}",
+            title="🎲 رمية النرد",
+            description=f"قام {interaction.user.mention} برمي النرد وكانت النتيجة:\n\n# {result}",
             color=EmbedColor.INFO
         )
 
@@ -45,12 +45,12 @@ class CoinFlipView(discord.ui.View):
         super().__init__(timeout=None)
         self.cog = cog
 
-    @discord.ui.button(label="🪙 Heads", style=discord.ButtonStyle.success, custom_id="coin_heads")
+    @discord.ui.button(label="🪙 صورة", style=discord.ButtonStyle.success, custom_id="coin_heads")
     async def flip_heads(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Bet on heads"""
         await self._flip_coin(interaction, "heads")
 
-    @discord.ui.button(label="🪙 Tails", style=discord.ButtonStyle.danger, custom_id="coin_tails")
+    @discord.ui.button(label="🪙 كتابة", style=discord.ButtonStyle.danger, custom_id="coin_tails")
     async def flip_tails(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Bet on tails"""
         await self._flip_coin(interaction, "tails")
@@ -96,7 +96,7 @@ class TriviaView(discord.ui.View):
     def _make_callback(self, option_index):
         async def callback(interaction: discord.Interaction):
             if self.answered:
-                await interaction.response.send_message("This trivia has been answered!", ephemeral=True)
+                await interaction.response.send_message("تمت الإجابة عن هذا السؤال بالفعل.", ephemeral=True)
                 return
 
             self.answered = True
@@ -131,7 +131,7 @@ class EightBallView(discord.ui.View):
         super().__init__(timeout=None)
         self.cog = cog
 
-    @discord.ui.button(label="🔮 Ask the Magic 8-Ball", style=discord.ButtonStyle.primary, custom_id="8ball_ask")
+    @discord.ui.button(label="🔮 اسأل كرة الحظ السحرية", style=discord.ButtonStyle.primary, custom_id="8ball_ask")
     async def ask_8ball(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Ask 8ball"""
         responses = [
@@ -145,8 +145,8 @@ class EightBallView(discord.ui.View):
         response = random.choice(responses)
 
         embed = EmbedFactory.create(
-            title="🔮 Magic 8-Ball",
-            description=f"{interaction.user.mention} asked the Magic 8-Ball...\n\n**Answer:** {response}",
+            title="🔮 كرة الحظ السحرية",
+            description=f"طرح {interaction.user.mention} سؤالًا على كرة الحظ السحرية...\n\n**الإجابة:** {response}",
             color=EmbedColor.INFO
         )
 
@@ -160,17 +160,17 @@ class TriviaStartView(discord.ui.View):
         super().__init__(timeout=None)
         self.cog = cog
 
-    @discord.ui.button(label="🧠 Play Trivia", style=discord.ButtonStyle.success, custom_id="trivia_start")
+    @discord.ui.button(label="🧠 ابدأ الأسئلة العامة", style=discord.ButtonStyle.success, custom_id="trivia_start")
     async def start_trivia(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Start a trivia game"""
         question_data = random.choice(self.cog.trivia_questions)
 
         embed = EmbedFactory.create(
-            title="🎯 Trivia Time!",
+            title="🎯 وقت الأسئلة العامة!",
             description=f"**{question_data['question']}**",
             color=EmbedColor.INFO
         )
-        embed.set_footer(text="You have 30 seconds to answer! Win 💎 50 for correct answer!")
+        embed.set_footer(text="لديك 30 ثانية للإجابة! اربح 💎 50 عند الإجابة الصحيحة.")
 
         view = TriviaView(self.cog, question_data)
         await interaction.response.send_message(embed=embed, view=view)
@@ -266,13 +266,13 @@ class Games(commands.Cog):
             }
         ]
 
-    @app_commands.command(name="setup-game-panel", description="Setup game panel with buttons for users (Admin)")
+    @app_commands.command(name="setup-game-panel", description="إعداد لوحة الألعاب بأزرار للمستخدمين (للمسؤولين)")
     @is_admin()
     async def setup_game_panel(self, interaction: discord.Interaction):
         """Setup game panel"""
         embed = EmbedFactory.create(
-            title="🎮 Game Center",
-            description="Click the buttons below to play games!\n\n"
+            title="🎮 مركز الألعاب",
+            description="اضغط على الأزرار أدناه للعب!\n\n"
                        "🎲 **Dice** - Roll a dice\n"
                        "🪙 **Coinflip** - Flip a coin\n"
                        "🧠 **Trivia** - Test your knowledge (Win 💎 50!)\n"
@@ -284,31 +284,31 @@ class Games(commands.Cog):
         await interaction.channel.send(embed=embed)
 
         # Dice game
-        dice_embed = EmbedFactory.create(title="🎲 Dice Game", description="Click to roll a dice!", color=EmbedColor.INFO)
+        dice_embed = EmbedFactory.create(title="🎲 لعبة النرد", description="اضغط لرمي النرد!", color=EmbedColor.INFO)
         await interaction.channel.send(embed=dice_embed, view=DiceGameView(self))
 
         # Coinflip game
-        coin_embed = EmbedFactory.create(title="🪙 Coinflip", description="Pick heads or tails!", color=EmbedColor.INFO)
+        coin_embed = EmbedFactory.create(title="🪙 رمي العملة", description="اختر صورة أو كتابة!", color=EmbedColor.INFO)
         await interaction.channel.send(embed=coin_embed, view=CoinFlipView(self))
 
         # Trivia game
-        trivia_embed = EmbedFactory.create(title="🧠 Trivia Game", description="Test your knowledge! Win 💎 50!", color=EmbedColor.SUCCESS)
+        trivia_embed = EmbedFactory.create(title="🧠 الأسئلة العامة", description="اختبر معلوماتك واربح 💎 50!", color=EmbedColor.SUCCESS)
         await interaction.channel.send(embed=trivia_embed, view=TriviaStartView(self))
 
         # 8-Ball
-        ball_embed = EmbedFactory.create(title="🔮 Magic 8-Ball", description="Ask the magic 8-ball a question!", color=EmbedColor.INFO)
+        ball_embed = EmbedFactory.create(title="🔮 كرة الحظ السحرية", description="Ask the magic 8-ball a question!", color=EmbedColor.INFO)
         await interaction.channel.send(embed=ball_embed, view=EightBallView(self))
 
         await interaction.response.send_message(
-            embed=EmbedFactory.success("Game Panel Created", "Users can now play games by clicking buttons!"),
+            embed=EmbedFactory.success("تم إنشاء لوحة الألعاب", "يمكن للمستخدمين اللعب الآن بالضغط على الأزرار."),
             ephemeral=True
         )
 
         logger.info(f"Game panel created in {interaction.guild}")
 
     # Public commands for viewing stats
-    @app_commands.command(name="rank", description="View your rank card")
-    @app_commands.describe(user="User to check (optional)")
+    @app_commands.command(name="rank", description="عرض بطاقة مستواك")
+    @app_commands.describe(user="العضو المراد عرض مستواه (اختياري)")
     async def rank(self, interaction: discord.Interaction, user: Optional[discord.Member] = None):
         """View rank card - PUBLIC"""
         target = user or interaction.user
@@ -328,8 +328,8 @@ class Games(commands.Cog):
         embed = EmbedFactory.rank_card(target, level, xp, rank, next_level_xp)
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="balance", description="Check your balance")
-    @app_commands.describe(user="User to check (optional)")
+    @app_commands.command(name="balance", description="عرض رصيدك")
+    @app_commands.describe(user="العضو المراد عرض مستواه (اختياري)")
     async def balance(self, interaction: discord.Interaction, user: Optional[discord.Member] = None):
         """Check balance - PUBLIC"""
         target = user or interaction.user
@@ -343,14 +343,14 @@ class Games(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="leaderboard", description="View server leaderboard")
+    @app_commands.command(name="leaderboard", description="عرض لوحة المتصدرين في الخادم")
     async def leaderboard(self, interaction: discord.Interaction):
         """View leaderboard - PUBLIC"""
         leaderboard = await self.db.get_leaderboard(interaction.guild.id, limit=10)
 
         if not leaderboard:
             await interaction.response.send_message(
-                embed=EmbedFactory.info("No Data", "No leaderboard data available"),
+                embed=EmbedFactory.info("لا توجد بيانات", "لا تتوفر بيانات للمتصدرين حاليًا."),
                 ephemeral=True
             )
             return
