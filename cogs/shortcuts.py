@@ -45,7 +45,7 @@ class ShortcutSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         if not self.cog.can_manage(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            return await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         await self.cog.show_editor(interaction, self.values[0], self.hidden)
 
 
@@ -70,7 +70,7 @@ class EditAliasButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         if not self.cog.can_manage(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            return await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         await interaction.response.send_modal(
             AliasModal(self.cog, self.key, self.cog.get_alias(interaction.guild.id, self.key), self.hidden)
         )
@@ -83,7 +83,7 @@ class BackButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         if not self.cog.can_manage(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            return await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         await interaction.response.edit_message(
             embed=self.cog.selector_embed(), view=ShortcutView(self.cog, self.hidden)
         )
@@ -99,15 +99,15 @@ class AliasModal(discord.ui.Modal, title="تعديل الاختصار"):
 
     async def on_submit(self, interaction: discord.Interaction):
         if not self.cog.can_manage(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            return await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         value = self.alias.value.strip()
         if not value or any(char.isspace() for char in value):
             return await interaction.response.send_message(
-                "❌ يجب أن يتكوّن الاختصار من كلمة واحدة دون مسافات. يُسمح بحرف واحد، ويمكن استخدامه مع `!` أو بدونه.",
+                "<:failure:1560286464892469380> يجب أن يتكوّن الاختصار من كلمة واحدة دون مسافات. يُسمح بحرف واحد، ويمكن استخدامه مع `!` أو بدونه.",
                 ephemeral=True,
             )
         self.cog.set_alias(interaction.guild.id, self.key, value)
-        await interaction.response.send_message(f"✅ تم تغيير الاختصار إلى `{value}`", ephemeral=True)
+        await interaction.response.send_message(f"<:success:1560285005018566757> تم تغيير الاختصار إلى `{value}`", ephemeral=True)
 
 
 class Shortcuts(commands.Cog):
@@ -152,10 +152,10 @@ class Shortcuts(commands.Cog):
     async def shortcuts(self, interaction: discord.Interaction, اخفاء: bool = False):
         """لوحة إعداد اختصارات الإدارة."""
         if not interaction.guild:
-            return await interaction.response.send_message("❌ هذا الأمر مخصّص للخوادم فقط.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> هذا الأمر مخصّص للخوادم فقط.", ephemeral=True)
         if not self.can_manage(interaction):
             return await interaction.response.send_message(
-                "❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True
+                "<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True
             )
         await interaction.response.send_message(
             embed=self.selector_embed(), view=ShortcutView(self, اخفاء), ephemeral=اخفاء
@@ -317,9 +317,9 @@ class Shortcuts(commands.Cog):
         author_permissions = ctx.author.guild_permissions
         if key in ("lock", "unlock"):
             if not (author_permissions.manage_channels or author_permissions.administrator):
-                return await ctx.send("❌ ليست لديك صلاحية قفل القناة أو فتحها.", delete_after=5)
+                return await ctx.send("<:no_access:1560284872403062904> ليست لديك صلاحية قفل القناة أو فتحها.", delete_after=5)
             if not ctx.channel.permissions_for(ctx.guild.me).manage_channels:
-                return await ctx.send("❌ لا يمتلك البوت صلاحية إدارة القنوات.", delete_after=5)
+                return await ctx.send("<:no_access:1560284872403062904> لا يمتلك البوت صلاحية إدارة القنوات.", delete_after=5)
 
             # Keep the existing @everyone overwrite and change only these
             # four permissions. A partially applied/older lock is repaired rather
@@ -358,10 +358,10 @@ class Shortcuts(commands.Cog):
             except discord.HTTPException as exc:
                 if getattr(exc, "code", None) == 350005:
                     return await ctx.send(
-                        "❌ رفض Discord قفل هذه القناة لأن إعدادات **تهيئة الخادم** تتطلب وجود قناة واحدة على الأقل يمكن للجميع قراءتها وإرسال الرسائل فيها.",
+                        "<:failure:1560286464892469380> رفض Discord قفل هذه القناة لأن إعدادات **تهيئة الخادم** تتطلب وجود قناة واحدة على الأقل يمكن للجميع قراءتها وإرسال الرسائل فيها.",
                         delete_after=10,
                     )
-                return await ctx.send("❌ تعذّر تعديل صلاحيات القناة حاليًا.", delete_after=7)
+                return await ctx.send("<:failure:1560286464892469380> تعذّر تعديل صلاحيات القناة حاليًا.", delete_after=7)
 
             if key == "lock":
                 return await ctx.send(f"**<:truee:1545109160956264501> تم قفل القناة {ctx.channel.mention}**")
@@ -372,11 +372,11 @@ class Shortcuts(commands.Cog):
             or author_permissions.administrator
             or (key == "give_role" and (author_permissions.manage_roles or ctx.author.id == ctx.guild.owner_id))
         ):
-            return await ctx.send("❌ ليست لديك الصلاحيات اللازمة لاستخدام هذا الاختصار.", delete_after=5)
+            return await ctx.send("<:no_access:1560284872403062904> ليست لديك الصلاحيات اللازمة لاستخدام هذا الاختصار.", delete_after=5)
 
         if not argument:
             example = "`!رتبة @عضو @رتبة`" if key == "give_role" else "`!معلومات_العضو @عضو`"
-            return await ctx.send(f"❌ يجب تحديد العضو. مثال: {example}", delete_after=6)
+            return await ctx.send(f"<:failure:1560286464892469380> يجب تحديد العضو. مثال: {example}", delete_after=6)
 
         if key == "member_info":
             try:
@@ -385,7 +385,7 @@ class Shortcuts(commands.Cog):
             except Exception as exc:
                 # Log the real reason while keeping the user-facing message clean.
                 print(f"[Shortcuts] member_info failed: {type(exc).__name__}: {exc}")
-                return await ctx.send("❌ تعذر إنشاء صورة معلومات العضو حالياً.", delete_after=7)
+                return await ctx.send("<:failure:1560286464892469380> تعذر إنشاء صورة معلومات العضو حالياً.", delete_after=7)
 
         if key == "give_role":
             if not (
@@ -393,23 +393,23 @@ class Shortcuts(commands.Cog):
                 or author_permissions.administrator
                 or ctx.author.id == ctx.guild.owner_id
             ):
-                return await ctx.send("❌ تحتاج إلى صلاحية إدارة الرتب لاستخدام هذا الاختصار.", delete_after=7)
+                return await ctx.send("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الرتب لاستخدام هذا الاختصار.", delete_after=7)
 
             role_mentions = list(getattr(ctx.message, "role_mentions", []) or [])
             if len(role_mentions) != 1:
                 return await ctx.send(
-                    "❌ يجب تحديد رتبة واحدة مع العضو. مثال: `!رتبة @عضو @رتبة`",
+                    "<:failure:1560286464892469380> يجب تحديد رتبة واحدة مع العضو. مثال: `!رتبة @عضو @رتبة`",
                     delete_after=8,
                 )
 
             role = role_mentions[0]
             if role.is_default() or role.managed:
-                return await ctx.send("❌ لا يمكن إسناد هذه الرتبة.", delete_after=7)
+                return await ctx.send("<:failure:1560286464892469380> لا يمكن إسناد هذه الرتبة.", delete_after=7)
 
             bot_member = ctx.guild.me
             if bot_member is None or role >= bot_member.top_role:
                 return await ctx.send(
-                    "❌ لا يستطيع البوت إسناد هذه الرتبة؛ يجب أن تكون رتبة البوت أعلى منها.",
+                    "<:failure:1560286464892469380> لا يستطيع البوت إسناد هذه الرتبة؛ يجب أن تكون رتبة البوت أعلى منها.",
                     delete_after=8,
                 )
 
@@ -419,13 +419,13 @@ class Shortcuts(commands.Cog):
                 and role >= ctx.author.top_role
             ):
                 return await ctx.send(
-                    "❌ لا يمكنك إسناد رتبة تساوي رتبتك أو تتجاوزها.",
+                    "<:failure:1560286464892469380> لا يمكنك إسناد رتبة تساوي رتبتك أو تتجاوزها.",
                     delete_after=7,
                 )
 
             if role in argument.roles:
                 return await ctx.send(
-                    f"ℹ️ العضو {argument.mention} يمتلك الرتبة {role.mention} بالفعل.",
+                    f"<:required:1558907460763525182> العضو {argument.mention} يمتلك الرتبة {role.mention} بالفعل.",
                     delete_after=7,
                 )
 
@@ -436,25 +436,25 @@ class Shortcuts(commands.Cog):
                 )
             except discord.Forbidden:
                 return await ctx.send(
-                    "❌ تعذّر إسناد الرتبة. تحقّق من صلاحيات البوت وترتيب الرتب.",
+                    "<:failure:1560286464892469380> تعذّر إسناد الرتبة. تحقّق من صلاحيات البوت وترتيب الرتب.",
                     delete_after=8,
                 )
             except discord.HTTPException:
-                return await ctx.send("❌ تعذّر إسناد الرتبة بسبب خطأ من Discord.", delete_after=8)
+                return await ctx.send("<:failure:1560286464892469380> تعذّر إسناد الرتبة بسبب خطأ من Discord.", delete_after=8)
 
             return await ctx.send(
-                f"✅ تم إسناد الرتبة {role.mention} إلى العضو {argument.mention}."
+                f"<:success:1560285005018566757> تم إسناد الرتبة {role.mention} إلى العضو {argument.mention}."
             )
 
         if argument == ctx.author or argument == ctx.guild.owner or argument.top_role >= ctx.author.top_role:
-            return await ctx.send("❌ لا يمكنك تنفيذ هذا الإجراء على هذا العضو.", delete_after=6)
+            return await ctx.send("<:failure:1560286464892469380> لا يمكنك تنفيذ هذا الإجراء على هذا العضو.", delete_after=6)
         try:
             if key == "timeout":
                 await argument.timeout(discord.utils.utcnow() + discord.timedelta(minutes=10), reason=reason or f"تنفيذ الاختصار بواسطة {ctx.author}")
                 return await ctx.send(f"⏱️ تم إعطاء Timeout لـ {argument.mention} لمدة 10 دقائق.")
             if key == "untimeout":
                 await argument.timeout(None, reason=reason or f"تنفيذ الاختصار بواسطة {ctx.author}")
-                return await ctx.send(f"✅ تم إلغاء Timeout لـ {argument.mention}.")
+                return await ctx.send(f"<:success:1560285005018566757> تم إلغاء Timeout لـ {argument.mention}.")
             if key == "kick":
                 await argument.kick(reason=reason or f"تنفيذ الاختصار بواسطة {ctx.author}")
                 return await ctx.send(f"👢 تم طرد {argument.mention}.")
@@ -464,9 +464,9 @@ class Shortcuts(commands.Cog):
             if key == "warn":
                 return await ctx.send(f"⚠️ تحذير {argument.mention}: {reason or 'تحذير إداري.'}")
         except discord.Forbidden:
-            return await ctx.send("❌ لا يملك البوت الصلاحيات اللازمة، أو أن رتبة العضو أعلى من رتبته.", delete_after=7)
+            return await ctx.send("<:no_access:1560284872403062904> لا يملك البوت الصلاحيات اللازمة، أو أن رتبة العضو أعلى من رتبته.", delete_after=7)
         except discord.HTTPException:
-            return await ctx.send("❌ تعذّر تنفيذ العملية بسبب خطأ من Discord.", delete_after=7)
+            return await ctx.send("<:failure:1560286464892469380> تعذّر تنفيذ العملية بسبب خطأ من Discord.", delete_after=7)
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -498,12 +498,12 @@ class Shortcuts(commands.Cog):
                 try:
                     await self.execute(ctx, key, member)
                 except discord.Forbidden:
-                    await message.channel.send("❌ لا يملك البوت الصلاحيات اللازمة لتنفيذ هذا الاختصار.", delete_after=7)
+                    await message.channel.send("<:no_access:1560284872403062904> لا يملك البوت الصلاحيات اللازمة لتنفيذ هذا الاختصار.", delete_after=7)
                 except discord.HTTPException:
-                    await message.channel.send("❌ Discord رفض العملية. تأكد من صلاحيات البوت وإعدادات السيرفر.", delete_after=7)
+                    await message.channel.send("<:failure:1560286464892469380> Discord رفض العملية. تأكد من صلاحيات البوت وإعدادات السيرفر.", delete_after=7)
                 except Exception as exc:
                     print(f"[Shortcuts] unexpected error: {type(exc).__name__}: {exc}")
-                    await message.channel.send("❌ حدث خطأ غير متوقع أثناء تنفيذ الاختصار.", delete_after=7)
+                    await message.channel.send("<:failure:1560286464892469380> حدث خطأ غير متوقع أثناء تنفيذ الاختصار.", delete_after=7)
                 return
 
 
