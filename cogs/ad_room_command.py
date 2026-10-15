@@ -87,7 +87,7 @@ class FixedWriteAdView(WriteAdView):
     @discord.ui.button(label="اكتب إعلانك", emoji="📢", style=discord.ButtonStyle.primary)
     async def write(self, interaction: discord.Interaction, _button: discord.ui.Button):
         if interaction.user.id != self.owner_id:
-            return await interaction.response.send_message("❌ فقط صاحب الروم يمكنه كتابة الإعلان.", ephemeral=True)
+            return await interaction.response.send_message("❌ فقط مالك القناة يمكنه كتابة الإعلان.", ephemeral=True)
         await interaction.response.send_modal(
             FixedAdModal(
                 self.cog,
@@ -140,7 +140,7 @@ class AdRoomCommandOverride(commands.Cog):
             return await ctx.reply("❌ ليست لديك صلاحية استعمال أمر `$اعلان`.", mention_author=False)
 
         if member is None:
-            return await ctx.reply("❌ الاستعمال الصحيح: `$اعلان @user`", mention_author=False)
+            return await ctx.reply("❌ الاستعمال الصحيح: `$اعلان @العضو`", mention_author=False)
         if member.bot:
             return await ctx.reply("❌ لا يمكن إنشاء إعلان لبوت.", mention_author=False)
 
