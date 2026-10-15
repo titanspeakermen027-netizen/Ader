@@ -62,13 +62,13 @@ class CoinFlipView(discord.ui.View):
 
         if won:
             embed = EmbedFactory.success(
-                "🎉 You Won!",
-                f"{interaction.user.mention} bet on **{choice}** and the coin landed on **{result}**!"
+                "🎉 لقد فزت!",
+                f"اختار {interaction.user.mention} **{choice}**، وكانت نتيجة رمي العملة **{result}**."
             )
         else:
             embed = EmbedFactory.error(
-                "You Lost!",
-                f"{interaction.user.mention} bet on **{choice}** but the coin landed on **{result}**!"
+                "لم تفز هذه المرة!",
+                f"اختار {interaction.user.mention} **{choice}**، لكن نتيجة رمي العملة كانت **{result}**."
             )
 
         await interaction.response.send_message(embed=embed)
@@ -105,14 +105,14 @@ class TriviaView(discord.ui.View):
             if correct:
                 await self.cog.db.add_balance(interaction.user.id, interaction.guild.id, 50)
                 embed = EmbedFactory.success(
-                    "Correct! 🎉",
-                    f"{interaction.user.mention} got it right!\nYou earned **💎 50**!"
+                    "إجابة صحيحة! 🎉",
+                    f"أجاب {interaction.user.mention} إجابة صحيحة!\nحصلت على **💎 50**!"
                 )
             else:
                 correct_answer = self.question_data['options'][self.question_data['answer']]
                 embed = EmbedFactory.error(
-                    "Incorrect! ❌",
-                    f"The correct answer was: **{correct_answer}**"
+                    "إجابة غير صحيحة! ❌",
+                    f"الإجابة الصحيحة هي: **{correct_answer}**"
                 )
 
             for child in self.children:
@@ -135,11 +135,11 @@ class EightBallView(discord.ui.View):
     async def ask_8ball(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Ask 8ball"""
         responses = [
-            "Yes, definitely!", "It is certain.", "Without a doubt.",
-            "Most likely.", "Outlook good.", "Signs point to yes.",
-            "Reply hazy, try again.", "Ask again later.",
-            "Cannot predict now.", "Don't count on it.",
-            "My reply is no.", "Outlook not so good.", "Very doubtful."
+            "نعم، بالتأكيد!", "الأمر مؤكد.", "بلا شك.",
+            "على الأرجح.", "المؤشرات إيجابية.", "تشير الدلائل إلى نعم.",
+            "الإجابة غير واضحة، حاول مجددًا.", "أعد السؤال لاحقًا.",
+            "لا يمكن التنبؤ الآن.", "لا تعتمد على ذلك.",
+            "إجابتي هي لا.", "المؤشرات ليست جيدة.", "هذا مستبعد جدًا."
         ]
 
         response = random.choice(responses)
@@ -190,77 +190,77 @@ class Games(commands.Cog):
         """Load trivia questions"""
         return [
             {
-                "question": "What year was Python first released?",
+                "question": "في أي عام صدرت لغة Python لأول مرة؟",
                 "options": ["1989", "1991", "1995", "2000"],
                 "answer": 1
             },
             {
                 "question": "What does CPU stand for?",
-                "options": ["Central Processing Unit", "Computer Personal Unit", "Central Process Union", "Computer Processing Unit"],
+                "options": ["وحدة المعالجة المركزية", "وحدة الحاسوب الشخصية", "اتحاد المعالجة المركزي", "وحدة معالجة الحاسوب"],
                 "answer": 0
             },
             {
-                "question": "Who created Linux?",
+                "question": "من أنشأ نظام Linux؟",
                 "options": ["Bill Gates", "Linus Torvalds", "Steve Jobs", "Dennis Ritchie"],
                 "answer": 1
             },
             {
-                "question": "What is the maximum value of a 32-bit signed integer?",
+                "question": "ما أكبر قيمة لعدد صحيح موقّع من 32 بت؟",
                 "options": ["2,147,483,647", "4,294,967,295", "65,535", "2,147,483,648"],
                 "answer": 0
             },
             {
-                "question": "Which programming language is known as the 'mother of all languages'?",
+                "question": "أي لغة برمجة تُعرف باسم أمّ اللغات؟",
                 "options": ["C", "Assembly", "Fortran", "COBOL"],
                 "answer": 0
             },
             {
-                "question": "What does HTML stand for?",
-                "options": ["Hyper Text Markup Language", "High Tech Modern Language", "Home Tool Markup Language", "Hyperlinks and Text Markup Language"],
+                "question": "إلى ماذا يشير اختصار HTML؟",
+                "options": ["لغة ترميز النص التشعبي", "لغة التقنية الحديثة المتقدمة", "لغة ترميز أدوات المنزل", "لغة ترميز الروابط التشعبية والنصوص"],
                 "answer": 0
             },
             {
-                "question": "Who is known as the father of computers?",
+                "question": "من يُعرف بأبي الحاسوب؟",
                 "options": ["Charles Babbage", "Alan Turing", "Bill Gates", "Steve Jobs"],
                 "answer": 0
             },
             {
-                "question": "What year was the first iPhone released?",
+                "question": "في أي عام صدر أول هاتف iPhone؟",
                 "options": ["2005", "2006", "2007", "2008"],
                 "answer": 2
             },
             {
-                "question": "What does RAM stand for?",
-                "options": ["Random Access Memory", "Read Access Memory", "Rapid Access Memory", "Run Access Memory"],
+                "question": "إلى ماذا يشير اختصار RAM؟",
+                "options": ["ذاكرة الوصول العشوائي", "ذاكرة الوصول للقراءة", "ذاكرة الوصول السريع", "ذاكرة الوصول أثناء التشغيل"],
                 "answer": 0
             },
             {
-                "question": "Which company created JavaScript?",
+                "question": "ما الشركة التي أنشأت JavaScript؟",
                 "options": ["Microsoft", "Netscape", "Google", "Apple"],
                 "answer": 1
             },
             {
-                "question": "What is the capital of France?",
+                "question": "ما عاصمة فرنسا؟",
                 "options": ["London", "Berlin", "Paris", "Madrid"],
                 "answer": 2
             },
             {
-                "question": "How many continents are there?",
+                "question": "كم عدد القارات؟",
                 "options": ["5", "6", "7", "8"],
                 "answer": 2
             },
             {
-                "question": "What is the largest planet in our solar system?",
+                "question": "ما أكبر كوكب في مجموعتنا الشمسية؟",
                 "options": ["Earth", "Mars", "Jupiter", "Saturn"],
                 "answer": 2
             },
             {
-                "question": "Who painted the Mona Lisa?",
+                "question": "من رسم لوحة الموناليزا؟",
                 "options": ["Vincent van Gogh", "Pablo Picasso", "Leonardo da Vinci", "Michelangelo"],
                 "answer": 2
             },
             {
-                "question": "What is the speed of light?",
+                "question": "ما سرعة الضوء؟",
                 "options": ["299,792 km/s", "150,000 km/s", "500,000 km/s", "1,000,000 km/s"],
                 "answer": 0
             }
@@ -273,10 +273,10 @@ class Games(commands.Cog):
         embed = EmbedFactory.create(
             title="🎮 مركز الألعاب",
             description="اضغط على الأزرار أدناه للعب!\n\n"
-                       "🎲 **Dice** - Roll a dice\n"
-                       "🪙 **Coinflip** - Flip a coin\n"
-                       "🧠 **Trivia** - Test your knowledge (Win 💎 50!)\n"
-                       "🔮 **8-Ball** - Ask a question",
+                       "🎲 **النرد** - ارمِ النرد\n"
+                       "🪙 **رمي العملة** - اختر صورة أو كتابة\n"
+                       "🧠 **الأسئلة العامة** - اختبر معلوماتك واربح 💎 50\n"
+                       "🔮 **كرة الحظ السحرية** - اطرح سؤالًا",
             color=EmbedColor.INFO
         )
 
@@ -296,7 +296,7 @@ class Games(commands.Cog):
         await interaction.channel.send(embed=trivia_embed, view=TriviaStartView(self))
 
         # 8-Ball
-        ball_embed = EmbedFactory.create(title="🔮 كرة الحظ السحرية", description="Ask the magic 8-ball a question!", color=EmbedColor.INFO)
+        ball_embed = EmbedFactory.create(title="🔮 كرة الحظ السحرية", description="اطرح سؤالًا على كرة الحظ السحرية!", color=EmbedColor.INFO)
         await interaction.channel.send(embed=ball_embed, view=EightBallView(self))
 
         await interaction.response.send_message(
@@ -355,7 +355,7 @@ class Games(commands.Cog):
             )
             return
 
-        embed = EmbedFactory.leaderboard("XP Leaderboard", leaderboard, field_name="xp", color=EmbedColor.LEVELING)
+        embed = EmbedFactory.leaderboard("لوحة متصدري النقاط", leaderboard, field_name="xp", color=EmbedColor.LEVELING)
         await interaction.response.send_message(embed=embed)
 
 
