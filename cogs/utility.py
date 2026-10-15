@@ -218,7 +218,7 @@ class Utility(commands.Cog):
             description="يعمل البوت بشكل طبيعي ✅",
             color=discord.Color.green(),
         )
-        embed.add_field(name="📡 Ping", value=f"`{latency}ms`", inline=True)
+        embed.add_field(name="📡 زمن الاستجابة", value=f"`{latency} مللي ثانية`", inline=True)
         embed.add_field(name="🏠 السيرفرات", value=f"`{len(self.bot.guilds)}`", inline=True)
         if bot_user:
             embed.set_thumbnail(url=bot_user.display_avatar.url)
