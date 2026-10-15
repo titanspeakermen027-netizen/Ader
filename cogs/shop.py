@@ -33,10 +33,10 @@ class ShopSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
-            return await interaction.response.send_message("❌ هذه القائمة ليست لك.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> هذه القائمة ليست لك.", ephemeral=True)
         item = await self.cog._get_item(interaction.guild.id, int(self.values[0]))
         if not item:
-            return await interaction.response.send_message("❌ هذا المنتج لم يعد موجوداً.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> هذا المنتج لم يعد موجوداً.", ephemeral=True)
         await interaction.response.send_message(embed=self.cog._item_embed(item), view=PurchaseView(self.cog, item["id"], self.user_id), ephemeral=True)
 
 
@@ -56,7 +56,7 @@ class PurchaseView(discord.ui.View):
     @discord.ui.button(label="شراء", emoji="🛒", style=discord.ButtonStyle.success)
     async def buy(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user_id:
-            return await interaction.response.send_message("❌ هذه العملية ليست لك.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> هذه العملية ليست لك.", ephemeral=True)
         ok, message = await self.cog._purchase(interaction.guild.id, interaction.user.id, self.item_id)
         if ok:
             await interaction.response.edit_message(embed=EmbedFactory.success("تم الشراء", message), view=None)
@@ -66,8 +66,8 @@ class PurchaseView(discord.ui.View):
     @discord.ui.button(label="إلغاء", emoji="✖️", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user_id:
-            return await interaction.response.send_message("❌ هذه العملية ليست لك.", ephemeral=True)
-        await interaction.response.edit_message(content="❌ تم إلغاء عملية الشراء.", embed=None, view=None)
+            return await interaction.response.send_message("<:failure:1560286464892469380> هذه العملية ليست لك.", ephemeral=True)
+        await interaction.response.edit_message(content="<:failure:1560286464892469380> تم إلغاء عملية الشراء.", embed=None, view=None)
 
 
 class Shop(commands.Cog):
@@ -155,7 +155,7 @@ class Shop(commands.Cog):
     @app_commands.checks.has_permissions(manage_guild=True)
     async def shop_add(self, interaction: discord.Interaction, name: str, price: int, description: str, stock: int = -1):
         if price <= 0 or stock < -1:
-            return await interaction.response.send_message("❌ السعر يجب أن يكون موجباً والمخزون -1 أو أكبر.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> السعر يجب أن يكون موجباً والمخزون -1 أو أكبر.", ephemeral=True)
         await self.db.execute(
             "INSERT INTO shop(guild_id,name,price,data) VALUES(?,?,?,?)",
             (interaction.guild.id, name[:100], price, json.dumps({"description": description[:1000], "stock": stock}, ensure_ascii=False)),
@@ -169,7 +169,7 @@ class Shop(commands.Cog):
     async def shop_remove(self, interaction: discord.Interaction, item_id: int):
         cur = await self.db.execute("DELETE FROM shop WHERE guild_id=? AND id=?", (interaction.guild.id, item_id))
         if cur.rowcount == 0:
-            return await interaction.response.send_message("❌ المنتج غير موجود.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> المنتج غير موجود.", ephemeral=True)
         await interaction.response.send_message(embed=EmbedFactory.success("تم حذف المنتج", f"تم حذف المنتج `#{item_id}`."), ephemeral=True)
 
     @app_commands.command(name="shop-edit", description="تعديل منتج في متجر ANORIS")
@@ -179,11 +179,11 @@ class Shop(commands.Cog):
     async def shop_edit(self, interaction: discord.Interaction, item_id: int, name: str | None = None, price: int | None = None, description: str | None = None, stock: int | None = None):
         item = await self._get_item(interaction.guild.id, item_id)
         if not item:
-            return await interaction.response.send_message("❌ المنتج غير موجود.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> المنتج غير موجود.", ephemeral=True)
         if price is not None and price <= 0:
-            return await interaction.response.send_message("❌ السعر يجب أن يكون موجباً.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> السعر يجب أن يكون موجباً.", ephemeral=True)
         if stock is not None and stock < -1:
-            return await interaction.response.send_message("❌ المخزون يجب أن يكون -1 أو أكبر.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> المخزون يجب أن يكون -1 أو أكبر.", ephemeral=True)
         data = self._item_data(item)
         if description is not None:
             data["description"] = description[:1000]
@@ -198,13 +198,13 @@ class Shop(commands.Cog):
         await self.db.create_user(user_id, guild_id)
         conn = self.db.connection
         if conn is None:
-            return False, "❌ قاعدة البيانات غير متصلة."
+            return False, "<:failure:1560286464892469380> قاعدة البيانات غير متصلة."
         try:
             await conn.execute("BEGIN IMMEDIATE")
             row = await (await conn.execute("SELECT * FROM shop WHERE guild_id=? AND id=?", (guild_id, item_id))).fetchone()
             if not row:
                 await conn.rollback()
-                return False, "❌ المنتج لم يعد موجوداً."
+                return False, "<:failure:1560286464892469380> المنتج لم يعد موجوداً."
             item = dict(row)
             data = self._item_data(item)
             stock = int(data.get("stock", -1))
@@ -213,20 +213,20 @@ class Shop(commands.Cog):
             balance = int(balance_row[0]) if balance_row else 0
             if balance < price:
                 await conn.rollback()
-                return False, f"❌ رصيدك غير كافٍ. تحتاج **{price:,} {self.currency_name}** ورصيدك الحالي **{balance:,} {self.currency_name}**."
+                return False, f"<:failure:1560286464892469380> رصيدك غير كافٍ. تحتاج **{price:,} {self.currency_name}** ورصيدك الحالي **{balance:,} {self.currency_name}**."
             if stock == 0:
                 await conn.rollback()
-                return False, "❌ هذا المنتج نفد من المخزون."
+                return False, "<:failure:1560286464892469380> هذا المنتج نفد من المخزون."
             if stock > 0:
                 data["stock"] = stock - 1
                 cur = await conn.execute("UPDATE shop SET data=? WHERE id=? AND guild_id=?", (json.dumps(data, ensure_ascii=False), item_id, guild_id))
                 if cur.rowcount != 1:
                     await conn.rollback()
-                    return False, "❌ تعذر تحديث المخزون. حاول مرة أخرى."
+                    return False, "<:failure:1560286464892469380> تعذر تحديث المخزون. حاول مرة أخرى."
             cur = await conn.execute("UPDATE global_balances SET balance=balance-? WHERE user_id=? AND balance>=?", (price, user_id, price))
             if cur.rowcount != 1:
                 await conn.rollback()
-                return False, "❌ تغير رصيدك قبل إتمام الشراء. حاول مرة أخرى."
+                return False, "<:failure:1560286464892469380> تغير رصيدك قبل إتمام الشراء. حاول مرة أخرى."
             user_row = await (await conn.execute("SELECT inventory FROM users WHERE user_id=? AND guild_id=?", (user_id, guild_id))).fetchone()
             inventory = json.loads(user_row[0] or "[]") if user_row else []
             inventory.append({"shop_item_id": item_id, "name": item["name"], "price": price, "purchased_at": int(time.time())})
@@ -250,7 +250,7 @@ class Shop(commands.Cog):
                 await conn.rollback()
             except Exception:
                 pass
-            return False, "❌ وقع خطأ أثناء الشراء. لم يتم خصم أي رصيد."
+            return False, "<:failure:1560286464892469380> وقع خطأ أثناء الشراء. لم يتم خصم أي رصيد."
 
 
 async def setup(bot: commands.Bot):
