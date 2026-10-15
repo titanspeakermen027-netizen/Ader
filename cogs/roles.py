@@ -59,7 +59,7 @@ class RoleMenuSetupModal(discord.ui.Modal, title="إنشاء قائمة رتب")
         import re
         
         # Parse exclusive setting
-        is_exclusive = self.exclusive.value.lower() in ['yes', 'y', 'true']
+        is_exclusive = self.exclusive.value.strip().lower() in ['yes', 'y', 'true', 'نعم', 'أجل', 'اجل', 'صحيح']
 
         # Parse role mentions
         role_list = []
@@ -367,7 +367,7 @@ class Roles(commands.Cog):
     ):
         """Create role menu directly with slash command"""
         target_channel = channel or interaction.channel
-        is_exclusive = exclusive.lower() in ['yes', 'y', 'true']
+        is_exclusive = exclusive.strip().lower() in ['yes', 'y', 'true', 'نعم', 'أجل', 'اجل', 'صحيح']
         
         # Collect all roles
         roles = [role1]
