@@ -237,7 +237,7 @@ class ProfileCard(commands.Cog):
 
         if len(parts) > 2:
             await message.reply(
-                "❌ الاستعمال: P أو P @العضو أو P ID",
+                "<:failure:1560286464892469380> الاستعمال: P أو P @العضو أو P ID",
                 mention_author=False,
                 delete_after=8,
                 allowed_mentions=discord.AllowedMentions.none(),
@@ -257,7 +257,7 @@ class ProfileCard(commands.Cog):
 
         if len(parts) == 2 and target is None:
             await message.reply(
-                "❌ لم يتم العثور على هذا العضو. استخدم `P @العضو` أو `P <المعرّف>`. ",
+                "<:failure:1560286464892469380> لم يتم العثور على هذا العضو. استخدم `P @العضو` أو `P <المعرّف>`. ",
                 mention_author=False,
                 delete_after=8,
                 allowed_mentions=discord.AllowedMentions.none(),
@@ -273,7 +273,7 @@ class ProfileCard(commands.Cog):
 
         if member is None:
             await ctx.send(
-                "❌ الاستعمال: !rep @العضو/ID أو /rep ثم اختر العضو.",
+                "<:failure:1560286464892469380> الاستعمال: !rep @العضو/ID أو /rep ثم اختر العضو.",
                 allowed_mentions=discord.AllowedMentions.none(),
                 delete_after=8 if ctx.interaction is None else None,
             )
@@ -281,7 +281,7 @@ class ProfileCard(commands.Cog):
 
         if member.bot:
             await ctx.send(
-                "❌ لا يمكنك إعطاء السمعة للبوتات.",
+                "<:failure:1560286464892469380> لا يمكنك إعطاء السمعة للبوتات.",
                 allowed_mentions=discord.AllowedMentions.none(),
                 delete_after=8 if ctx.interaction is None else None,
             )
@@ -289,7 +289,7 @@ class ProfileCard(commands.Cog):
 
         if member.id == ctx.author.id:
             await ctx.send(
-                "❌ لا يمكنك إعطاء السمعة لنفسك.",
+                "<:failure:1560286464892469380> لا يمكنك إعطاء السمعة لنفسك.",
                 allowed_mentions=discord.AllowedMentions.none(),
                 delete_after=8 if ctx.interaction is None else None,
             )
@@ -351,7 +351,7 @@ class ProfileCard(commands.Cog):
         reputation = int(row["reputation"]) if row else 1
 
         await ctx.send(
-            f"✅ {ctx.author.mention} عطى +1 REP لـ {member.mention}.\n"
+            f"<:success:1560285005018566757> {ctx.author.mention} عطى +1 REP لـ {member.mention}.\n"
             f"📈 السمعة الحالية لـ {member.display_name}: {reputation:+d} REP",
             allowed_mentions=discord.AllowedMentions(users=[ctx.author, member]),
         )
