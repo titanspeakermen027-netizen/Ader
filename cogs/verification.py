@@ -18,12 +18,12 @@ from database.db_manager import DatabaseManager
 logger = logging.getLogger(__name__)
 
 
-class VerificationSetupModal(discord.ui.Modal, title="Verification Setup"):
+class VerificationSetupModal(discord.ui.Modal, title="إعداد نظام التحقق"):
     """Modal for setting up verification with welcome message"""
 
     welcome_message = discord.ui.TextInput(
-        label="Welcome Message",
-        placeholder="Use {username} for name, {user} for @mention. Type channel names like: verify-channel",
+        label="رسالة الترحيب",
+        placeholder="استخدم {username} لاسم العضو و{user} للإشارة إليه. يمكنك كتابة اسم القناة مثل: verify-channel",
         style=discord.TextStyle.paragraph,
         required=True,
         max_length=2000
@@ -86,13 +86,13 @@ class VerificationButton(discord.ui.View):
         super().__init__(timeout=None)
         self.cog = cog
 
-    @discord.ui.button(label="Verify", style=discord.ButtonStyle.green, custom_id="verify_button", emoji="✅")
+    @discord.ui.button(label="تحقّق", style=discord.ButtonStyle.green, custom_id="verify_button", emoji="✅")
     async def verify_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Handle verification button click"""
         await self.cog.verify_user(interaction)
 
 
-class CaptchaModal(discord.ui.Modal, title="Verification Captcha"):
+class CaptchaModal(discord.ui.Modal, title="رمز التحقق"):
     """Captcha verification modal"""
 
     def __init__(self, correct_code: str, cog: 'Verification'):
@@ -101,8 +101,8 @@ class CaptchaModal(discord.ui.Modal, title="Verification Captcha"):
         self.cog = cog
 
     captcha_code = discord.ui.TextInput(
-        label="Enter the code shown",
-        placeholder="Enter captcha code",
+        label="أدخل الرمز الظاهر",
+        placeholder="أدخل رمز التحقق",
         required=True,
         max_length=6
     )
@@ -113,7 +113,7 @@ class CaptchaModal(discord.ui.Modal, title="Verification Captcha"):
             await self.cog.verify_user(interaction)
         else:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Verification Failed", "Incorrect captcha code. Please try again."),
+                embed=EmbedFactory.error("فشل التحقق", "رمز التحقق غير صحيح. يرجى المحاولة مرة أخرى."),
                 ephemeral=True
             )
 
@@ -163,7 +163,7 @@ class Verification(commands.Cog):
             if welcome_channel:
                 # Make sure everyone can see the welcome channel
                 welcome_embed = EmbedFactory.create(
-                    title=f"👋 Welcome to {member.guild.name}!",
+                    title=f"👋 مرحبًا بك في {member.guild.name}!",
                     description=f"{member.mention}\n\n{welcome_message}",
                     color=EmbedColor.SUCCESS
                 )
@@ -183,8 +183,8 @@ class Verification(commands.Cog):
                 try:
                     if verification_type == 'button':
                         embed = EmbedFactory.create(
-                            title=f"🔐 Verification",
-                            description=f"{member.mention}, click the button below to verify.",
+                            title=f"🔐 التحقق",
+                            description=f"{member.mention}، اضغط على الزر أدناه لإتمام التحقق.",
                             color=EmbedColor.PRIMARY
                         )
                         view = VerificationButton(self)
@@ -201,10 +201,10 @@ class Verification(commands.Cog):
                                 self.code = verification_code
                                 self.cog = cog
                             
-                            @discord.ui.button(label="Show My Code", style=discord.ButtonStyle.primary, emoji="🔐")
+                            @discord.ui.button(label="عرض الرمز الخاص بي", style=discord.ButtonStyle.primary, emoji="🔐")
                             async def show_code(self, interaction: discord.Interaction, button: discord.ui.Button):
                                 if interaction.user.id != self.user_id:
-                                    await interaction.response.send_message("This is not for you!", ephemeral=True)
+                                    await interaction.response.send_message("هذا الإجراء غير مخصص لك.", ephemeral=True)
                                     return
                                 await interaction.response.send_message(
                                     f"Your verification code: `{self.code}`\n\nClick the button below to enter it.",
@@ -219,17 +219,17 @@ class Verification(commands.Cog):
                                 self.code = verification_code
                                 self.cog = cog
                             
-                            @discord.ui.button(label="Enter Code", style=discord.ButtonStyle.success, emoji="✅")
+                            @discord.ui.button(label="إدخال الرمز", style=discord.ButtonStyle.success, emoji="✅")
                             async def enter_code(self, interaction: discord.Interaction, button: discord.ui.Button):
                                 if interaction.user.id != self.user_id:
-                                    await interaction.response.send_message("This is not for you!", ephemeral=True)
+                                    await interaction.response.send_message("هذا الإجراء غير مخصص لك.", ephemeral=True)
                                     return
                                 modal = CaptchaModal(self.code, self.cog)
                                 await interaction.response.send_modal(modal)
                         
                         embed = EmbedFactory.create(
-                            title=f"🔐 Verification",
-                            description=f"{member.mention}, click the button below to see your verification code (only you will see it).",
+                            title=f"🔐 التحقق",
+                            description=f"{member.mention}، اضغط على الزر أدناه لعرض رمز التحقق الخاص بك. لن يتمكن من رؤيته سواك.",
                             color=EmbedColor.PRIMARY
                         )
                         
@@ -244,7 +244,7 @@ class Verification(commands.Cog):
         try:
             if verification_type == 'button':
                 embed = EmbedFactory.create(
-                    title=f"🔐 Welcome to {member.guild.name}",
+                    title=f"🔐 مرحبًا بك في {member.guild.name}",
                     description=welcome_message,
                     color=EmbedColor.PRIMARY
                 )
@@ -255,17 +255,17 @@ class Verification(commands.Cog):
             elif verification_type == 'captcha':
                 code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
                 embed = EmbedFactory.create(
-                    title=f"🔐 Welcome to {member.guild.name}",
-                    description=f"{welcome_message}\n\n**Your verification code:** `{code}`\n\nClick the button below and enter this code.",
+                    title=f"🔐 مرحبًا بك في {member.guild.name}",
+                    description=f"{welcome_message}\n\n**رمز التحقق الخاص بك:** `{code}`\n\nاضغط على الزر أدناه وأدخل هذا الرمز.",
                     color=EmbedColor.PRIMARY
                 )
                 embed.set_thumbnail(url=member.guild.icon.url if member.guild.icon else None)
 
-                button = discord.ui.Button(label="Enter Code", style=discord.ButtonStyle.green, custom_id=f"captcha_{member.id}")
+                button = discord.ui.Button(label="إدخال الرمز", style=discord.ButtonStyle.green, custom_id=f"captcha_{member.id}")
 
                 async def captcha_callback(interaction: discord.Interaction):
                     if interaction.user.id != member.id:
-                        await interaction.response.send_message("This verification is not for you!", ephemeral=True)
+                        await interaction.response.send_message("عملية التحقق هذه غير مخصصة لك.", ephemeral=True)
                         return
                     modal = CaptchaModal(code, self)
                     await interaction.response.send_modal(modal)
@@ -296,7 +296,7 @@ class Verification(commands.Cog):
         guild_config = await self.db.get_guild(interaction.guild.id)
         if not guild_config:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "Server not configured"),
+                embed=EmbedFactory.error("خطأ", "لم يتم إعداد الخادم بعد."),
                 ephemeral=True
             )
             return
@@ -304,7 +304,7 @@ class Verification(commands.Cog):
         verified_role_id = guild_config.get('verified_role')
         if not verified_role_id:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "Verified role not configured"),
+                embed=EmbedFactory.error("خطأ", "لم يتم إعداد رتبة التحقق."),
                 ephemeral=True
             )
             return
@@ -312,14 +312,14 @@ class Verification(commands.Cog):
         verified_role = interaction.guild.get_role(verified_role_id)
         if not verified_role:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "Verified role not found"),
+                embed=EmbedFactory.error("خطأ", "لم يتم العثور على رتبة التحقق."),
                 ephemeral=True
             )
             return
 
         if verified_role in interaction.user.roles:
             await interaction.response.send_message(
-                embed=EmbedFactory.info("Already Verified", "You are already verified!"),
+                embed=EmbedFactory.info("تم التحقق بالفعل", "لقد أكملت التحقق بالفعل."),
                 ephemeral=True
             )
             return
@@ -342,17 +342,17 @@ class Verification(commands.Cog):
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "I don't have permission to assign roles"),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية إسناد الرتب."),
                 ephemeral=True
             )
         except Exception as e:
             logger.error(f"Error verifying user: {e}", exc_info=True)
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "An error occurred during verification"),
+                embed=EmbedFactory.error("خطأ", "حدث خطأ أثناء عملية التحقق."),
                 ephemeral=True
             )
 
-    @app_commands.command(name="setup-verification", description="Setup verification system (Admin)")
+    @app_commands.command(name="setup-verification", description="إعداد نظام التحقق (للمسؤولين)")
     @app_commands.describe(
         role="Role to assign upon verification",
         welcome_channel="Channel to send welcome messages",
@@ -375,21 +375,21 @@ class Verification(commands.Cog):
         
         if method not in ['dm', 'channel']:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Invalid Method", "Method must be 'dm' or 'channel'"),
+                embed=EmbedFactory.error("طريقة غير صالحة", "يجب أن تكون الطريقة إما dm أو channel."),
                 ephemeral=True
             )
             return
         
         if method == 'channel' and not verify_channel:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Missing Channel", "You must specify a verify_channel when using 'channel' method"),
+                embed=EmbedFactory.error("القناة مطلوبة", "يجب تحديد قناة التحقق عند اختيار الطريقة channel."),
                 ephemeral=True
             )
             return
         
         if verification_type not in ['button', 'captcha']:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Invalid Type", "Verification type must be 'button' or 'captcha'"),
+                embed=EmbedFactory.error("نوع غير صالح", "يجب أن يكون نوع التحقق button أو captcha."),
                 ephemeral=True
             )
             return
@@ -398,8 +398,8 @@ class Verification(commands.Cog):
         modal = VerificationSetupModal(self, role, welcome_channel, method, verify_channel, verification_type)
         await interaction.response.send_modal(modal)
 
-    @app_commands.command(name="set-welcome-message", description="Set custom welcome DM message (Admin)")
-    @app_commands.describe(message="Custom welcome message for new members")
+    @app_commands.command(name="set-welcome-message", description="تعيين رسالة ترحيب خاصة تُرسل في الخاص (للمسؤولين)")
+    @app_commands.describe(message="رسالة الترحيب المخصصة للأعضاء الجدد")
     @is_admin()
     async def set_welcome_message(self, interaction: discord.Interaction, message: str):
         """Set custom welcome message for verification DMs (ADMIN ONLY)"""
@@ -419,14 +419,14 @@ class Verification(commands.Cog):
         await interaction.response.send_message(embed=embed)
         logger.info(f"Welcome message updated in {interaction.guild}")
 
-    @app_commands.command(name="send-verification", description="Send verification button in current channel (Admin)")
+    @app_commands.command(name="send-verification", description="إرسال زر التحقق في القناة الحالية (للمسؤولين)")
     @is_admin()
     async def send_verification(self, interaction: discord.Interaction):
         """Manually send verification button to current channel (ADMIN ONLY)"""
         guild_config = await self.db.get_guild(interaction.guild.id)
         if not guild_config or not guild_config.get('verified_role'):
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Not Configured", "Please setup verification first with /setup-verification"),
+                embed=EmbedFactory.error("لم يتم الإعداد", "يرجى إعداد نظام التحقق أولًا باستخدام /setup-verification."),
                 ephemeral=True
             )
             return
@@ -435,7 +435,7 @@ class Verification(commands.Cog):
         view = VerificationButton(self)
         await interaction.channel.send(embed=embed, view=view)
         await interaction.response.send_message(
-            embed=EmbedFactory.success("Sent", "Verification button sent to this channel!"),
+            embed=EmbedFactory.success("تم الإرسال", "تم إرسال زر التحقق إلى هذه القناة."),
             ephemeral=True
         )
 
