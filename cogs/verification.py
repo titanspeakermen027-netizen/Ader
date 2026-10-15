@@ -65,7 +65,7 @@ class VerificationSetupModal(discord.ui.Modal, title="إعداد نظام الت
             location_text = "via DM"
         
         embed = EmbedFactory.success(
-            "✅ Verification Setup Complete",
+            "<:success:1560285005018566757> Verification Setup Complete",
             f"**Verified Role:** {self.role.mention}\n"
             f"**Welcome Channel:** {self.welcome_channel.mention}\n"
             f"{method_text}\n"
@@ -86,7 +86,7 @@ class VerificationButton(discord.ui.View):
         super().__init__(timeout=None)
         self.cog = cog
 
-    @discord.ui.button(label="تحقّق", style=discord.ButtonStyle.green, custom_id="verify_button", emoji="✅")
+    @discord.ui.button(label="تحقّق", style=discord.ButtonStyle.green, custom_id="verify_button", emoji="<:success:1560285005018566757>")
     async def verify_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Handle verification button click"""
         await self.cog.verify_user(interaction)
@@ -219,7 +219,7 @@ class Verification(commands.Cog):
                                 self.code = verification_code
                                 self.cog = cog
                             
-                            @discord.ui.button(label="إدخال الرمز", style=discord.ButtonStyle.success, emoji="✅")
+                            @discord.ui.button(label="إدخال الرمز", style=discord.ButtonStyle.success, emoji="<:success:1560285005018566757>")
                             async def enter_code(self, interaction: discord.Interaction, button: discord.ui.Button):
                                 if interaction.user.id != self.user_id:
                                     await interaction.response.send_message("هذا الإجراء غير مخصص لك.", ephemeral=True)
@@ -331,7 +331,7 @@ class Verification(commands.Cog):
             # Send private success message
             await interaction.response.send_message(
                 embed=EmbedFactory.success(
-                    "✅ Verified Successfully!",
+                    "<:success:1560285005018566757> Verified Successfully!",
                     f"Welcome to **{interaction.guild.name}**!\n\nYou now have access to all channels."
                 ),
                 ephemeral=True
@@ -422,7 +422,7 @@ class Verification(commands.Cog):
         })
 
         embed = EmbedFactory.success(
-            "✅ Welcome Message Updated",
+            "<:success:1560285005018566757> Welcome Message Updated",
             f"**New Welcome Message:**\n{message}\n\n"
             "This will be sent in DMs to new members along with the verification button."
         )
