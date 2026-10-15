@@ -59,16 +59,18 @@ class CoinFlipView(discord.ui.View):
         """Flip coin logic"""
         result = random.choice(["heads", "tails"])
         won = result == choice
+        choice_label = "صورة" if choice == "heads" else "كتابة"
+        result_label = "صورة" if result == "heads" else "كتابة"
 
         if won:
             embed = EmbedFactory.success(
                 "🎉 لقد فزت!",
-                f"اختار {interaction.user.mention} **{choice}**، وكانت نتيجة رمي العملة **{result}**."
+                f"اختار {interaction.user.mention} **{choice_label}**، وكانت نتيجة رمي العملة **{result_label}**."
             )
         else:
             embed = EmbedFactory.error(
                 "لم تفز هذه المرة!",
-                f"اختار {interaction.user.mention} **{choice}**، لكن نتيجة رمي العملة كانت **{result}**."
+                f"اختار {interaction.user.mention} **{choice_label}**، لكن نتيجة رمي العملة كانت **{result_label}**."
             )
 
         await interaction.response.send_message(embed=embed)
