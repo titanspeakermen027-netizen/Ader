@@ -39,7 +39,7 @@ class RoomSelect(discord.ui.Select):
                     value=str(row["channel_id"]),
                 )
             )
-        super().__init__(placeholder="اختار روم الإعلان", options=options, min_values=1, max_values=1)
+        super().__init__(placeholder="اختر قناة الإعلان", options=options, min_values=1, max_values=1)
         self.cog, self.actor_id, self.owner_id = cog, actor_id, owner_id
 
     async def callback(self, interaction: discord.Interaction):
@@ -47,7 +47,7 @@ class RoomSelect(discord.ui.Select):
             return await interaction.response.send_message("❌ هذا التحكم ليس لك.", ephemeral=True)
         channel_id = int(self.values[0])
         await interaction.response.edit_message(
-            content="**اختر نوع المنشن حق الروم**",
+            content="**اختر نوع الإشارة الخاصة بالقناة**",
             view=PrefixAdView(self.cog, self.actor_id, self.owner_id, channel_id, self.cog.control_message_id(interaction.message)),
         )
 
@@ -60,7 +60,7 @@ class RoomSelectView(discord.ui.View):
 
 class AdModal(discord.ui.Modal, title="اكتب إعلانك"):
     text = discord.ui.TextInput(label="اكتب إعلانك", style=discord.TextStyle.paragraph, max_length=4000)
-    name = discord.ui.TextInput(label="اسم الروم", max_length=90)
+    name = discord.ui.TextInput(label="اسم القناة", max_length=90)
 
     def __init__(self, cog, owner_id: int, channel_id: int, mention: str, actor_id: int, control_message_id: int | None = None):
         super().__init__(custom_id=f"ader:admodal:{channel_id}:{actor_id}")
@@ -77,7 +77,7 @@ class AdModal(discord.ui.Modal, title="اكتب إعلانك"):
         row = await self.cog.db.fetchone("SELECT * FROM ad_rooms WHERE channel_id=? AND active=1", (self.channel_id,))
         channel = interaction.guild.get_channel(self.channel_id) if interaction.guild else None
         if not row or int(row["owner_id"]) != self.owner_id or not isinstance(channel, discord.TextChannel):
-            return await interaction.response.send_message("❌ الروم غير موجود.", ephemeral=True)
+            return await interaction.response.send_message("❌ القناة غير موجودة.", ephemeral=True)
         try:
             await channel.edit(name=clean_name(str(self.name.value)), reason="Ader advertisement")
             mention_text = "@everyone" if self.mention == "everyone" else "@here"
@@ -152,7 +152,7 @@ class AdPanel(discord.ui.View):
 
     async def check(self, interaction: discord.Interaction):
         if interaction.user.id != self.owner_id:
-            await interaction.response.send_message("❌ هذه اللوحة مخصصة لصاحب الروم فقط.", ephemeral=True)
+            await interaction.response.send_message("❌ هذه اللوحة مخصصة لمالك القناة فقط.", ephemeral=True)
             return False
         return True
 
@@ -171,7 +171,7 @@ class AdPanel(discord.ui.View):
     async def image(self, interaction: discord.Interaction):
         if not await self.check(interaction):
             return
-        await interaction.response.send_message("📎 أرسل الصورة كـAttachment في هذا الروم خلال 60 ثانية.", ephemeral=True)
+        await interaction.response.send_message("📎 أرسل الصورة كمرفق في هذه القناة خلال 60 ثانية.", ephemeral=True)
         try:
             message = await self.cog.bot.wait_for(
                 "message",
@@ -207,7 +207,7 @@ class TemplateModal(discord.ui.Modal, title="تعديل الرسالة"):
 
     async def on_submit(self, interaction: discord.Interaction):
         if interaction.user.id != self.owner_id:
-            return await interaction.response.send_message("❌ هذه اللوحة مخصصة لصاحب الروم.", ephemeral=True)
+            return await interaction.response.send_message("❌ هذه اللوحة مخصصة لمالك القناة.", ephemeral=True)
         await self.cog.db.execute("UPDATE ad_rooms SET template=? WHERE channel_id=?", (str(self.text.value), self.channel_id))
         await self.cog.render_panel(interaction.guild.get_channel(self.channel_id))
         await interaction.response.send_message("✅ تم حفظ الرسالة.", ephemeral=True)
@@ -242,7 +242,7 @@ class WriteAdView(discord.ui.View):
     @discord.ui.button(label="اكتب إعلانك", emoji="📢", style=discord.ButtonStyle.primary)
     async def write(self, interaction: discord.Interaction, _button: discord.ui.Button):
         if interaction.user.id != self.owner_id:
-            return await interaction.response.send_message("❌ فقط صاحب الروم يمكنه كتابة الإعلان.", ephemeral=True)
+            return await interaction.response.send_message("❌ فقط مالك القناة يمكنه كتابة الإعلان.", ephemeral=True)
         await interaction.response.send_modal(
             AdModal(self.cog, self.owner_id, self.channel_id, self.mention, self.owner_id, self.control_message_id)
         )
@@ -293,12 +293,12 @@ class AdvertisingShop(commands.Cog):
             channel = await guild.create_text_channel(clean_name(f"ad-{member.display_name}"), category=None, overwrites=overwrites, reason="Ader shop advertising room")
         except (discord.Forbidden, discord.HTTPException):
             await self.db.add_balance(user_id, guild_id, int(item["price"]))
-            return False, "❌ تعذر إنشاء الروم؛ تمت إعادة المبلغ."
+            return False, "❌ تعذّر إنشاء القناة؛ تمت إعادة المبلغ."
         mention = delivery.get("mention_type", "everyone")
         await self.db.execute("INSERT INTO ad_rooms(guild_id,channel_id,owner_id,mention_type) VALUES(?,?,?,?)", (guild_id, channel.id, user_id, mention))
         await channel.send(member.mention, allowed_mentions=discord.AllowedMentions(users=True))
         await self.render_panel(channel)
-        return True, f"🏠 تم تسليم الروم: {channel.mention}"
+        return True, f"🏠 تم تسليم القناة: {channel.mention}"
 
     async def render_panel(self, channel):
         if not isinstance(channel, discord.TextChannel):
@@ -306,7 +306,7 @@ class AdvertisingShop(commands.Cog):
         row = await self.db.fetchone("SELECT * FROM ad_rooms WHERE channel_id=? AND active=1", (channel.id,))
         if not row:
             return
-        embed = discord.Embed(title="📢 لوحة الروم الإعلاني", description=row["template"], colour=discord.Colour.blurple())
+        embed = discord.Embed(title="📢 لوحة القناة الإعلانية", description=row["template"], colour=discord.Colour.blurple())
         embed.add_field(name="نوع المنشن", value="@everyone" if row["mention_type"] == "everyone" else "@here")
         view = AdPanel(self, int(row["owner_id"]), channel.id, str(row["mention_type"]))
         msg = None
@@ -355,11 +355,11 @@ class AdvertisingShop(commands.Cog):
             return await ctx.reply("❌ لا يمكن إنشاء إعلان لبوت.", mention_author=False)
         rows = await self.db.fetchall("SELECT * FROM ad_rooms WHERE guild_id=? AND owner_id=? AND active=1 ORDER BY channel_id", (ctx.guild.id, member.id))
         if not rows:
-            return await ctx.reply("❌ هذا العضو لا يملك أي روم إعلان نشطاً.", mention_author=False)
+            return await ctx.reply("❌ هذا العضو لا يملك أي قناة إعلانية نشطاً.", mention_author=False)
         if len(rows) == 1:
             view = PrefixAdView(self, ctx.author.id, member.id, int(rows[0]["channel_id"]))
             control = await ctx.reply(
-                f"{member.mention}\n**اختر نوع المنشن حق الروم**",
+                f"{member.mention}\n**اختر نوع الإشارة الخاصة بالقناة**",
                 mention_author=False,
                 view=view,
                 allowed_mentions=discord.AllowedMentions(users=True),
@@ -367,7 +367,7 @@ class AdvertisingShop(commands.Cog):
             view.control_message_id = control.id
             return
         message = await ctx.reply(
-            f"{member.mention}\n**اختار روم الإعلان اللي بغيتي تنشر فيه**",
+            f"{member.mention}\n**اختر قناة الإعلان اللي بغيتي تنشر فيه**",
             mention_author=False,
             view=RoomSelectView(self, ctx.author.id, member.id, rows),
             allowed_mentions=discord.AllowedMentions(users=True),
@@ -421,7 +421,7 @@ class AdvertisingShop(commands.Cog):
             return False, "❌ السيرفر غير موجود."
         row = await self.db.fetchone("SELECT * FROM ad_rooms WHERE guild_id=? AND channel_id=? AND owner_id=? AND active=1", (guild.id, channel_id, owner.id))
         if not row:
-            return False, "❌ هذا ليس رومك الإعلاني."
+            return False, "❌ هذه ليست قناتك الإعلانية."
         if await self.db.get_balance(owner.id) < amount:
             return False, f"❌ يجب أن يكون لديك **{amount:,} ANOCoin** لبدء القيف أواي."
         settings = await self.db.fetchone("SELECT giveaway_enabled,required_guild_id FROM ad_settings_v2 WHERE guild_id=?", (guild.id,))
