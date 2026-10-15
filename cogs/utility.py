@@ -45,7 +45,7 @@ class PollView(discord.ui.View):
             description=description,
             color=EmbedColor.INFO
         )
-        embed.set_footer(text=f"Total votes: {total_votes}")
+        embed.set_footer(text=f"إجمالي الأصوات: {total_votes}")
         return embed
 
     @discord.ui.button(label="1", style=discord.ButtonStyle.primary, custom_id="poll_1")
@@ -296,7 +296,7 @@ class Utility(commands.Cog):
                 view.children[i].disabled = True
 
         embed = view.get_results_embed()
-        embed.set_footer(text=f"Poll ends in {duration} minutes | Total votes: 0")
+        embed.set_footer(text=f"ينتهي التصويت خلال {duration} دقيقة | إجمالي الأصوات: 0")
 
         await interaction.response.send_message(embed=embed, view=view)
         logger.info(f"{interaction.user} created poll in {interaction.guild}")
