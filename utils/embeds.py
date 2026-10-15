@@ -81,7 +81,7 @@ class EmbedFactory:
     def success(title: str, description: str) -> discord.Embed:
         """Create success embed"""
         return EmbedFactory.create(
-            title=f"✅ {title}",
+            title=f"<:success:1560285005018566757> {title}",
             description=description,
             color=EmbedColor.SUCCESS
         )
@@ -90,7 +90,7 @@ class EmbedFactory:
     def error(title: str, description: str) -> discord.Embed:
         """Create error embed"""
         return EmbedFactory.create(
-            title=f"❌ {title}",
+            title=f"<:failure:1560286464892469380> {title}",
             description=description,
             color=EmbedColor.ERROR
         )
@@ -108,7 +108,7 @@ class EmbedFactory:
     def info(title: str, description: str) -> discord.Embed:
         """Create info embed"""
         return EmbedFactory.create(
-            title=f"ℹ️ {title}",
+            title=f"<:required:1558907460763525182> {title}",
             description=description,
             color=EmbedColor.INFO
         )
