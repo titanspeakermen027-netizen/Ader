@@ -38,10 +38,10 @@ class PollView(discord.ui.View):
             percentage = (vote_count / total_votes * 100) if total_votes > 0 else 0
             bar_length = int(percentage / 10)
             bar = "█" * bar_length + "░" * (10 - bar_length)
-            description += f"{i + 1}. {option}\n{bar} {vote_count} votes ({percentage:.1f}%)\n\n"
+            description += f"{i + 1}. {option}\n{bar} {vote_count} أصوات ({percentage:.1f}%)\n\n"
 
         embed = EmbedFactory.create(
-            title="📊 Poll Results",
+            title="📊 نتائج التصويت",
             description=description,
             color=EmbedColor.INFO
         )
@@ -67,7 +67,7 @@ class PollView(discord.ui.View):
     async def _vote(self, interaction: discord.Interaction, option_index: int):
         """Handle vote"""
         if option_index >= len(self.options):
-            await interaction.response.send_message("Invalid option", ephemeral=True)
+            await interaction.response.send_message("خيار غير صالح", ephemeral=True)
             return
 
         user_id = interaction.user.id
@@ -256,7 +256,7 @@ class Utility(commands.Cog):
                 logger.error(f"Error in reminder checker: {e}", exc_info=True)
                 await asyncio.sleep(60)
 
-    @app_commands.command(name="poll", description="Create a poll (Admin)")
+    @app_commands.command(name="poll", description="إنشاء تصويت (للمسؤولين)")
     @app_commands.describe(
         question="Poll question",
         option1="Option 1",
@@ -285,7 +285,7 @@ class Utility(commands.Cog):
 
         if duration < 1 or duration > 10080:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Invalid Duration", "Duration must be between 1 minute and 1 week"),
+                embed=EmbedFactory.error("مدة غير صالحة", "يجب أن تتراوح المدة بين دقيقة واحدة وأسبوع واحد."),
                 ephemeral=True
             )
             return
@@ -301,7 +301,7 @@ class Utility(commands.Cog):
         await interaction.response.send_message(embed=embed, view=view)
         logger.info(f"{interaction.user} created poll in {interaction.guild}")
 
-    @app_commands.command(name="remind", description="Set a reminder (Admin)")
+    @app_commands.command(name="remind", description="ضبط تذكير (للمسؤولين)")
     @app_commands.describe(
         duration="When to remind (e.g., 1h, 30m, 1d)",
         message="Reminder message"
@@ -312,14 +312,14 @@ class Utility(commands.Cog):
         seconds = TimeConverter.parse(duration)
         if not seconds:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Invalid Duration", "Please provide a valid duration (e.g., 1h, 30m, 2d)"),
+                embed=EmbedFactory.error("مدة غير صالحة", "يرجى إدخال مدة صحيحة، مثل 1h أو 30m أو 2d."),
                 ephemeral=True
             )
             return
 
         if seconds > 31536000:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Duration Too Long", "Maximum reminder duration is 1 year"),
+                embed=EmbedFactory.error("المدة طويلة جدًا", "الحد الأقصى لمدة التذكير هو سنة واحدة."),
                 ephemeral=True
             )
             return
@@ -344,7 +344,7 @@ class Utility(commands.Cog):
         await interaction.response.send_message(embed=embed)
         logger.info(f"{interaction.user} set reminder in {interaction.guild}")
 
-    @app_commands.command(name="serverstats", description="View server statistics (Admin)")
+    @app_commands.command(name="serverstats", description="عرض إحصاءات الخادم (للمسؤولين)")
     @is_admin()
     async def serverstats(self, interaction: discord.Interaction):
         """View server stats"""
@@ -357,58 +357,58 @@ class Utility(commands.Cog):
         roles = len(guild.roles)
 
         embed = EmbedFactory.create(
-            title=f"📊 Server Statistics - {guild.name}",
+            title=f"📊 إحصاءات الخادم - {guild.name}",
             color=EmbedColor.INFO,
             thumbnail=guild.icon.url if guild.icon else None,
             fields=[
-                {"name": "👥 Total Members", "value": str(total_members), "inline": True},
-                {"name": "🙋 Humans", "value": str(humans), "inline": True},
-                {"name": "🤖 Bots", "value": str(bots), "inline": True},
-                {"name": "💬 Text Channels", "value": str(text_channels), "inline": True},
-                {"name": "🔊 Voice Channels", "value": str(voice_channels), "inline": True},
-                {"name": "🎭 Roles", "value": str(roles), "inline": True},
-                {"name": "👑 Owner", "value": guild.owner.mention if guild.owner else "Unknown", "inline": True},
-                {"name": "📅 Created", "value": guild.created_at.strftime("%Y-%m-%d"), "inline": True},
-                {"name": "🚀 Boost Level", "value": f"Level {guild.premium_tier}", "inline": True}
+                {"name": "👥 إجمالي الأعضاء", "value": str(total_members), "inline": True},
+                {"name": "🙋 الأعضاء البشر", "value": str(humans), "inline": True},
+                {"name": "🤖 البوتات", "value": str(bots), "inline": True},
+                {"name": "💬 القنوات النصية", "value": str(text_channels), "inline": True},
+                {"name": "🔊 القنوات الصوتية", "value": str(voice_channels), "inline": True},
+                {"name": "🎭 الرتب", "value": str(roles), "inline": True},
+                {"name": "👑 المالك", "value": guild.owner.mention if guild.owner else "غير معروف", "inline": True},
+                {"name": "📅 تاريخ الإنشاء", "value": guild.created_at.strftime("%Y-%m-%d"), "inline": True},
+                {"name": "🚀 مستوى التعزيز", "value": f"Level {guild.premium_tier}", "inline": True}
             ]
         )
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="userinfo", description="Get information about a user (Admin)")
-    @app_commands.describe(user="User to get info about")
+    @app_commands.command(name="userinfo", description="عرض معلومات عضو (للمسؤولين)")
+    @app_commands.describe(user="العضو المراد عرض معلوماته")
     @is_admin()
     async def userinfo(self, interaction: discord.Interaction, user: Optional[discord.Member] = None):
         """Get user information"""
         target = user or interaction.user
         roles = [role.mention for role in target.roles[1:]]
-        roles_str = ", ".join(roles[:10]) if roles else "None"
+        roles_str = ", ".join(roles[:10]) if roles else "لا يوجد"
         if len(roles) > 10:
             roles_str += f" (+{len(roles) - 10} more)"
 
         embed = EmbedFactory.create(
-            title=f"User Information - {target.display_name}",
+            title=f"معلومات العضو - {target.display_name}",
             color=target.color if target.color.value != 0 else EmbedColor.INFO,
             thumbnail=target.display_avatar.url,
             fields=[
-                {"name": "Username", "value": str(target), "inline": True},
+                {"name": "اسم المستخدم", "value": str(target), "inline": True},
                 {"name": "ID", "value": str(target.id), "inline": True},
-                {"name": "Nickname", "value": target.nick or "None", "inline": True},
-                {"name": "Account Created", "value": target.created_at.strftime("%Y-%m-%d"), "inline": True},
-                {"name": "Joined Server", "value": target.joined_at.strftime("%Y-%m-%d") if target.joined_at else "Unknown", "inline": True},
-                {"name": "Top Role", "value": target.top_role.mention, "inline": True},
-                {"name": f"Roles ({len(roles)})", "value": roles_str, "inline": False}
+                {"name": "اللقب", "value": target.nick or "لا يوجد", "inline": True},
+                {"name": "تاريخ إنشاء الحساب", "value": target.created_at.strftime("%Y-%m-%d"), "inline": True},
+                {"name": "تاريخ الانضمام إلى الخادم", "value": target.joined_at.strftime("%Y-%m-%d") if target.joined_at else "غير معروف", "inline": True},
+                {"name": "أعلى رتبة", "value": target.top_role.mention, "inline": True},
+                {"name": f"الرتب ({len(roles)})", "value": roles_str, "inline": False}
             ]
         )
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="avatar", description="Get user's avatar (Admin)")
-    @app_commands.describe(user="User to get avatar from")
+    @app_commands.command(name="avatar", description="عرض الصورة الشخصية لعضو (للمسؤولين)")
+    @app_commands.describe(user="العضو المراد عرض صورته الشخصية")
     @is_admin()
     async def avatar(self, interaction: discord.Interaction, user: Optional[discord.Member] = None):
         """Get user avatar"""
         target = user or interaction.user
         embed = EmbedFactory.create(
-            title=f"Avatar - {target.display_name}",
+            title=f"الصورة الشخصية - {target.display_name}",
             color=EmbedColor.INFO,
             image=target.display_avatar.url
         )
