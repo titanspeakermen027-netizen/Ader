@@ -117,23 +117,23 @@ class EmbedFactory:
     def ai_response(message: str, model: str = "AI") -> discord.Embed:
         """Create AI response embed"""
         return EmbedFactory.create(
-            title="🤖 AI Response",
+            title="🤖 استجابة الذكاء الاصطناعي",
             description=message,
             color=EmbedColor.AI,
-            footer=f"Powered by {model}"
+            footer=f"مدعوم بواسطة {model}"
         )
 
     @staticmethod
     def level_up(user: discord.Member, new_level: int, xp: int) -> discord.Embed:
         """Create level up embed"""
         return EmbedFactory.create(
-            title="🎉 Level Up!",
-            description=f"{user.mention} just reached **Level {new_level}**!",
+            title="🎉 ارتقاء المستوى!",
+            description=f"وصل {user.mention} إلى **المستوى {new_level}**!",
             color=EmbedColor.LEVELING,
             thumbnail=user.display_avatar.url,
             fields=[
-                {"name": "Level", "value": str(new_level), "inline": True},
-                {"name": "Total XP", "value": str(xp), "inline": True}
+                {"name": "المستوى", "value": str(new_level), "inline": True},
+                {"name": "إجمالي نقاط الخبرة", "value": str(xp), "inline": True}
             ]
         )
 
@@ -144,14 +144,14 @@ class EmbedFactory:
         progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
 
         return EmbedFactory.create(
-            title=f"📊 Rank Card - {user.display_name}",
+            title=f"📊 بطاقة مستوى {user.display_name}",
             color=EmbedColor.LEVELING,
             thumbnail=user.display_avatar.url,
             fields=[
-                {"name": "Rank", "value": f"#{rank}", "inline": True},
+                {"name": "الترتيب", "value": f"#{rank}", "inline": True},
                 {"name": "Level", "value": str(level), "inline": True},
-                {"name": "XP", "value": f"{xp % next_level_xp}/{next_level_xp}", "inline": True},
-                {"name": "Progress", "value": f"{progress_bar} {progress:.1f}%", "inline": False}
+                {"name": "نقاط الخبرة", "value": f"{xp % next_level_xp}/{next_level_xp}", "inline": True},
+                {"name": "التقدم", "value": f"{progress_bar} {progress:.1f}%", "inline": False}
             ]
         )
 
@@ -159,12 +159,12 @@ class EmbedFactory:
     def economy_balance(user: discord.Member, balance: int, currency_symbol: str = "💎") -> discord.Embed:
         """Create balance embed"""
         return EmbedFactory.create(
-            title=f"{currency_symbol} Balance",
-            description=f"{user.mention}'s balance",
+            title=f"{currency_symbol} الرصيد",
+            description=f"رصيد {user.mention}",
             color=EmbedColor.ECONOMY,
             thumbnail=user.display_avatar.url,
             fields=[
-                {"name": "Amount", "value": f"{currency_symbol} {balance:,}", "inline": False}
+                {"name": "المبلغ", "value": f"{currency_symbol} {balance:,}", "inline": False}
             ]
         )
 
@@ -176,14 +176,25 @@ class EmbedFactory:
         reason: str
     ) -> discord.Embed:
         """Create moderation action embed"""
+        action_labels = {
+            "warn": "تحذير",
+            "timeout": "تقييد مؤقت",
+            "kick": "طرد",
+            "ban": "حظر",
+            "unban": "إلغاء الحظر",
+            "clear": "حذف الرسائل",
+            "lock": "قفل القناة",
+            "unlock": "فتح القناة",
+        }
+        action_label = action_labels.get(action.lower(), action)
         return EmbedFactory.create(
-            title=f"🔨 {action}",
-            description=f"{user.mention} has been {action.lower()}",
+            title=f"🔨 {action_label}",
+            description=f"تم تنفيذ الإجراء «{action_label}» بحق {user.mention}.",
             color=EmbedColor.WARNING,
             fields=[
-                {"name": "User", "value": f"{user.mention} ({user.id})", "inline": True},
-                {"name": "Moderator", "value": moderator.mention, "inline": True},
-                {"name": "Reason", "value": reason, "inline": False}
+                {"name": "العضو", "value": f"{user.mention} ({user.id})", "inline": True},
+                {"name": "المشرف", "value": moderator.mention, "inline": True},
+                {"name": "السبب", "value": reason, "inline": False}
             ]
         )
 
@@ -191,22 +202,22 @@ class EmbedFactory:
     def verification_prompt() -> discord.Embed:
         """Create verification prompt embed"""
         return EmbedFactory.create(
-            title="🔐 Verification Required",
-            description="Click the button below to verify and gain access to the server.",
+            title="🔐 يلزم إتمام التحقق",
+            description="اضغط على الزر أدناه لإتمام التحقق والحصول على إمكانية الوصول إلى الخادم.",
             color=EmbedColor.PRIMARY,
-            footer="Complete verification to unlock all channels"
+            footer="أكمل التحقق لفتح جميع القنوات"
         )
 
     @staticmethod
     def ticket_created(ticket_id: str, category: str) -> discord.Embed:
         """Create ticket created embed"""
         return EmbedFactory.create(
-            title="🎫 Ticket Created",
-            description="Your support ticket has been created!",
+            title="🎫 تم إنشاء التذكرة",
+            description="تم إنشاء تذكرة الدعم الخاصة بك.",
             color=EmbedColor.SUCCESS,
             fields=[
-                {"name": "Ticket ID", "value": ticket_id, "inline": True},
-                {"name": "Category", "value": category, "inline": True}
+                {"name": "معرّف التذكرة", "value": ticket_id, "inline": True},
+                {"name": "الفئة", "value": category, "inline": True}
             ]
         )
 
@@ -225,6 +236,6 @@ class EmbedFactory:
 
         return EmbedFactory.create(
             title=f"🏆 {title}",
-            description=description or "No entries yet",
+            description=description or "لا توجد مشاركات بعد.",
             color=color
         )
