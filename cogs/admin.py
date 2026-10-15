@@ -25,8 +25,8 @@ class Admin(commands.Cog):
         self.db = db
         self.config = config
 
-    @app_commands.command(name="reload", description="Reload a cog")
-    @app_commands.describe(cog="Name of the cog to reload")
+    @app_commands.command(name="reload", description="إعادة تحميل إحدى وحدات البوت")
+    @app_commands.describe(cog="اسم الوحدة المراد إعادة تحميلها")
     @is_admin()
     async def reload(self, interaction: discord.Interaction, cog: str):
         """Reload a cog"""
@@ -40,22 +40,22 @@ class Admin(commands.Cog):
             logger.info(f"{interaction.user} reloaded cog {cog}")
         except commands.ExtensionNotLoaded:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", f"Cog **{cog}** is not loaded"),
+                embed=EmbedFactory.error("خطأ", f"الوحدة **{cog}** غير محمّلة."),
                 ephemeral=True
             )
         except commands.ExtensionNotFound:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", f"Cog **{cog}** not found"),
+                embed=EmbedFactory.error("خطأ", f"لم يتم العثور على الوحدة **{cog}**."),
                 ephemeral=True
             )
         except Exception as e:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", f"Failed to reload: {str(e)}"),
+                embed=EmbedFactory.error("خطأ", f"تعذرت إعادة التحميل: {str(e)}"),
                 ephemeral=True
             )
             logger.error(f"Error reloading cog {cog}: {e}", exc_info=True)
 
-    @app_commands.command(name="sync", description="Sync slash commands")
+    @app_commands.command(name="sync", description="مزامنة أوامر الشرطة المائلة")
     @is_admin()
     async def sync(self, interaction: discord.Interaction):
         """Sync command tree"""
@@ -71,12 +71,12 @@ class Admin(commands.Cog):
             logger.info(f"{interaction.user} synced commands")
         except Exception as e:
             await interaction.followup.send(
-                embed=EmbedFactory.error("Error", f"Failed to sync: {str(e)}"),
+                embed=EmbedFactory.error("خطأ", f"تعذرت المزامنة: {str(e)}"),
                 ephemeral=True
             )
             logger.error(f"Error syncing commands: {e}", exc_info=True)
 
-    @app_commands.command(name="modules", description="View and toggle modules")
+    @app_commands.command(name="modules", description="عرض الوحدات وتفعيلها أو تعطيلها")
     @is_admin()
     async def modules(self, interaction: discord.Interaction):
         """View module status"""
@@ -89,14 +89,14 @@ class Admin(commands.Cog):
             description += f"**{module_name.title()}**: {status}\n"
 
         embed = EmbedFactory.create(
-            title="📦 Bot Modules",
-            description=description or "No modules configured",
+            title="📦 وحدات البوت",
+            description=description or "لم يتم إعداد أي وحدات.",
             color=EmbedColor.INFO
         )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(name="botinfo", description="View bot information")
+    @app_commands.command(name="botinfo", description="عرض معلومات البوت")
     async def botinfo(self, interaction: discord.Interaction):
         """Display bot information"""
         # Calculate uptime
@@ -109,7 +109,7 @@ class Admin(commands.Cog):
         total_channels = sum(len(g.channels) for g in self.bot.guilds)
 
         embed = EmbedFactory.create(
-            title="🤖 Logiq Information",
+            title="🤖 معلومات Ader",
             color=EmbedColor.PRIMARY,
             thumbnail=self.bot.user.display_avatar.url if self.bot.user else None,
             fields=[
@@ -126,8 +126,8 @@ class Admin(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="setlogchannel", description="Set the log channel")
-    @app_commands.describe(channel="Channel for moderation logs")
+    @app_commands.command(name="setlogchannel", description="تعيين قناة السجلات")
+    @app_commands.describe(channel="القناة المخصصة لسجلات الإشراف")
     @is_admin()
     async def set_log_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         """Set log channel"""
@@ -144,7 +144,7 @@ class Admin(commands.Cog):
         await interaction.response.send_message(embed=embed)
         logger.info(f"Log channel set to {channel} in {interaction.guild}")
 
-    @app_commands.command(name="config", description="View server configuration")
+    @app_commands.command(name="config", description="عرض إعدادات الخادم")
     @is_admin()
     async def config(self, interaction: discord.Interaction):
         """View server configuration"""
@@ -152,7 +152,7 @@ class Admin(commands.Cog):
 
         if not guild_config:
             await interaction.response.send_message(
-                embed=EmbedFactory.info("No Configuration", "Server has no configuration yet"),
+                embed=EmbedFactory.info("لا توجد إعدادات", "لم يتم إعداد هذا الخادم بعد."),
                 ephemeral=True
             )
             return
@@ -162,7 +162,7 @@ class Admin(commands.Cog):
         verified_role = f"<@&{guild_config.get('verified_role')}>" if guild_config.get('verified_role') else "Not set"
 
         embed = EmbedFactory.create(
-            title="⚙️ Server Configuration",
+            title="⚙️ إعدادات الخادم",
             color=EmbedColor.INFO,
             fields=[
                 {"name": "Log Channel", "value": log_channel, "inline": False},
@@ -174,14 +174,14 @@ class Admin(commands.Cog):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(name="purge", description="Delete messages in bulk")
-    @app_commands.describe(amount="Number of messages to delete (1-100)")
+    @app_commands.command(name="purge", description="حذف مجموعة من الرسائل")
+    @app_commands.describe(amount="عدد الرسائل المراد حذفها (1–100)")
     @is_admin()
     async def purge(self, interaction: discord.Interaction, amount: int):
         """Purge messages"""
         if amount < 1 or amount > 100:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Invalid Amount", "Amount must be between 1 and 100"),
+                embed=EmbedFactory.error("عدد غير صالح", "يجب أن يكون العدد بين 1 و100."),
                 ephemeral=True
             )
             return
@@ -196,7 +196,7 @@ class Admin(commands.Cog):
             logger.info(f"{interaction.user} purged {len(deleted)} messages in {interaction.channel}")
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "I don't have permission to delete messages"),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية حذف الرسائل."),
                 ephemeral=True
             )
 
