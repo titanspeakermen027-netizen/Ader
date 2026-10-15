@@ -21,7 +21,13 @@ def norm(s: str) -> str:
     return re.sub(r"[._|/\\\-+=~*^\x60]+", "", s)
 
 def bool_value(v: str):
-    return {"on":True,"off":False,"enable":True,"disable":False,"enabled":True,"disabled":False}.get(v.lower())
+    value = str(v or "").strip().lower()
+    return {
+        "on": True, "enable": True, "enabled": True,
+        "yes": True, "true": True, "1": True, "نعم": True, "تشغيل": True,
+        "off": False, "disable": False, "disabled": False,
+        "no": False, "false": False, "0": False, "لا": False, "إيقاف": False,
+    }.get(value)
 
 
 _CUSTOM_EMOJI_RE = re.compile(r"^<a?:[A-Za-z0-9_]{1,32}:\d{1,25}>$")
