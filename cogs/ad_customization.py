@@ -147,7 +147,7 @@ class ReplyTargetSelect(discord.ui.Select):
         options = [
             discord.SelectOption(label="بدون رد", value="none"),
             discord.SelectOption(label="الرد على الإعلان", value="ad"),
-            discord.SelectOption(label="Reply للالسحب", value="giveaway"),
+            discord.SelectOption(label="الرد على السحب", value="giveaway"),
             discord.SelectOption(label="الرد على الصورة / المرفق", value="image"),
         ]
         for row in rows[:20]:
