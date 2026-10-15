@@ -174,11 +174,11 @@ class PermissionChecker:
     @staticmethod
     def can_moderate(moderator: discord.Member, target: discord.Member) -> tuple[bool, Optional[str]]:
         if moderator.id == target.id:
-            return False, "You cannot moderate yourself"
+            return False, "لا يمكنك الإشراف على نفسك."
         if target.guild.owner_id == target.id:
-            return False, "You cannot moderate the server owner"
+            return False, "لا يمكنك الإشراف على مالك الخادم."
         if not PermissionChecker.check_hierarchy(moderator, target):
-            return False, "You cannot moderate someone with a higher or equal role"
+            return False, "لا يمكنك الإشراف على عضو رتبته أعلى من رتبتك أو مساوية لها."
         return True, None
 
     @staticmethod
