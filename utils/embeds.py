@@ -186,7 +186,7 @@ class EmbedFactory:
             "lock": "قفل القناة",
             "unlock": "فتح القناة",
         }
-        action_label = action_labels.get(action.lower(), action)
+        action_label = action_labels.get(action.lower(), "إجراء إداري")
         return EmbedFactory.create(
             title=f"🔨 {action_label}",
             description=f"تم تنفيذ الإجراء «{action_label}» بحق {user.mention}.",
