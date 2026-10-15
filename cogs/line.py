@@ -68,7 +68,7 @@ class Line(commands.Cog):
 
         if not self._can_manage(interaction):
             return await interaction.response.send_message(
-                "❌ تحتاج إلى صلاحية Manage Server أو Administrator لإعداد /line.",
+                "❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول لإعداد /line.",
                 ephemeral=True,
             )
 
@@ -97,7 +97,7 @@ class Line(commands.Cog):
         content_type = image.content_type or mimetypes.guess_type(image.filename)[0] or ""
         if not content_type.lower().startswith("image/") and Path(image.filename).suffix.lower() not in IMAGE_EXTENSIONS:
             return await interaction.response.send_message(
-                "❌ الملف خاصو يكون صورة بصيغة معروفة بحال PNG أو JPG أو GIF أو WEBP.",
+                "❌ يجب أن يكون الملف صورة بصيغة معروفة، مثل PNG أو JPG أو GIF أو WEBP.",
                 ephemeral=True,
             )
 
@@ -106,17 +106,17 @@ class Line(commands.Cog):
             bot_member = guild.get_member(self.bot.user.id)
         if bot_member is None:
             return await interaction.response.send_message(
-                "❌ ما قدرتش نتحقق من صلاحيات البوت في هذا السيرفر.",
+                "❌ تعذّر التحقق من صلاحيات البوت في هذا الخادم.",
                 ephemeral=True,
             )
         bot_permissions = bot_member.guild_permissions
         missing = []
         if not bot_permissions.manage_messages:
-            missing.append("Manage Messages")
+            missing.append("إدارة الرسائل")
         if not bot_permissions.send_messages:
-            missing.append("Send Messages")
+            missing.append("إرسال الرسائل")
         if not bot_permissions.attach_files:
-            missing.append("Attach Files")
+            missing.append("إرفاق الملفات")
         if missing:
             return await interaction.response.send_message(
                 "❌ يحتاج البوت إلى الصلاحيات التالية لتشغيل /line: "
@@ -130,7 +130,7 @@ class Line(commands.Cog):
             image_data = await image.read()
             if not image_data:
                 return await interaction.followup.send(
-                    "❌ ما قدرتش نقرا الصورة المرفوعة. جرّب ترفعها من جديد.",
+                    "❌ تعذّرت قراءة الصورة المرفوعة. يرجى رفعها مرة أخرى.",
                     ephemeral=True,
                 )
             if len(image_data) > MAX_IMAGE_BYTES:
@@ -157,18 +157,18 @@ class Line(commands.Cog):
         except (discord.HTTPException, OSError, ValueError) as exc:
             logger.warning("Could not save /line image for guild %s: %s", guild.id, exc)
             return await interaction.followup.send(
-                "❌ وقع مشكل أثناء حفظ الصورة. جرّب صورة أخرى.",
+                "❌ حدث خطأ أثناء حفظ الصورة. يرجى تجربة صورة أخرى.",
                 ephemeral=True,
             )
         except Exception:
             logger.exception("Failed to store /line config for guild %s", guild.id)
             return await interaction.followup.send(
-                "❌ ما قدرش البوت يحفظ إعدادات /line بسبب خطأ داخلي.",
+                "❌ تعذّر على البوت حفظ إعدادات /line بسبب خطأ داخلي.",
                 ephemeral=True,
             )
 
         await interaction.followup.send(
-            f"✅ تفعّل /line بنجاح.\n"
+            f"✅ تم تفعيل /line بنجاح.\n"
             f"**الكلمة:** `{keyword}`\n"
             f"**الرتبة المسموح لها:** {role.mention}\n"
             "أي عضو يمتلك هذه الرتبة ويكتب الكلمة المحددة، سيحذف البوت رسالته ويرسل الصورة. "
