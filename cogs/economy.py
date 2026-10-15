@@ -27,7 +27,7 @@ class Economy(commands.Cog):
         self.config = config
         self.module_config = config.get("modules", {}).get("economy", {})
         self.currency_symbol = self.module_config.get("currency_symbol", "🪙")
-        self.currency_name = self.module_config.get("currency_name", "ANOCoin")
+        self.currency_name = self.module_config.get("currency_name", "ANORIS")
         self._pending_confirmations: set[tuple[int, int]] = set()
 
     async def cog_load(self):
@@ -222,7 +222,7 @@ class Economy(commands.Cog):
             return await interaction.response.send_message(f":thinking: | **{interaction.user.name}، البوتات لا تملك أرصدة !**", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         balance = await self.db.get_balance(interaction.user.id)
         if balance < amount:
-            return await interaction.response.send_message(f"**ـ {interaction.user.name} رصيدك غير كافي لهذا!** :thinking:", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+            return await interaction.response.send_message(f"**ـ {interaction.user.name} رصيدك غير كافٍ لإتمام هذه العملية.** :thinking:"", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         await interaction.response.defer(ephemeral=True)
         confirmed, user_code_message = await self._confirm(
             interaction.channel,
@@ -247,8 +247,8 @@ class Economy(commands.Cog):
                 await self._delete_message(user_code_message)
         else:
             await interaction.followup.send(text, ephemeral=True)
-    @app_commands.command(name="credits", description="Show your balance or another member's balance, or transfer ANOCoin")
-    @app_commands.describe(user="Member whose balance you want to view or receive ANOCoin", amount="Amount to transfer")
+    @app_commands.command(name="credits", description="عرض رصيدك أو رصيد عضو آخر، أو تحويل ANORIS")
+    @app_commands.describe(user="العضو المراد عرض رصيده أو تحويل ANORIS إليه", amount="المبلغ المراد تحويله")
     async def credits(self, interaction: discord.Interaction, user: discord.Member | None = None, amount: int | None = None):
         if user is None and amount is None:
             balance = await self.db.get_balance(interaction.user.id)
@@ -283,7 +283,7 @@ class Economy(commands.Cog):
             return await ctx.send("❌ يجب تحديد مبلغ موجب وعضواً آخر غير البوتات.")
         balance = await self.db.get_balance(ctx.author.id)
         if balance < amount:
-            return await ctx.send(f"**ـ {ctx.author.name} رصيدك غير كافي لهذا!** :thinking:", allowed_mentions=discord.AllowedMentions.none())
+            return await ctx.send(f"**ـ {ctx.author.name} رصيدك غير كافٍ لإتمام هذه العملية.** :thinking:"", allowed_mentions=discord.AllowedMentions.none())
         confirmed, user_code_message = await self._confirm(
             ctx.channel,
             ctx.author,
