@@ -23,7 +23,7 @@ def _strip_ad_mentions(text: str) -> str:
 
 class FixedAdModal(discord.ui.Modal, title="اكتب إعلانك"):
     text = discord.ui.TextInput(label="اكتب إعلانك", style=discord.TextStyle.paragraph, max_length=4000)
-    name = discord.ui.TextInput(label="اسم الروم", max_length=90)
+    name = discord.ui.TextInput(label="اسم القناة", max_length=90)
 
     def __init__(self, cog, owner_id: int, channel_id: int, mention: str, actor_id: int, control_message_id: int | None):
         super().__init__(custom_id=f"ader:fixed-admodal:{channel_id}:{actor_id}")
@@ -50,7 +50,7 @@ class FixedAdModal(discord.ui.Modal, title="اكتب إعلانك"):
                 channel = None
 
         if not row or int(row["owner_id"]) != self.owner_id or not isinstance(channel, discord.TextChannel):
-            return await interaction.response.send_message("❌ الروم غير موجود.", ephemeral=True)
+            return await interaction.response.send_message("❌ القناة غير موجودة.", ephemeral=True)
 
         try:
             await channel.edit(name=clean_name(str(self.name.value)), reason="Ader advertisement")
@@ -147,7 +147,7 @@ class AdRoomCommandOverride(commands.Cog):
         me = ctx.guild.me
         if me is None or not me.guild_permissions.manage_channels:
             return await ctx.reply(
-                "❌ البوت يحتاج صلاحية Manage Channels لإنشاء روم إعلان جديد.",
+                "❌ البوت يحتاج صلاحية إدارة القنوات لإنشاء قناة إعلانية جديدة.",
                 mention_author=False,
             )
 
@@ -183,17 +183,17 @@ class AdRoomCommandOverride(commands.Cog):
                 (ctx.guild.id, channel.id, member.id, "everyone"),
             )
         except (discord.Forbidden, discord.HTTPException):
-            return await ctx.reply("❌ تعذر إنشاء روم إعلان جديد.", mention_author=False)
+            return await ctx.reply("❌ تعذر إنشاء قناة إعلانية جديدة.", mention_author=False)
         except Exception:
             try:
                 await channel.delete(reason="Ader rollback after database error")
             except Exception:
                 pass
-            return await ctx.reply("❌ تعذر تجهيز روم الإعلان الجديد.", mention_author=False)
+            return await ctx.reply("❌ تعذر تجهيز قناة الإعلان الجديدة.", mention_author=False)
 
         view = FixedPrefixAdView(shop_cog, ctx.author.id, member.id, channel.id)
         control = await ctx.reply(
-            f"{member.mention}\n🏠 تم إنشاء روم إعلان جديد: {channel.mention}\n**اختر نوع المنشن حق الروم**",
+            f"{member.mention}\n🏠 تم إنشاء قناة إعلانية جديدة: {channel.mention}\n**اختر نوع الإشارة الخاصة بالقناة**",
             mention_author=False,
             view=view,
             allowed_mentions=discord.AllowedMentions(users=True),
