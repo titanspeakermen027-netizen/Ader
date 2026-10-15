@@ -28,7 +28,7 @@ class MemberResetConfirmView(discord.ui.View):
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         current = await self.cog.db.get_balance(self.member.id)
         if current <= 0:
-            await interaction.response.edit_message(content=f"ℹ️ رصيد {self.member.mention} راه أصلاً **0 ANORIS**.", view=None)
+            await interaction.response.edit_message(content=f"ℹ️ رصيد {self.member.mention} يساوي بالفعل **0 ANORIS**.", view=None)
             self.stop()
             return
         ok = await self.cog.db.remove_balance(self.member.id, self.guild_id, current)
@@ -95,7 +95,7 @@ class MemberCurrencyReset(commands.Cog):
             return
         member = await self._resolve_member(ctx, parts[0])
         if member is None:
-            await message.channel.send("❌ ما لقيتش هاد العضو. استعمل Mention أو ID صحيح.", delete_after=8)
+            await message.channel.send("❌ لم يتم العثور على هذا العضو. استخدم إشارة عضو أو معرّفًا صحيحًا.", delete_after=8)
             return
         if member.bot:
             await message.channel.send("❌ ما يمكنش تصفير عملة بوت.", delete_after=8)
@@ -105,14 +105,14 @@ class MemberCurrencyReset(commands.Cog):
             return
         balance = await self.db.get_balance(member.id)
         if balance <= 0:
-            await message.channel.send(f"ℹ️ رصيد {member.mention} راه أصلاً **0 ANORIS**.", delete_after=8)
+            await message.channel.send(f"ℹ️ رصيد {member.mention} يساوي بالفعل **0 ANORIS**.", delete_after=8)
             return
         view = MemberResetConfirmView(self, message.author.id, member, balance, message.guild.id)
         await message.channel.send(
             f"⚠️ **تأكيد تصفير عملة العضو**\n\n"
             f"👤 العضو: {member.mention}\n"
             f"💰 الرصيد الحالي: **{balance:,} ANORIS**\n\n"
-            f"واش متأكد أنك باغي تصفر رصيد هاد العضو؟\n"
+            f"هل أنت متأكد من أنك تريد تصفير رصيد هذا العضو؟\n"
             f"⚠️ العملية غادي تخلي الرصيد **0 ANORIS**.",
             view=view,
         )
