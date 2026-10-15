@@ -90,7 +90,7 @@ class Moderation(commands.Cog):
             except discord.Forbidden:
                 pass
 
-    @app_commands.command(name="warn", description="Warn a user")
+    @app_commands.command(name="warn", description="تحذير عضو")
     @app_commands.describe(
         user="User to warn",
         reason="Reason for warning"
@@ -106,7 +106,7 @@ class Moderation(commands.Cog):
         can_moderate, error = PermissionChecker.can_moderate(interaction.user, user)
         if not can_moderate:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Cannot Warn", error),
+                embed=EmbedFactory.error("تعذّر التحذير", error),
                 ephemeral=True
             )
             return
@@ -147,8 +147,8 @@ class Moderation(commands.Cog):
         await self._log_action(interaction.guild, embed)
         logger.info(f"{interaction.user} warned {user} in {interaction.guild}")
 
-    @app_commands.command(name="warnings", description="View user warnings")
-    @app_commands.describe(user="User to check")
+    @app_commands.command(name="warnings", description="عرض تحذيرات العضو")
+    @app_commands.describe(user="العضو المراد التحقق من تحذيراته")
     @is_moderator()
     async def warnings(self, interaction: discord.Interaction, user: discord.Member):
         """View user warnings"""
@@ -156,7 +156,7 @@ class Moderation(commands.Cog):
 
         if not warnings:
             await interaction.response.send_message(
-                embed=EmbedFactory.info("No Warnings", f"{user.mention} has no warnings."),
+                embed=EmbedFactory.info("لا توجد تحذيرات", f"لا توجد تحذيرات مسجلة للعضو {user.mention}."),
                 ephemeral=True
             )
             return
@@ -169,7 +169,7 @@ class Moderation(commands.Cog):
             description += f"**{i}.** {warning['reason']}\n   *By {mod_name} on {timestamp}*\n\n"
 
         embed = EmbedFactory.create(
-            title=f"⚠️ Warnings for {user.display_name}",
+            title=f"⚠️ تحذيرات العضو {user.display_name}",
             description=description,
             color=EmbedColor.WARNING,
             thumbnail=user.display_avatar.url
@@ -178,7 +178,7 @@ class Moderation(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="timeout", description="Timeout a user")
+    @app_commands.command(name="timeout", description="تقييد عضو مؤقتًا")
     @app_commands.describe(
         user="User to timeout",
         duration="Duration (e.g., 1h, 30m, 1d)",
@@ -196,7 +196,7 @@ class Moderation(commands.Cog):
         can_moderate, error = PermissionChecker.can_moderate(interaction.user, user)
         if not can_moderate:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Cannot Timeout", error),
+                embed=EmbedFactory.error("تعذّر التقييد المؤقت", error),
                 ephemeral=True
             )
             return
@@ -204,7 +204,7 @@ class Moderation(commands.Cog):
         seconds = TimeConverter.parse(duration)
         if not seconds or seconds > 2419200:  # Max 28 days
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Invalid Duration", "Duration must be valid and less than 28 days"),
+                embed=EmbedFactory.error("مدة غير صالحة", "يجب أن تكون المدة صالحة وأقل من 28 يومًا."),
                 ephemeral=True
             )
             return
@@ -231,11 +231,11 @@ class Moderation(commands.Cog):
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "I don't have permission to timeout this user"),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية تقييد هذا العضو مؤقتًا."),
                 ephemeral=True
             )
 
-    @app_commands.command(name="kick", description="Kick a user")
+    @app_commands.command(name="kick", description="طرد عضو")
     @app_commands.describe(
         user="User to kick",
         reason="Reason for kick"
@@ -251,7 +251,7 @@ class Moderation(commands.Cog):
         can_moderate, error = PermissionChecker.can_moderate(interaction.user, user)
         if not can_moderate:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Cannot Kick", error),
+                embed=EmbedFactory.error("تعذّر الطرد", error),
                 ephemeral=True
             )
             return
@@ -277,11 +277,11 @@ class Moderation(commands.Cog):
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "I don't have permission to kick this user"),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية طرد هذا العضو."),
                 ephemeral=True
             )
 
-    @app_commands.command(name="ban", description="Ban a user")
+    @app_commands.command(name="ban", description="حظر عضو")
     @app_commands.describe(
         user="User to ban",
         reason="Reason for ban",
@@ -299,14 +299,14 @@ class Moderation(commands.Cog):
         can_moderate, error = PermissionChecker.can_moderate(interaction.user, user)
         if not can_moderate:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Cannot Ban", error),
+                embed=EmbedFactory.error("تعذّر الحظر", error),
                 ephemeral=True
             )
             return
 
         if delete_messages < 0 or delete_messages > 7:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Invalid Parameter", "delete_messages must be between 0-7"),
+                embed=EmbedFactory.error("قيمة غير صالحة", "يجب أن تكون مدة حذف الرسائل بين 0 و7 أيام."),
                 ephemeral=True
             )
             return
@@ -332,12 +332,12 @@ class Moderation(commands.Cog):
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "I don't have permission to ban this user"),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية حظر هذا العضو."),
                 ephemeral=True
             )
 
-    @app_commands.command(name="unban", description="Unban a user")
-    @app_commands.describe(user_id="ID of user to unban")
+    @app_commands.command(name="unban", description="إلغاء حظر عضو")
+    @app_commands.describe(user_id="معرّف العضو المراد إلغاء حظره")
     @is_moderator()
     async def unban(
         self,
@@ -362,21 +362,21 @@ class Moderation(commands.Cog):
 
         except ValueError:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Invalid ID", "Please provide a valid user ID"),
+                embed=EmbedFactory.error("معرّف غير صالح", "يرجى إدخال معرّف عضو صالح."),
                 ephemeral=True
             )
         except discord.NotFound:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Not Found", "This user is not banned"),
+                embed=EmbedFactory.error("لم يتم العثور على العضو", "هذا العضو غير محظور."),
                 ephemeral=True
             )
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "I don't have permission to unban users"),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية إلغاء حظر الأعضاء."),
                 ephemeral=True
             )
 
-    @app_commands.command(name="clear", description="Clear messages in channel")
+    @app_commands.command(name="clear", description="حذف الرسائل من القناة")
     @app_commands.describe(
         amount="Number of messages to delete (1-100)",
         user="Only delete messages from this user (optional)"
@@ -391,7 +391,7 @@ class Moderation(commands.Cog):
         """Clear messages from channel"""
         if amount < 1 or amount > 100:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Invalid Amount", "Amount must be between 1 and 100"),
+                embed=EmbedFactory.error("عدد غير صالح", "يجب أن يكون العدد بين 1 و100 رسالة."),
                 ephemeral=True
             )
             return
@@ -415,8 +415,8 @@ class Moderation(commands.Cog):
 
             # Log action
             log_embed = EmbedFactory.create(
-                title="🗑️ Messages Cleared",
-                description=f"**Channel:** {interaction.channel.mention}\n"
+                title="🗑️ تم حذف الرسائل",
+                description=f"**القناة:** {interaction.channel.mention}\n"
                            f"**Moderator:** {interaction.user.mention}\n"
                            f"**Amount:** {len(deleted)} messages{target_text}",
                 color=EmbedColor.WARNING
@@ -426,18 +426,18 @@ class Moderation(commands.Cog):
 
         except discord.Forbidden:
             await interaction.followup.send(
-                embed=EmbedFactory.error("Error", "I don't have permission to delete messages"),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية حذف الرسائل."),
                 ephemeral=True
             )
 
-    @app_commands.command(name="slowmode", description="Set slowmode for channel")
-    @app_commands.describe(seconds="Slowmode delay in seconds (0 to disable)")
+    @app_commands.command(name="slowmode", description="تعيين الوضع البطيء للقناة")
+    @app_commands.describe(seconds="مدة الوضع البطيء بالثواني (0 للتعطيل)")
     @is_moderator()
     async def slowmode(self, interaction: discord.Interaction, seconds: int):
         """Set slowmode for channel"""
         if seconds < 0 or seconds > 21600:  # Max 6 hours
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Invalid Duration", "Slowmode must be between 0 and 21600 seconds (6 hours)"),
+                embed=EmbedFactory.error("مدة غير صالحة", "يجب أن تتراوح مدة الوضع البطيء بين 0 و21600 ثانية (6 ساعات)."),
                 ephemeral=True
             )
             return
@@ -446,7 +446,7 @@ class Moderation(commands.Cog):
             await interaction.channel.edit(slowmode_delay=seconds)
             
             if seconds == 0:
-                embed = EmbedFactory.success("Slowmode Disabled", "Slowmode has been disabled")
+                embed = EmbedFactory.success("تم تعطيل الوضع البطيء", "تم تعطيل الوضع البطيء.")
             else:
                 embed = EmbedFactory.success(
                     "Slowmode Enabled",
@@ -457,8 +457,8 @@ class Moderation(commands.Cog):
 
             # Log action
             log_embed = EmbedFactory.create(
-                title="⏱️ Slowmode Updated",
-                description=f"**Channel:** {interaction.channel.mention}\n"
+                title="⏱️ تم تحديث الوضع البطيء",
+                description=f"**القناة:** {interaction.channel.mention}\n"
                            f"**Moderator:** {interaction.user.mention}\n"
                            f"**Delay:** {seconds} seconds",
                 color=EmbedColor.INFO
@@ -468,12 +468,12 @@ class Moderation(commands.Cog):
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "I don't have permission to edit this channel"),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية تعديل هذه القناة."),
                 ephemeral=True
             )
 
-    @app_commands.command(name="lock", description="Lock a channel")
-    @app_commands.describe(channel="Channel to lock (optional, defaults to current)")
+    @app_commands.command(name="lock", description="قفل قناة")
+    @app_commands.describe(channel="القناة المراد قفلها (اختيارية؛ الافتراضي هو القناة الحالية)")
     @is_moderator()
     async def lock(self, interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
         """Lock a channel"""
@@ -485,13 +485,13 @@ class Moderation(commands.Cog):
                 send_messages=False
             )
             
-            embed = EmbedFactory.success("🔒 Channel Locked", f"{target_channel.mention} has been locked")
+            embed = EmbedFactory.success("🔒 تم قفل القناة", f"تم قفل القناة {target_channel.mention}.")
             await interaction.response.send_message(embed=embed)
 
             # Log action
             log_embed = EmbedFactory.create(
-                title="🔒 Channel Locked",
-                description=f"**Channel:** {target_channel.mention}\n"
+                title="🔒 تم قفل القناة",
+                description=f"**القناة:** {target_channel.mention}\n"
                            f"**Moderator:** {interaction.user.mention}",
                 color=EmbedColor.WARNING
             )
@@ -500,12 +500,12 @@ class Moderation(commands.Cog):
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "I don't have permission to edit this channel"),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية تعديل هذه القناة."),
                 ephemeral=True
             )
 
-    @app_commands.command(name="unlock", description="Unlock a channel")
-    @app_commands.describe(channel="Channel to unlock (optional, defaults to current)")
+    @app_commands.command(name="unlock", description="فتح قناة")
+    @app_commands.describe(channel="القناة المراد فتحها (اختيارية؛ الافتراضي هو القناة الحالية)")
     @is_moderator()
     async def unlock(self, interaction: discord.Interaction, channel: Optional[discord.TextChannel] = None):
         """Unlock a channel"""
@@ -517,13 +517,13 @@ class Moderation(commands.Cog):
                 send_messages=None
             )
             
-            embed = EmbedFactory.success("🔓 Channel Unlocked", f"{target_channel.mention} has been unlocked")
+            embed = EmbedFactory.success("🔓 تم فتح القناة", f"تم فتح القناة {target_channel.mention}.")
             await interaction.response.send_message(embed=embed)
 
             # Log action
             log_embed = EmbedFactory.create(
-                title="🔓 Channel Unlocked",
-                description=f"**Channel:** {target_channel.mention}\n"
+                title="🔓 تم فتح القناة",
+                description=f"**القناة:** {target_channel.mention}\n"
                            f"**Moderator:** {interaction.user.mention}",
                 color=EmbedColor.SUCCESS
             )
@@ -532,11 +532,11 @@ class Moderation(commands.Cog):
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "I don't have permission to edit this channel"),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية تعديل هذه القناة."),
                 ephemeral=True
             )
 
-    @app_commands.command(name="nickname", description="Change a user's nickname")
+    @app_commands.command(name="nickname", description="تغيير لقب عضو")
     @app_commands.describe(
         user="User to change nickname",
         nickname="New nickname (leave empty to reset)"
@@ -552,7 +552,7 @@ class Moderation(commands.Cog):
         can_moderate, error = PermissionChecker.can_moderate(interaction.user, user)
         if not can_moderate:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Cannot Change Nickname", error),
+                embed=EmbedFactory.error("تعذّر تغيير اللقب", error),
                 ephemeral=True
             )
             return
@@ -577,7 +577,7 @@ class Moderation(commands.Cog):
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "I don't have permission to change this user's nickname"),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية تغيير لقب هذا العضو."),
                 ephemeral=True
             )
 
