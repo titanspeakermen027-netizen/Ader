@@ -113,7 +113,7 @@ class Shop(commands.Cog):
             color=EmbedColor.ECONOMY,
         )
 
-    @app_commands.command(name="shop", description="Browse and buy items from the server ANOCoin shop")
+    @app_commands.command(name="shop", description="استعراض منتجات متجر ANORIS في الخادم وشراؤها")
     async def shop(self, interaction: discord.Interaction):
         items = await self._get_items(interaction.guild.id)
         if not items:
@@ -126,18 +126,18 @@ class Shop(commands.Cog):
             for item in items[:25]
         )
         embed = EmbedFactory.create(
-            title="🏪 ANOCoin Shop",
+            title="🏪 متجر ANORIS",
             description=f"رصيدك: **{balance:,} {self.currency_name}**\n\n{description}\n\nاختر منتجاً من القائمة لعرض التفاصيل والشراء.",
             color=EmbedColor.ECONOMY,
         )
         await interaction.response.send_message(embed=embed, view=ShopView(self, items, interaction.user.id))
 
-    @app_commands.command(name="inventory", description="View your purchased shop items")
+    @app_commands.command(name="inventory", description="عرض المنتجات التي اشتريتها من المتجر")
     async def inventory(self, interaction: discord.Interaction):
         user = await self.db.get_user(interaction.user.id, interaction.guild.id) or await self.db.create_user(interaction.user.id, interaction.guild.id)
         inventory = user.get("inventory", [])
         if not inventory:
-            return await interaction.response.send_message(embed=EmbedFactory.info("🎒 Inventory", "مخزونك فارغ حالياً."), ephemeral=True)
+            return await interaction.response.send_message(embed=EmbedFactory.info("🎒 المخزون", "مخزونك فارغ حالياً."), ephemeral=True)
         lines = []
         for index, item in enumerate(inventory, 1):
             if isinstance(item, dict):
@@ -146,11 +146,11 @@ class Shop(commands.Cog):
                 lines.append(f"**{index}. {name}**" + (f" — <t:{int(purchased)}:R>" if purchased else ""))
             else:
                 lines.append(f"**{index}. {item}**")
-        embed = EmbedFactory.create(title="🎒 Inventory", description="\n".join(lines[-25:]), color=EmbedColor.ECONOMY)
+        embed = EmbedFactory.create(title="🎒 المخزون", description="\n".join(lines[-25:]), color=EmbedColor.ECONOMY)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(name="shop-add", description="Add an item to the ANOCoin shop")
-    @app_commands.describe(name="Item name", price="Price in ANOCoin", description="Item description", stock="Stock; use -1 for unlimited")
+    @app_commands.command(name="shop-add", description="إضافة منتج إلى متجر ANORIS")
+    @app_commands.describe(name="اسم المنتج", price="السعر بعملة ANORIS", description="وصف المنتج", stock="المخزون؛ استخدم -1 للمخزون غير المحدود")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
     async def shop_add(self, interaction: discord.Interaction, name: str, price: int, description: str, stock: int = -1):
@@ -162,8 +162,8 @@ class Shop(commands.Cog):
         )
         await interaction.response.send_message(embed=EmbedFactory.success("تمت إضافة المنتج", f"🛒 **{name}** — **{price:,} {self.currency_name}**"), ephemeral=True)
 
-    @app_commands.command(name="shop-remove", description="Remove an item from the ANOCoin shop")
-    @app_commands.describe(item_id="Shop item ID")
+    @app_commands.command(name="shop-remove", description="حذف منتج من متجر ANORIS")
+    @app_commands.describe(item_id="معرّف المنتج في المتجر")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
     async def shop_remove(self, interaction: discord.Interaction, item_id: int):
@@ -172,8 +172,8 @@ class Shop(commands.Cog):
             return await interaction.response.send_message("❌ المنتج غير موجود.", ephemeral=True)
         await interaction.response.send_message(embed=EmbedFactory.success("تم حذف المنتج", f"تم حذف المنتج `#{item_id}`."), ephemeral=True)
 
-    @app_commands.command(name="shop-edit", description="Edit an item in the ANOCoin shop")
-    @app_commands.describe(item_id="Shop item ID", name="New name", price="New price", description="New description", stock="New stock; -1 for unlimited")
+    @app_commands.command(name="shop-edit", description="تعديل منتج في متجر ANORIS")
+    @app_commands.describe(item_id="معرّف المنتج في المتجر", name="الاسم الجديد", price="السعر الجديد", description="الوصف الجديد", stock="المخزون الجديد؛ -1 للمخزون غير المحدود")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
     async def shop_edit(self, interaction: discord.Interaction, item_id: int, name: str | None = None, price: int | None = None, description: str | None = None, stock: int | None = None):
