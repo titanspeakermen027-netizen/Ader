@@ -36,7 +36,7 @@ class FixedAdModal(discord.ui.Modal, title="اكتب إعلانك"):
 
     async def on_submit(self, interaction: discord.Interaction):
         if interaction.user.id != self.actor_id:
-            return await interaction.response.send_message("❌ هذه العملية ليست لك.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> هذه العملية ليست لك.", ephemeral=True)
 
         row = await self.cog.db.fetchone(
             "SELECT * FROM ad_rooms WHERE channel_id=? AND active=1",
@@ -50,7 +50,7 @@ class FixedAdModal(discord.ui.Modal, title="اكتب إعلانك"):
                 channel = None
 
         if not row or int(row["owner_id"]) != self.owner_id or not isinstance(channel, discord.TextChannel):
-            return await interaction.response.send_message("❌ القناة غير موجودة.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> القناة غير موجودة.", ephemeral=True)
 
         try:
             await channel.edit(name=clean_name(str(self.name.value)), reason="Ader advertisement")
@@ -64,20 +64,20 @@ class FixedAdModal(discord.ui.Modal, title="اكتب إعلانك"):
             await self.cog.run_custom_event(channel, "after_ad", message)
             await self.cog.render_panel(channel)
             await interaction.response.send_message(
-                embed=ad_embed(f"تم نشر إعلانك في {channel.mention} ✅"),
+                embed=ad_embed(f"تم نشر إعلانك في {channel.mention} <:success:1560285005018566757>"),
                 ephemeral=True,
             )
             await self.cog.finish_control_message(interaction, self.control_message_id, channel)
         except discord.Forbidden:
             if not interaction.response.is_done():
-                await interaction.response.send_message("❌ البوت لا يملك الصلاحيات الكافية.", ephemeral=True)
+                await interaction.response.send_message("<:no_access:1560284872403062904> البوت لا يملك الصلاحيات الكافية.", ephemeral=True)
             else:
-                await interaction.followup.send("❌ البوت لا يملك الصلاحيات الكافية.", ephemeral=True)
+                await interaction.followup.send("<:no_access:1560284872403062904> البوت لا يملك الصلاحيات الكافية.", ephemeral=True)
         except discord.HTTPException:
             if not interaction.response.is_done():
-                await interaction.response.send_message("❌ تعذر إرسال الإعلان حالياً.", ephemeral=True)
+                await interaction.response.send_message("<:failure:1560286464892469380> تعذر إرسال الإعلان حالياً.", ephemeral=True)
             else:
-                await interaction.followup.send("❌ تعذر إرسال الإعلان حالياً.", ephemeral=True)
+                await interaction.followup.send("<:failure:1560286464892469380> تعذر إرسال الإعلان حالياً.", ephemeral=True)
 
 
 class FixedWriteAdView(WriteAdView):
@@ -87,7 +87,7 @@ class FixedWriteAdView(WriteAdView):
     @discord.ui.button(label="اكتب إعلانك", emoji="📢", style=discord.ButtonStyle.primary)
     async def write(self, interaction: discord.Interaction, _button: discord.ui.Button):
         if interaction.user.id != self.owner_id:
-            return await interaction.response.send_message("❌ فقط مالك القناة يمكنه كتابة الإعلان.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> فقط مالك القناة يمكنه كتابة الإعلان.", ephemeral=True)
         await interaction.response.send_modal(
             FixedAdModal(
                 self.cog,
@@ -103,7 +103,7 @@ class FixedWriteAdView(WriteAdView):
 class FixedPrefixAdView(PrefixAdView):
     async def pick(self, interaction, mention):
         if interaction.user.id != self.actor_id:
-            return await interaction.response.send_message("❌ هذا التحكم ليس لك.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> هذا التحكم ليس لك.", ephemeral=True)
         owner = interaction.guild.get_member(self.owner_id) if interaction.guild else None
         owner_mention = owner.mention if owner else ""
         await interaction.response.edit_message(
@@ -134,20 +134,20 @@ class AdRoomCommandOverride(commands.Cog):
 
         shop_cog = self.bot.get_cog("AdvertisingShop")
         if shop_cog is None:
-            return await ctx.reply("❌ نظام الإعلانات غير جاهز حالياً.", mention_author=False)
+            return await ctx.reply("<:failure:1560286464892469380> نظام الإعلانات غير جاهز حالياً.", mention_author=False)
 
         if not await shop_cog.authorized(ctx.author):
-            return await ctx.reply("❌ ليست لديك صلاحية استعمال أمر `$اعلان`.", mention_author=False)
+            return await ctx.reply("<:no_access:1560284872403062904> ليست لديك صلاحية استعمال أمر `$اعلان`.", mention_author=False)
 
         if member is None:
-            return await ctx.reply("❌ الاستعمال الصحيح: `$اعلان @العضو`", mention_author=False)
+            return await ctx.reply("<:failure:1560286464892469380> الاستعمال الصحيح: `$اعلان @العضو`", mention_author=False)
         if member.bot:
-            return await ctx.reply("❌ لا يمكن إنشاء إعلان لبوت.", mention_author=False)
+            return await ctx.reply("<:failure:1560286464892469380> لا يمكن إنشاء إعلان لبوت.", mention_author=False)
 
         me = ctx.guild.me
         if me is None or not me.guild_permissions.manage_channels:
             return await ctx.reply(
-                "❌ البوت يحتاج صلاحية إدارة القنوات لإنشاء قناة إعلانية جديدة.",
+                "<:no_access:1560284872403062904> البوت يحتاج صلاحية إدارة القنوات لإنشاء قناة إعلانية جديدة.",
                 mention_author=False,
             )
 
@@ -183,13 +183,13 @@ class AdRoomCommandOverride(commands.Cog):
                 (ctx.guild.id, channel.id, member.id, "everyone"),
             )
         except (discord.Forbidden, discord.HTTPException):
-            return await ctx.reply("❌ تعذر إنشاء قناة إعلانية جديدة.", mention_author=False)
+            return await ctx.reply("<:failure:1560286464892469380> تعذر إنشاء قناة إعلانية جديدة.", mention_author=False)
         except Exception:
             try:
                 await channel.delete(reason="Ader rollback after database error")
             except Exception:
                 pass
-            return await ctx.reply("❌ تعذر تجهيز قناة الإعلان الجديدة.", mention_author=False)
+            return await ctx.reply("<:failure:1560286464892469380> تعذر تجهيز قناة الإعلان الجديدة.", mention_author=False)
 
         view = FixedPrefixAdView(shop_cog, ctx.author.id, member.id, channel.id)
         control = await ctx.reply(
