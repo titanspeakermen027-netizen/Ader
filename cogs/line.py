@@ -80,7 +80,7 @@ class Line(commands.Cog):
             )
         if len(keyword) > 100:
             return await interaction.response.send_message(
-                "❌ الكلمة طويلة بزاف؛ الحد الأقصى هو 100 حرف.",
+                "❌ الكلمة طويلة جدًا؛ الحد الأقصى هو 100 حرف.",
                 ephemeral=True,
             )
         if role.is_default():
@@ -90,7 +90,7 @@ class Line(commands.Cog):
             )
         if image.size > MAX_IMAGE_BYTES:
             return await interaction.response.send_message(
-                "❌ حجم الصورة كبير بزاف. الحد الأقصى هو 25 MB.",
+                "❌ حجم الصورة كبير جدًا. الحد الأقصى هو 25 ميغابايت.",
                 ephemeral=True,
             )
 
@@ -135,7 +135,7 @@ class Line(commands.Cog):
                 )
             if len(image_data) > MAX_IMAGE_BYTES:
                 return await interaction.followup.send(
-                    "❌ حجم الصورة كبير بزاف. الحد الأقصى هو 25 MB.",
+                    "❌ حجم الصورة كبير جدًا. الحد الأقصى هو 25 ميغابايت.",
                     ephemeral=True,
                 )
 
