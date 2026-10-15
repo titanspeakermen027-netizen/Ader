@@ -20,7 +20,7 @@ class MemberResetConfirmView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author_id:
-            await interaction.response.send_message("❌ يمكن فقط للشخص الذي بدأ الأمر تأكيد العملية.", ephemeral=True)
+            await interaction.response.send_message("<:failure:1560286464892469380> يمكن فقط للشخص الذي بدأ الأمر تأكيد العملية.", ephemeral=True)
             return False
         return True
 
@@ -28,16 +28,16 @@ class MemberResetConfirmView(discord.ui.View):
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         current = await self.cog.db.get_balance(self.member.id)
         if current <= 0:
-            await interaction.response.edit_message(content=f"ℹ️ رصيد {self.member.mention} يساوي بالفعل **0 ANORIS**.", view=None)
+            await interaction.response.edit_message(content=f"<:required:1558907460763525182> رصيد {self.member.mention} يساوي بالفعل **0 ANORIS**.", view=None)
             self.stop()
             return
         ok = await self.cog.db.remove_balance(self.member.id, self.guild_id, current)
         if not ok:
-            await interaction.response.edit_message(content="❌ وقع خطأ وما تبدلش الرصيد.", view=None)
+            await interaction.response.edit_message(content="<:failure:1560286464892469380> وقع خطأ وما تبدلش الرصيد.", view=None)
             self.stop()
             return
         await interaction.response.edit_message(
-            content=(f"✅ **تم تصفير عملة العضو بنجاح**\n"
+            content=(f"<:success:1560285005018566757> **تم تصفير عملة العضو بنجاح**\n"
                      f"👤 العضو: {self.member.mention}\n"
                      f"💰 المبلغ الذي تم تصفيره: **{current:,} ANORIS**\n"
                      f"🪙 الرصيد الجديد: **0 ANORIS**"),
@@ -47,7 +47,7 @@ class MemberResetConfirmView(discord.ui.View):
 
     @discord.ui.button(label="إلغاء", style=discord.ButtonStyle.secondary, emoji="✖️")
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(content="❌ تم إلغاء عملية تصفير عملة العضو.", view=None)
+        await interaction.response.edit_message(content="<:failure:1560286464892469380> تم إلغاء عملية تصفير عملة العضو.", view=None)
         self.stop()
 
     async def on_timeout(self):
@@ -86,26 +86,26 @@ class MemberCurrencyReset(commands.Cog):
         if args is None:
             return
         if message.author.id not in OWNER_IDS:
-            await message.channel.send("❌ هذا الأمر مخصص لصاحب البوت فقط.", delete_after=8)
+            await message.channel.send("<:failure:1560286464892469380> هذا الأمر مخصص لصاحب البوت فقط.", delete_after=8)
             return
         ctx = await self.bot.get_context(message)
         parts = args.split()
         if len(parts) != 1:
-            await message.channel.send("❌ الاستعمال: `-ظبط @العضو` أو `-ظبط ID`", delete_after=8)
+            await message.channel.send("<:failure:1560286464892469380> الاستعمال: `-ظبط @العضو` أو `-ظبط ID`", delete_after=8)
             return
         member = await self._resolve_member(ctx, parts[0])
         if member is None:
-            await message.channel.send("❌ لم يتم العثور على هذا العضو. استخدم إشارة عضو أو معرّفًا صحيحًا.", delete_after=8)
+            await message.channel.send("<:failure:1560286464892469380> لم يتم العثور على هذا العضو. استخدم إشارة عضو أو معرّفًا صحيحًا.", delete_after=8)
             return
         if member.bot:
-            await message.channel.send("❌ لا يمكن تصفير رصيد البوت.", delete_after=8)
+            await message.channel.send("<:failure:1560286464892469380> لا يمكن تصفير رصيد البوت.", delete_after=8)
             return
         if member.id in OWNER_IDS:
-            await message.channel.send("❌ لا يمكن تصفير رصيد مالك البوت.", delete_after=8)
+            await message.channel.send("<:failure:1560286464892469380> لا يمكن تصفير رصيد مالك البوت.", delete_after=8)
             return
         balance = await self.db.get_balance(member.id)
         if balance <= 0:
-            await message.channel.send(f"ℹ️ رصيد {member.mention} يساوي بالفعل **0 ANORIS**.", delete_after=8)
+            await message.channel.send(f"<:required:1558907460763525182> رصيد {member.mention} يساوي بالفعل **0 ANORIS**.", delete_after=8)
             return
         view = MemberResetConfirmView(self, message.author.id, member, balance, message.guild.id)
         await message.channel.send(
