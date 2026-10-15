@@ -113,7 +113,7 @@ class MemberCurrencyReset(commands.Cog):
             f"👤 العضو: {member.mention}\n"
             f"💰 الرصيد الحالي: **{balance:,} ANORIS**\n\n"
             f"هل أنت متأكد من أنك تريد تصفير رصيد هذا العضو؟\n"
-            f"⚠️ العملية غادي تخلي الرصيد **0 ANORIS**.",
+            f"⚠️ ستؤدي العملية إلى جعل الرصيد **0 ANORIS**.",
             view=view,
         )
 
