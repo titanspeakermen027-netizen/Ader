@@ -43,7 +43,7 @@ class BotEditTextModal(discord.ui.Modal):
             )
         else:
             self.value = discord.ui.TextInput(
-                label="البايو الجديدة",
+                label="الوصف الجديد",
                 placeholder="خادمك، رؤيتك، ANO BOT.",
                 style=discord.TextStyle.paragraph,
                 max_length=190,
