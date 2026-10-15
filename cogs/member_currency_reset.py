@@ -20,7 +20,7 @@ class MemberResetConfirmView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author_id:
-            await interaction.response.send_message("❌ غير الشخص اللي استعمل الأمر يقدر يأكد العملية.", ephemeral=True)
+            await interaction.response.send_message("❌ يمكن فقط للشخص الذي بدأ الأمر تأكيد العملية.", ephemeral=True)
             return False
         return True
 
@@ -98,10 +98,10 @@ class MemberCurrencyReset(commands.Cog):
             await message.channel.send("❌ لم يتم العثور على هذا العضو. استخدم إشارة عضو أو معرّفًا صحيحًا.", delete_after=8)
             return
         if member.bot:
-            await message.channel.send("❌ ما يمكنش تصفير عملة بوت.", delete_after=8)
+            await message.channel.send("❌ لا يمكن تصفير رصيد البوت.", delete_after=8)
             return
         if member.id in OWNER_IDS:
-            await message.channel.send("❌ ما يمكنش تصفير عملة صاحب البوت.", delete_after=8)
+            await message.channel.send("❌ لا يمكن تصفير رصيد مالك البوت.", delete_after=8)
             return
         balance = await self.db.get_balance(member.id)
         if balance <= 0:
