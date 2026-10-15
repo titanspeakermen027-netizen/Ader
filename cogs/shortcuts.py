@@ -361,7 +361,7 @@ class Shortcuts(commands.Cog):
                         "❌ رفض Discord قفل هذه القناة لأن إعدادات **تهيئة الخادم** تتطلب وجود قناة واحدة على الأقل يمكن للجميع قراءتها وإرسال الرسائل فيها.",
                         delete_after=10,
                     )
-                return await ctx.send("❌ تعذر تعديل صلاحيات الروم حالياً.", delete_after=7)
+                return await ctx.send("❌ تعذّر تعديل صلاحيات القناة حاليًا.", delete_after=7)
 
             if key == "lock":
                 return await ctx.send(f"**<:truee:1545109160956264501> تم قفل القناة {ctx.channel.mention}**")
