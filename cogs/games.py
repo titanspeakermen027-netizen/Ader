@@ -113,7 +113,7 @@ class TriviaView(discord.ui.View):
             else:
                 correct_answer = self.question_data['options'][self.question_data['answer']]
                 embed = EmbedFactory.error(
-                    "إجابة غير صحيحة! ❌",
+                    "إجابة غير صحيحة! <:failure:1560286464892469380>",
                     f"الإجابة الصحيحة هي: **{correct_answer}**"
                 )
 
