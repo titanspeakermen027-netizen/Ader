@@ -25,7 +25,7 @@ def clean_name(value: str) -> str:
 
 
 def ad_embed(text: str) -> discord.Embed:
-    return discord.Embed(title="✅ تم نشر الإعلان", description=text, colour=discord.Colour.green())
+    return discord.Embed(title="<:success:1560285005018566757> تم نشر الإعلان", description=text, colour=discord.Colour.green())
 
 
 class RoomSelect(discord.ui.Select):
@@ -44,7 +44,7 @@ class RoomSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.actor_id:
-            return await interaction.response.send_message("❌ هذا التحكم ليس لك.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> هذا التحكم ليس لك.", ephemeral=True)
         channel_id = int(self.values[0])
         await interaction.response.edit_message(
             content="**اختر نوع الإشارة الخاصة بالقناة**",
@@ -73,23 +73,23 @@ class AdModal(discord.ui.Modal, title="اكتب إعلانك"):
 
     async def on_submit(self, interaction: discord.Interaction):
         if interaction.user.id != self.actor_id:
-            return await interaction.response.send_message("❌ هذه العملية ليست لك.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> هذه العملية ليست لك.", ephemeral=True)
         row = await self.cog.db.fetchone("SELECT * FROM ad_rooms WHERE channel_id=? AND active=1", (self.channel_id,))
         channel = interaction.guild.get_channel(self.channel_id) if interaction.guild else None
         if not row or int(row["owner_id"]) != self.owner_id or not isinstance(channel, discord.TextChannel):
-            return await interaction.response.send_message("❌ القناة غير موجودة.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> القناة غير موجودة.", ephemeral=True)
         try:
             await channel.edit(name=clean_name(str(self.name.value)), reason="Ader advertisement")
             mention_text = "@everyone" if self.mention == "everyone" else "@here"
             content = f"{mention_text} {str(self.text.value).strip()}"
             message = await channel.send(content, allowed_mentions=discord.AllowedMentions(everyone=True))
             await self.cog.run_custom_event(channel, "after_ad", message)
-            await interaction.response.send_message(embed=ad_embed(f"تم نشر إعلانك في {channel.mention} ✅"), ephemeral=True)
+            await interaction.response.send_message(embed=ad_embed(f"تم نشر إعلانك في {channel.mention} <:success:1560285005018566757>"), ephemeral=True)
             await self.cog.finish_control_message(interaction, self.control_message_id, channel)
         except discord.Forbidden:
-            await interaction.response.send_message("❌ البوت لا يملك الصلاحيات الكافية.", ephemeral=True)
+            await interaction.response.send_message("<:no_access:1560284872403062904> البوت لا يملك الصلاحيات الكافية.", ephemeral=True)
         except discord.HTTPException:
-            await interaction.response.send_message("❌ تعذر إرسال الإعلان حالياً.", ephemeral=True)
+            await interaction.response.send_message("<:failure:1560286464892469380> تعذر إرسال الإعلان حالياً.", ephemeral=True)
 
 
 class GiveawayAmountModal(discord.ui.Modal, title="إنشاء السحب"):
@@ -102,14 +102,14 @@ class GiveawayAmountModal(discord.ui.Modal, title="إنشاء السحب"):
 
     async def on_submit(self, interaction: discord.Interaction):
         if interaction.user.id != self.owner_id:
-            return await interaction.response.send_message("❌ هذه العملية ليست لك.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> هذه العملية ليست لك.", ephemeral=True)
         try:
             amount = int(str(self.amount.value).replace(",", "").strip())
             minutes = int(str(self.duration.value).strip())
         except ValueError:
-            return await interaction.response.send_message("❌ أدخل أرقاماً صحيحة.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> أدخل أرقاماً صحيحة.", ephemeral=True)
         if amount <= 0 or minutes <= 0 or minutes > 10080:
-            return await interaction.response.send_message("❌ المبلغ والمدة غير صالحين.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> المبلغ والمدة غير صالحين.", ephemeral=True)
         ok, msg = await self.cog.create_giveaway(interaction.guild, interaction.user, self.channel_id, amount, minutes * 60)
         await interaction.response.send_message(msg, ephemeral=True)
 
@@ -125,14 +125,14 @@ class GiveawayView(discord.ui.View):
     async def enter(self, interaction: discord.Interaction):
         row = await self.cog.db.fetchone("SELECT * FROM ad_giveaways WHERE id=? AND ended=0", (self.giveaway_id,))
         if not row or float(row["ends_at"]) <= time.time():
-            return await interaction.response.send_message("❌ انتهى السحب.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> انتهى السحب.", ephemeral=True)
         try:
             await self.cog.db.execute(
                 "INSERT INTO ad_giveaway_entries(giveaway_id,user_id) VALUES(?,?)",
                 (self.giveaway_id, interaction.user.id),
             )
         except Exception:
-            return await interaction.response.send_message("ℹ️ أنت مسجل بالفعل في السحب.", ephemeral=True)
+            return await interaction.response.send_message("<:required:1558907460763525182> أنت مسجل بالفعل في السحب.", ephemeral=True)
         await interaction.response.send_message("🎉 تم تسجيل مشاركتك بنجاح.", ephemeral=True)
 
 
@@ -152,7 +152,7 @@ class AdPanel(discord.ui.View):
 
     async def check(self, interaction: discord.Interaction):
         if interaction.user.id != self.owner_id:
-            await interaction.response.send_message("❌ هذه اللوحة مخصصة لمالك القناة فقط.", ephemeral=True)
+            await interaction.response.send_message("<:failure:1560286464892469380> هذه اللوحة مخصصة لمالك القناة فقط.", ephemeral=True)
             return False
         return True
 
@@ -182,7 +182,7 @@ class AdPanel(discord.ui.View):
             return await interaction.followup.send("⌛ انتهى وقت رفع الصورة.", ephemeral=True)
         attachment = next((a for a in message.attachments if (a.content_type or "").startswith("image/")), None)
         if attachment is None:
-            return await interaction.followup.send("❌ الملف المرسل ليس صورة.", ephemeral=True)
+            return await interaction.followup.send("<:failure:1560286464892469380> الملف المرسل ليس صورة.", ephemeral=True)
         try:
             self.cog.image_dir.mkdir(parents=True, exist_ok=True)
             path = self.cog.image_dir / f"{interaction.guild.id}_{self.channel_id}_{message.id}.png"
@@ -193,9 +193,9 @@ class AdPanel(discord.ui.View):
                 await message.delete()
             except discord.HTTPException:
                 pass
-            await interaction.followup.send("✅ تم نشر الصورة.", ephemeral=True)
+            await interaction.followup.send("<:success:1560285005018566757> تم نشر الصورة.", ephemeral=True)
         except (OSError, discord.HTTPException):
-            await interaction.followup.send("❌ تعذر حفظ/نشر الصورة.", ephemeral=True)
+            await interaction.followup.send("<:failure:1560286464892469380> تعذر حفظ/نشر الصورة.", ephemeral=True)
 
 
 class TemplateModal(discord.ui.Modal, title="تعديل الرسالة"):
@@ -207,10 +207,10 @@ class TemplateModal(discord.ui.Modal, title="تعديل الرسالة"):
 
     async def on_submit(self, interaction: discord.Interaction):
         if interaction.user.id != self.owner_id:
-            return await interaction.response.send_message("❌ هذه اللوحة مخصصة لمالك القناة.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> هذه اللوحة مخصصة لمالك القناة.", ephemeral=True)
         await self.cog.db.execute("UPDATE ad_rooms SET template=? WHERE channel_id=?", (str(self.text.value), self.channel_id))
         await self.cog.render_panel(interaction.guild.get_channel(self.channel_id))
-        await interaction.response.send_message("✅ تم حفظ الرسالة.", ephemeral=True)
+        await interaction.response.send_message("<:success:1560285005018566757> تم حفظ الرسالة.", ephemeral=True)
 
 
 class PrefixAdView(discord.ui.View):
@@ -225,7 +225,7 @@ class PrefixAdView(discord.ui.View):
 
     async def pick(self, interaction, mention):
         if interaction.user.id != self.actor_id:
-            return await interaction.response.send_message("❌ هذا التحكم ليس لك.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> هذا التحكم ليس لك.", ephemeral=True)
         await interaction.response.edit_message(
             content=f"{interaction.guild.get_member(self.owner_id).mention if interaction.guild else ''}\nاضغط لكتابة إعلانك.",
             view=WriteAdView(self.cog, self.owner_id, self.channel_id, mention, self.control_message_id),
@@ -242,7 +242,7 @@ class WriteAdView(discord.ui.View):
     @discord.ui.button(label="اكتب إعلانك", emoji="📢", style=discord.ButtonStyle.primary)
     async def write(self, interaction: discord.Interaction, _button: discord.ui.Button):
         if interaction.user.id != self.owner_id:
-            return await interaction.response.send_message("❌ فقط مالك القناة يمكنه كتابة الإعلان.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> فقط مالك القناة يمكنه كتابة الإعلان.", ephemeral=True)
         await interaction.response.send_modal(
             AdModal(self.cog, self.owner_id, self.channel_id, self.mention, self.owner_id, self.control_message_id)
         )
@@ -279,10 +279,10 @@ class AdvertisingShop(commands.Cog):
         guild = self.bot.get_guild(guild_id)
         member = guild.get_member(user_id) if guild else None
         if not guild or not member:
-            return False, "❌ تعذر تسليم المنتج."
+            return False, "<:failure:1560286464892469380> تعذر تسليم المنتج."
         if not guild.me.guild_permissions.manage_channels:
             await self.db.add_balance(user_id, guild_id, int(item["price"]))
-            return False, "❌ البوت يحتاج Manage Channels؛ تمت إعادة المبلغ."
+            return False, "<:failure:1560286464892469380> البوت يحتاج Manage Channels؛ تمت إعادة المبلغ."
         private = delivery.get("visibility") == "private"
         overwrites = {
                 guild.default_role: discord.PermissionOverwrite(view_channel=not private, send_messages=False, read_message_history=True),
@@ -293,7 +293,7 @@ class AdvertisingShop(commands.Cog):
             channel = await guild.create_text_channel(clean_name(f"ad-{member.display_name}"), category=None, overwrites=overwrites, reason="Ader shop advertising room")
         except (discord.Forbidden, discord.HTTPException):
             await self.db.add_balance(user_id, guild_id, int(item["price"]))
-            return False, "❌ تعذّر إنشاء القناة؛ تمت إعادة المبلغ."
+            return False, "<:failure:1560286464892469380> تعذّر إنشاء القناة؛ تمت إعادة المبلغ."
         mention = delivery.get("mention_type", "everyone")
         await self.db.execute("INSERT INTO ad_rooms(guild_id,channel_id,owner_id,mention_type) VALUES(?,?,?,?)", (guild_id, channel.id, user_id, mention))
         await channel.send(member.mention, allowed_mentions=discord.AllowedMentions(users=True))
@@ -339,7 +339,7 @@ class AdvertisingShop(commands.Cog):
             return
         try:
             message = await interaction.channel.fetch_message(message_id)
-            await message.edit(content=None, embed=ad_embed(f"تم نشر اعلانك في {channel.mention} ✅"), view=None)
+            await message.edit(content=None, embed=ad_embed(f"تم نشر اعلانك في {channel.mention} <:success:1560285005018566757>"), view=None)
         except (discord.NotFound, discord.HTTPException, discord.Forbidden):
             pass
 
@@ -348,14 +348,14 @@ class AdvertisingShop(commands.Cog):
         if not ctx.guild:
             return
         if not await self.authorized(ctx.author):
-            return await ctx.reply("❌ ليست لديك صلاحية استعمال أمر `$اعلان`.", mention_author=False)
+            return await ctx.reply("<:no_access:1560284872403062904> ليست لديك صلاحية استعمال أمر `$اعلان`.", mention_author=False)
         if member is None:
-            return await ctx.reply("❌ الاستعمال الصحيح: `$اعلان @العضو`", mention_author=False)
+            return await ctx.reply("<:failure:1560286464892469380> الاستعمال الصحيح: `$اعلان @العضو`", mention_author=False)
         if member.bot:
-            return await ctx.reply("❌ لا يمكن إنشاء إعلان لبوت.", mention_author=False)
+            return await ctx.reply("<:failure:1560286464892469380> لا يمكن إنشاء إعلان لبوت.", mention_author=False)
         rows = await self.db.fetchall("SELECT * FROM ad_rooms WHERE guild_id=? AND owner_id=? AND active=1 ORDER BY channel_id", (ctx.guild.id, member.id))
         if not rows:
-            return await ctx.reply("❌ لا يملك هذا العضو أي قناة إعلانية نشطة.", mention_author=False)
+            return await ctx.reply("<:failure:1560286464892469380> لا يملك هذا العضو أي قناة إعلانية نشطة.", mention_author=False)
         if len(rows) == 1:
             view = PrefixAdView(self, ctx.author.id, member.id, int(rows[0]["channel_id"]))
             control = await ctx.reply(
@@ -418,16 +418,16 @@ class AdvertisingShop(commands.Cog):
 
     async def create_giveaway(self, guild, owner: discord.Member, channel_id: int, amount: int, duration: int):
         if guild is None:
-            return False, "❌ السيرفر غير موجود."
+            return False, "<:failure:1560286464892469380> السيرفر غير موجود."
         row = await self.db.fetchone("SELECT * FROM ad_rooms WHERE guild_id=? AND channel_id=? AND owner_id=? AND active=1", (guild.id, channel_id, owner.id))
         if not row:
-            return False, "❌ هذه ليست قناتك الإعلانية."
+            return False, "<:failure:1560286464892469380> هذه ليست قناتك الإعلانية."
         if await self.db.get_balance(owner.id) < amount:
-            return False, f"❌ يجب أن يكون لديك **{amount:,} ANORIS** لبدء السحب."
+            return False, f"<:failure:1560286464892469380> يجب أن يكون لديك **{amount:,} ANORIS** لبدء السحب."
         settings = await self.db.fetchone("SELECT giveaway_enabled,required_guild_id FROM ad_settings_v2 WHERE guild_id=?", (guild.id,))
         required_guild_id = int(settings["required_guild_id"]) if settings and settings["required_guild_id"] else None
         if not await self.db.remove_balance(owner.id, guild.id, amount):
-            return False, "❌ تعذر خصم المبلغ."
+            return False, "<:failure:1560286464892469380> تعذر خصم المبلغ."
         ends = time.time() + duration
         cur = await self.db.execute("INSERT INTO ad_giveaways(guild_id,channel_id,owner_id,amount,ends_at,required_guild_id) VALUES(?,?,?,?,?,?)", (guild.id, channel_id, owner.id, amount, ends, required_guild_id))
         gid = int(cur.lastrowid)
@@ -441,8 +441,8 @@ class AdvertisingShop(commands.Cog):
         except discord.HTTPException:
             await self.db.execute("UPDATE ad_giveaways SET ended=1 WHERE id=?", (gid,))
             await self.db.add_balance(owner.id, guild.id, amount)
-            return False, "❌ تعذر نشر السحب؛ تمت إعادة المبلغ."
-        return True, f"✅ تم إنشاء السحب **#{gid}** وخصم **{amount:,} ANORIS** من رصيدك."
+            return False, "<:failure:1560286464892469380> تعذر نشر السحب؛ تمت إعادة المبلغ."
+        return True, f"<:success:1560285005018566757> تم إنشاء السحب **#{gid}** وخصم **{amount:,} ANORIS** من رصيدك."
 
     async def process_view_membership(self, row, user_id: int):
         required = row["required_guild_id"]
