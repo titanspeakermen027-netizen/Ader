@@ -16,35 +16,35 @@ from database.db_manager import DatabaseManager
 logger = logging.getLogger(__name__)
 
 
-class RoleMenuSetupModal(discord.ui.Modal, title="Create Role Menu"):
+class RoleMenuSetupModal(discord.ui.Modal, title="إنشاء قائمة رتب"):
     """Modal for creating role menus with custom settings"""
 
     title_input = discord.ui.TextInput(
-        label="Menu Title",
-        placeholder="e.g., Choose Your Roles",
+        label="عنوان القائمة",
+        placeholder="مثال: اختر الرتب المناسبة",
         required=True,
         max_length=100
     )
 
     description_input = discord.ui.TextInput(
-        label="Menu Description",
-        placeholder="e.g., Select your preferred roles from the dropdown below",
+        label="وصف القائمة",
+        placeholder="مثال: اختر الرتب المناسبة لك من القائمة أدناه",
         style=discord.TextStyle.paragraph,
         required=False,
         max_length=500
     )
 
     role_mentions = discord.ui.TextInput(
-        label="Roles (mention with @)",
-        placeholder="Type @ and select roles. Example: @Gamer @Artist @Developer",
+        label="الرتب (اذكرها باستخدام @)",
+        placeholder="اكتب @ واختر الرتب. مثال: @لاعب @فنان @مطور",
         style=discord.TextStyle.paragraph,
         required=True,
         max_length=1000
     )
 
     exclusive = discord.ui.TextInput(
-        label="Exclusive? (yes/no)",
-        placeholder="Type 'yes' if users can only pick ONE role",
+        label="رتبة حصرية؟ (نعم/لا)",
+        placeholder="اكتب نعم إذا كان بإمكان المستخدم اختيار رتبة واحدة فقط",
         required=True,
         max_length=3
     )
@@ -68,7 +68,7 @@ class RoleMenuSetupModal(discord.ui.Modal, title="Create Role Menu"):
 
         if not role_ids:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("No Roles Found", "Please mention roles using @. Type @ and select roles from the list that appears."),
+                embed=EmbedFactory.error("لم يتم العثور على رتب", "يرجى ذكر الرتب باستخدام @، ثم اختيارها من القائمة التي تظهر."),
                 ephemeral=True
             )
             return
@@ -94,14 +94,14 @@ class RoleMenuSetupModal(discord.ui.Modal, title="Create Role Menu"):
 
         if not role_list:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("No Valid Roles", f"Found {len(role_ids)} role mentions but they cannot be used (might be bot roles or @everyone)."),
+                embed=EmbedFactory.error("لا توجد رتب صالحة", f"تم العثور على {len(role_ids)} إشارة إلى رتبة، لكن لا يمكن استخدامها؛ فقد تكون رتبة بوت أو رتبة @everyone."),
                 ephemeral=True
             )
             return
 
         if len(role_list) > 25:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Too Many Roles", "Discord allows maximum 25 options per menu."),
+                embed=EmbedFactory.error("عدد الرتب كبير جدًا", "يسمح Discord بحد أقصى 25 خيارًا في كل قائمة."),
                 ephemeral=True
             )
             return
@@ -109,14 +109,14 @@ class RoleMenuSetupModal(discord.ui.Modal, title="Create Role Menu"):
         # Create embed
         embed = EmbedFactory.create(
             title=self.title_input.value,
-            description=self.description_input.value or "Select your roles from the dropdown below.",
+            description=self.description_input.value or "اختر الرتب من القائمة المنسدلة أدناه.",
             color=EmbedColor.PRIMARY
         )
 
         # Add field showing available roles
         roles_text = "\n".join([f"{r['emoji']} {r['role'].mention}" for r in role_list])
         embed.add_field(
-            name="Available Roles",
+            name="الرتب المتاحة",
             value=roles_text,
             inline=False
         )
@@ -133,8 +133,8 @@ class RoleMenuSetupModal(discord.ui.Modal, title="Create Role Menu"):
         # Respond to interaction
         await interaction.response.send_message(
             embed=EmbedFactory.success(
-                "Role Menu Created!",
-                f"{'Exclusive' if is_exclusive else 'Multi-select'} role menu created in {self.channel.mention}"
+                "تم إنشاء قائمة الرتب!",
+                f"تم إنشاء قائمة {'حصرية' if is_exclusive else 'متعددة الاختيارات'} في {self.channel.mention}"
             ),
             ephemeral=True
         )
@@ -149,7 +149,7 @@ class ExclusiveRoleSelect(discord.ui.Select):
         options = [
             discord.SelectOption(
                 label=r['label'],
-                description=f"Get the {r['label']} role",
+                description=f"احصل على رتبة {r['label']}",
                 value=str(r['role'].id),
                 emoji=r['emoji']
             )
@@ -157,7 +157,7 @@ class ExclusiveRoleSelect(discord.ui.Select):
         ]
 
         super().__init__(
-            placeholder=f"Choose your option...",
+            placeholder="اختر أحد الخيارات...",
             min_values=1,
             max_values=1,
             options=options,
@@ -181,8 +181,8 @@ class ExclusiveRoleSelect(discord.ui.Select):
             if user_has_role:
                 await interaction.response.send_message(
                     embed=EmbedFactory.error(
-                        "🔒 Role Already Selected",
-                        f"You already have **{existing_role.name}**. You cannot select another role from this menu."
+                        "🔒 تم اختيار رتبة بالفعل",
+                        f"لديك بالفعل رتبة **{existing_role.name}**. لا يمكنك اختيار رتبة أخرى من هذه القائمة."
                     ),
                     ephemeral=True
                 )
@@ -193,7 +193,7 @@ class ExclusiveRoleSelect(discord.ui.Select):
 
             if not selected_role:
                 await interaction.response.send_message(
-                    embed=EmbedFactory.error("Error", "Role not found"),
+                    embed=EmbedFactory.error("خطأ", "لم يتم العثور على الرتبة"),
                     ephemeral=True
                 )
                 return
@@ -202,9 +202,9 @@ class ExclusiveRoleSelect(discord.ui.Select):
             await interaction.user.add_roles(selected_role, reason="Exclusive role menu selection")
 
             embed = EmbedFactory.success(
-                "✅ Role Selected!",
-                f"You now have the **{selected_role.name}** role!\n\n"
-                f"**Note:** You cannot select another role from this menu."
+                "✅ تم اختيار الرتبة!",
+                f"أصبحت تملك رتبة **{selected_role.name}** الآن!\n\n"
+                f"**ملاحظة:** لا يمكنك اختيار رتبة أخرى من هذه القائمة."
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -212,13 +212,13 @@ class ExclusiveRoleSelect(discord.ui.Select):
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "I don't have permission to manage your roles. Please contact an admin."),
+                embed=EmbedFactory.error("Error", "لا يملك البوت صلاحية إدارة رتبك. يرجى التواصل مع أحد المسؤولين."),
                 ephemeral=True
             )
         except Exception as e:
             logger.error(f"Error in role selection: {e}", exc_info=True)
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", f"Failed to assign role: {str(e)}"),
+                embed=EmbedFactory.error("Error", f"تعذر إسناد الرتبة: {str(e)}"),
                 ephemeral=True
             )
 
@@ -230,7 +230,7 @@ class MultiRoleSelect(discord.ui.Select):
         options = [
             discord.SelectOption(
                 label=r['label'],
-                description=f"Toggle {r['label']} role",
+                description=f"تبديل حالة رتبة {r['label']}",
                 value=str(r['role'].id),
                 emoji=r['emoji']
             )
@@ -238,7 +238,7 @@ class MultiRoleSelect(discord.ui.Select):
         ]
 
         super().__init__(
-            placeholder="Select roles to add/remove...",
+            placeholder="اختر الرتب المراد إضافتها أو إزالتها...",
             min_values=0,
             max_values=len(options),
             options=options,
@@ -273,22 +273,22 @@ class MultiRoleSelect(discord.ui.Select):
 
             changes = []
             if roles_to_add:
-                changes.append(f"**Added:** {', '.join([r.name for r in roles_to_add])}")
+                changes.append(f"**تمت الإضافة:** {', '.join([r.name for r in roles_to_add])}")
             if roles_to_remove:
-                changes.append(f"**Removed:** {', '.join([r.name for r in roles_to_remove])}")
+                changes.append(f"**تمت الإزالة:** {', '.join([r.name for r in roles_to_remove])}")
 
             if not changes:
-                changes.append("No changes made")
+                changes.append("لم يتم إجراء أي تغييرات.")
 
             embed = EmbedFactory.success(
-                "✅ Roles Updated!",
+                "✅ تم تحديث الرتب!",
                 "\n".join(changes)
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "I don't have permission to manage your roles. Please contact an admin."),
+                embed=EmbedFactory.error("Error", "لا يملك البوت صلاحية إدارة رتبك. يرجى التواصل مع أحد المسؤولين."),
                 ephemeral=True
             )
         except Exception as e:
@@ -329,22 +329,22 @@ class Roles(commands.Cog):
         # Views are automatically re-registered when messages are loaded
         logger.info("Role menu persistent views ready")
 
-    @app_commands.command(name="create-role-menu", description="Create a role menu (Admin)")
+    @app_commands.command(name="create-role-menu", description="إنشاء قائمة رتب (للمسؤولين)")
     @app_commands.describe(
-        title="Title of the role menu",
-        description="Description of the role menu",
-        role1="First role",
-        role2="Second role (optional)",
-        role3="Third role (optional)",
-        role4="Fourth role (optional)",
-        role5="Fifth role (optional)",
-        role6="Sixth role (optional)",
-        role7="Seventh role (optional)",
-        role8="Eighth role (optional)",
-        role9="Ninth role (optional)",
-        role10="Tenth role (optional)",
-        exclusive="Can users only pick ONE role? (yes/no)",
-        channel="Channel to send menu (optional)"
+        title="عنوان قائمة الرتب",
+        description="وصف قائمة الرتب",
+        role1="الرتبة الأولى",
+        role2="الرتبة الثانية (اختيارية)",
+        role3="الرتبة الثالثة (اختيارية)",
+        role4="الرتبة الرابعة (اختيارية)",
+        role5="الرتبة الخامسة (اختيارية)",
+        role6="الرتبة السادسة (اختيارية)",
+        role7="الرتبة السابعة (اختيارية)",
+        role8="الرتبة الثامنة (اختيارية)",
+        role9="الرتبة التاسعة (اختيارية)",
+        role10="الرتبة العاشرة (اختيارية)",
+        exclusive="هل يمكن للمستخدم اختيار رتبة واحدة فقط؟ (نعم/لا)",
+        channel="القناة التي ستُرسل فيها القائمة (اختيارية)"
     )
     @is_admin()
     async def create_role_menu(
@@ -410,7 +410,7 @@ class Roles(commands.Cog):
         
         if not role_list:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("No Valid Roles", "Please select valid roles."),
+                embed=EmbedFactory.error("لا توجد رتب صالحة", "Please select valid roles."),
                 ephemeral=True
             )
             return
@@ -425,7 +425,7 @@ class Roles(commands.Cog):
         # Add field showing available roles
         roles_text = "\n".join([f"{r['emoji']} {r['role'].mention}" for r in role_list])
         embed.add_field(
-            name="Available Roles",
+            name="الرتب المتاحة",
             value=roles_text,
             inline=False
         )
@@ -441,7 +441,7 @@ class Roles(commands.Cog):
         
         await interaction.response.send_message(
             embed=EmbedFactory.success(
-                "Role Menu Created!",
+                "تم إنشاء قائمة الرتب!",
                 f"{'Exclusive' if is_exclusive else 'Multi-select'} role menu created in {target_channel.mention}"
             ),
             ephemeral=True
@@ -449,49 +449,49 @@ class Roles(commands.Cog):
         
         logger.info(f"Role menu created by {interaction.user} with {len(role_list)} roles")
 
-    @app_commands.command(name="addrole", description="Add a role to a user (Admin)")
-    @app_commands.describe(user="User to add role to", role="Role to add")
+    @app_commands.command(name="addrole", description="إسناد رتبة إلى عضو (للمسؤولين)")
+    @app_commands.describe(user="العضو المراد إسناد الرتبة إليه", role="الرتبة المراد إسنادها")
     @is_admin()
     async def add_role(self, interaction: discord.Interaction, user: discord.Member, role: discord.Role):
         """Add role to user"""
         if role in user.roles:
             await interaction.response.send_message(
-                embed=EmbedFactory.info("Already Has Role", f"{user.mention} already has {role.mention}"),
+                embed=EmbedFactory.info("الرتبة موجودة بالفعل", f"يمتلك {user.mention} الرتبة {role.mention} بالفعل."),
                 ephemeral=True
             )
             return
 
         try:
             await user.add_roles(role)
-            embed = EmbedFactory.success("Role Added", f"Added {role.mention} to {user.mention}")
+            embed = EmbedFactory.success("تم إسناد الرتبة", f"تم إسناد {role.mention} إلى {user.mention}.")
             await interaction.response.send_message(embed=embed)
             logger.info(f"{interaction.user} added role {role} to {user}")
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "I don't have permission to manage roles"),
+                embed=EmbedFactory.error("Error", "لا يملك البوت صلاحية إدارة الرتب."),
                 ephemeral=True
             )
 
-    @app_commands.command(name="removerole", description="Remove a role from a user (Admin)")
-    @app_commands.describe(user="User to remove role from", role="Role to remove")
+    @app_commands.command(name="removerole", description="إزالة رتبة من عضو (للمسؤولين)")
+    @app_commands.describe(user="العضو المراد إزالة الرتبة منه", role="الرتبة المراد إزالتها")
     @is_admin()
     async def remove_role(self, interaction: discord.Interaction, user: discord.Member, role: discord.Role):
         """Remove role from user"""
         if role not in user.roles:
             await interaction.response.send_message(
-                embed=EmbedFactory.info("Doesn't Have Role", f"{user.mention} doesn't have {role.mention}"),
+                embed=EmbedFactory.info("الرتبة غير موجودة لدى العضو", f"لا يمتلك {user.mention} الرتبة {role.mention}."),
                 ephemeral=True
             )
             return
 
         try:
             await user.remove_roles(role)
-            embed = EmbedFactory.success("Role Removed", f"Removed {role.mention} from {user.mention}")
+            embed = EmbedFactory.success("تمت إزالة الرتبة", f"تمت إزالة {role.mention} من {user.mention}.")
             await interaction.response.send_message(embed=embed)
             logger.info(f"{interaction.user} removed role {role} from {user}")
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "I don't have permission to manage roles"),
+                embed=EmbedFactory.error("Error", "لا يملك البوت صلاحية إدارة الرتب."),
                 ephemeral=True
             )
 
