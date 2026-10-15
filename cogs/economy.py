@@ -222,7 +222,7 @@ class Economy(commands.Cog):
             return await interaction.response.send_message(f":thinking: | **{interaction.user.name}، البوتات لا تملك أرصدة !**", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         balance = await self.db.get_balance(interaction.user.id)
         if balance < amount:
-            return await interaction.response.send_message(f"**ـ {interaction.user.name} رصيدك غير كافٍ لإتمام هذه العملية.** :thinking:"", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+            return await interaction.response.send_message(f"**ـ {interaction.user.name} رصيدك غير كافٍ لإتمام هذه العملية.** :thinking:", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         await interaction.response.defer(ephemeral=True)
         confirmed, user_code_message = await self._confirm(
             interaction.channel,
@@ -283,7 +283,7 @@ class Economy(commands.Cog):
             return await ctx.send("❌ يجب تحديد مبلغ موجب وعضواً آخر غير البوتات.")
         balance = await self.db.get_balance(ctx.author.id)
         if balance < amount:
-            return await ctx.send(f"**ـ {ctx.author.name} رصيدك غير كافٍ لإتمام هذه العملية.** :thinking:"", allowed_mentions=discord.AllowedMentions.none())
+            return await ctx.send(f"**ـ {ctx.author.name} رصيدك غير كافٍ لإتمام هذه العملية.** :thinking:", allowed_mentions=discord.AllowedMentions.none())
         confirmed, user_code_message = await self._confirm(
             ctx.channel,
             ctx.author,
