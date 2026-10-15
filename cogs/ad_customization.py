@@ -11,7 +11,7 @@ from discord.ext import commands
 
 EVENTS = {
     "after_ad": "بعد الإعلان",
-    "after_giveaway": "بعد القيف أواي",
+    "after_giveaway": "بعد الالسحب",
     "after_image": "بعد الصورة",
     "after_all": "بعد الاكتمال",
 }
@@ -37,11 +37,11 @@ def parse_duration(value: str) -> int:
     return seconds
 
 
-class GiveawaySettingsModal(discord.ui.Modal, title="إعدادات القيف أواي"):
+class GiveawaySettingsModal(discord.ui.Modal, title="إعدادات الالسحب"):
     enabled = discord.ui.TextInput(label="التفعيل", default="نعم", max_length=10)
     amount = discord.ui.TextInput(label="المبلغ الافتراضي", default="3000000", max_length=20)
     duration = discord.ui.TextInput(label="المدة", default="1h", max_length=20)
-    required_server = discord.ui.TextInput(label="Server ID لشرط الدخول (فارغ = لا يوجد)", required=False, max_length=25)
+    required_server = discord.ui.TextInput(label="معرّف الخادم لشرط الدخول (اتركه فارغًا لعدم تطبيق الشرط)", required=False, max_length=25)
 
     def __init__(self, cog, row=None):
         super().__init__()
@@ -54,7 +54,7 @@ class GiveawaySettingsModal(discord.ui.Modal, title="إعدادات القيف �
 
     async def on_submit(self, interaction: discord.Interaction):
         if not self.cog.is_admin(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى Manage Server أو Administrator.", ephemeral=True)
+            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         raw = str(self.enabled.value).strip().lower()
         if raw in {"نعم", "yes", "y", "1", "on", "true"}:
             enabled = 1
@@ -69,7 +69,7 @@ class GiveawaySettingsModal(discord.ui.Modal, title="إعدادات القيف �
                 raise ValueError
             server_id = int(str(self.required_server.value).strip()) if str(self.required_server.value).strip() else None
         except ValueError:
-            return await interaction.response.send_message("❌ تحقق من المبلغ والمدة وServer ID.", ephemeral=True)
+            return await interaction.response.send_message("❌ تحقق من المبلغ والمدة ومعرّف الخادم.", ephemeral=True)
         if server_id is not None and self.cog.bot.get_guild(server_id) is None:
             return await interaction.response.send_message("❌ يجب أن يكون البوت موجودًا في الخادم المُعلن عنه حتى يتمكن من التحقق من العضوية.", ephemeral=True)
         await self.cog.db.execute(
@@ -78,7 +78,7 @@ class GiveawaySettingsModal(discord.ui.Modal, title="إعدادات القيف �
             ON CONFLICT(guild_id) DO UPDATE SET giveaway_enabled=excluded.giveaway_enabled,giveaway_amount=excluded.giveaway_amount,giveaway_duration=excluded.giveaway_duration,giveaway_sponsor_id=excluded.giveaway_sponsor_id,updated_at=excluded.updated_at,required_guild_id=excluded.required_guild_id""",
             (interaction.guild.id, "", enabled, value, duration, interaction.user.id, None, time.time(), server_id),
         )
-        await interaction.response.send_message("✅ تم حفظ إعدادات القيف أواي وشرط دخول السيرفر.", ephemeral=True)
+        await interaction.response.send_message("✅ تم حفظ إعدادات الالسحب وشرط دخول السيرفر.", ephemeral=True)
 
 
 class MessageModal(discord.ui.Modal):
@@ -96,7 +96,7 @@ class MessageModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         if not self.cog.is_admin(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى Manage Server أو Administrator.", ephemeral=True)
+            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         name = str(self.name_input.value).strip()
         content = strip_mentions(str(self.content_input.value))
         if not name or not content:
@@ -121,7 +121,7 @@ class EventSelect(discord.ui.Select):
 
     async def callback(self, interaction):
         if not self.cog.is_admin(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى Manage Server أو Administrator.", ephemeral=True)
+            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         self.cog.selected_event[(interaction.guild_id or 0, interaction.user.id)] = self.values[0]
         await interaction.response.send_message(f"✅ تم اختيار: **{EVENTS[self.values[0]]}**", ephemeral=True)
 
@@ -134,7 +134,7 @@ class MessageSelect(discord.ui.Select):
 
     async def callback(self, interaction):
         if not self.cog.is_admin(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى Manage Server أو Administrator.", ephemeral=True)
+            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         mid = int(self.values[0]) if self.values[0].isdigit() else 0
         if not mid:
             return await interaction.response.send_message("❌ لا توجد رسالة للاختيار.", ephemeral=True)
@@ -145,26 +145,26 @@ class MessageSelect(discord.ui.Select):
 class ReplyTargetSelect(discord.ui.Select):
     def __init__(self, cog, rows):
         options = [
-            discord.SelectOption(label="بدون Reply", value="none"),
-            discord.SelectOption(label="Reply للإعلان", value="ad"),
-            discord.SelectOption(label="Reply للقيف أواي", value="giveaway"),
-            discord.SelectOption(label="Reply للصورة / Attachment", value="image"),
+            discord.SelectOption(label="بدون رد", value="none"),
+            discord.SelectOption(label="الرد على الإعلان", value="ad"),
+            discord.SelectOption(label="Reply للالسحب", value="giveaway"),
+            discord.SelectOption(label="الرد على الصورة / المرفق", value="image"),
         ]
         for row in rows[:20]:
-            options.append(discord.SelectOption(label=f"Reply لـ: {str(row['name'])[:85]}", value=f"custom:{row['id']}"))
-        super().__init__(placeholder="ما الإجراء الذي تريد من البوت تنفيذه عند الرد؟ دون الحاجة إلى معرّفات", options=options[:25], row=2)
+            options.append(discord.SelectOption(label=f"الرد على: {str(row['name'])[:85]}", value=f"custom:{row['id']}"))
+        super().__init__(placeholder="ما الإجراء الذي تريد من البوت تنفيذه عند الرد دون الحاجة إلى معرّفات", options=options[:25], row=2)
         self.cog = cog
 
     async def callback(self, interaction):
         if not self.cog.is_admin(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى Manage Server أو Administrator.", ephemeral=True)
+            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         key = (interaction.guild_id or 0, interaction.user.id)
         mid = self.cog.selected_message.get(key)
         if not mid:
             return await interaction.response.send_message("❌ اختر الرسالة الحالية أولاً.", ephemeral=True)
         target = self.values[0]
         if target == f"custom:{mid}":
-            return await interaction.response.send_message("❌ ما يمكنش الرسالة تدير Reply لنفسها.", ephemeral=True)
+            return await interaction.response.send_message("❌ لا يمكن تعيين الرسالة نفسها هدفًا للرد.", ephemeral=True)
         await self.cog.db.execute("UPDATE ad_custom_messages SET reply_target=? WHERE id=? AND guild_id=?", (target, mid, interaction.guild.id))
         await interaction.response.send_message("✅ تم حفظ الرد دون الحاجة إلى إدخال أي معرّف.", ephemeral=True)
 
@@ -176,7 +176,7 @@ class RoleSelect(discord.ui.RoleSelect):
 
     async def callback(self, interaction):
         if not self.cog.is_admin(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى Manage Server أو Administrator.", ephemeral=True)
+            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         row = await self.cog.db.fetchone("SELECT allowed_roles FROM ad_settings WHERE guild_id=?", (interaction.guild.id,))
         try:
             roles = {int(x) for x in json.loads(row["allowed_roles"] or "[]")} if row else set()
@@ -207,7 +207,7 @@ class SettingsView(discord.ui.View):
 
     async def guard(self, interaction):
         if not self.cog.is_admin(interaction):
-            await interaction.response.send_message("❌ تحتاج إلى Manage Server أو Administrator.", ephemeral=True)
+            await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
             return False
         return True
 
@@ -248,13 +248,13 @@ class SettingsView(discord.ui.View):
         try:
             target = await self.cog.bot.wait_for("message", timeout=60, check=lambda m: m.author.id == interaction.user.id and m.channel.id == interaction.channel.id)
         except asyncio.TimeoutError:
-            return await interaction.followup.send("⌛ سالات المهلة.", ephemeral=True)
+            return await interaction.followup.send("⌛ انتهت المهلة.", ephemeral=True)
         if target.id == mid:
-            return await interaction.followup.send("❌ ما يمكنش الرسالة تدير Reply لنفسها.", ephemeral=True)
+            return await interaction.followup.send("❌ لا يمكن تعيين الرسالة نفسها هدفًا للرد.", ephemeral=True)
         await self.cog.db.execute("UPDATE ad_custom_messages SET reply_target=? WHERE id=? AND guild_id=?", (f"message:{target.id}", mid, interaction.guild.id))
-        await interaction.followup.send("✅ تم تحديد الرسالة/Attachment كهدف للـReply بلا ID.", ephemeral=True)
+        await interaction.followup.send("✅ تم تحديد الرسالة أو المرفق هدفًا للرد دون الحاجة إلى معرّف.", ephemeral=True)
 
-    @discord.ui.button(label="🎁 قيف أواي", style=discord.ButtonStyle.success, row=4)
+    @discord.ui.button(label="🎁 السحب", style=discord.ButtonStyle.success, row=4)
     async def giveaway(self, interaction, button):
         if await self.guard(interaction):
             row = await self.cog.db.fetchone("SELECT * FROM ad_settings_v2 WHERE guild_id=?", (interaction.guild.id,))
@@ -292,15 +292,15 @@ class AdCustomization(commands.Cog):
     async def show_panel(self, interaction, edit=False):
         rows = await self.db.fetchall("SELECT * FROM ad_custom_messages WHERE guild_id=? ORDER BY position,id", (interaction.guild.id,))
         settings = await self.db.fetchone("SELECT giveaway_enabled,giveaway_amount,giveaway_duration,required_guild_id FROM ad_settings_v2 WHERE guild_id=?", (interaction.guild.id,))
-        embed = discord.Embed(title="⚙️ إعدادات الإعلان", description="إدارة الرسائل، توقيتها، الـReply، الرتب، وإعدادات القيف أواي.", colour=discord.Colour.blurple())
-        for event, label, emoji in (("after_ad", "بعد الإعلان", "📢"), ("after_giveaway", "بعد القيف أواي", "🎁"), ("after_image", "بعد الصورة", "🖼️"), ("after_all", "بعد الاكتمال", "🔗")):
+        embed = discord.Embed(title="⚙️ إعدادات الإعلان", description="إدارة الرسائل، توقيتها، الـReply، الرتب، وإعدادات الالسحب.", colour=discord.Colour.blurple())
+        for event, label, emoji in (("after_ad", "بعد الإعلان", "📢"), ("after_giveaway", "بعد الالسحب", "🎁"), ("after_image", "بعد الصورة", "🖼️"), ("after_all", "بعد الاكتمال", "🔗")):
             count = sum(str(row["event"]) == event and int(row["enabled"]) for row in rows)
             embed.add_field(name=f"{emoji} {label}", value=f"{count} رسالة", inline=True)
         giveaway = "معطل"
         if settings and int(settings["giveaway_enabled"] or 0):
             server = f"\nشرط الدخول: `{settings['required_guild_id']}`" if settings["required_guild_id"] else "\nشرط الدخول: لا يوجد"
             giveaway = f"{int(settings['giveaway_amount']):,} ANOCoin لمدة {int(settings['giveaway_duration']):,}s{server}"
-        embed.add_field(name="🎁 القيف أواي", value=giveaway, inline=False)
+        embed.add_field(name="🎁 الالسحب", value=giveaway, inline=False)
         if edit:
             await interaction.response.edit_message(embed=embed, view=SettingsView(self, rows))
         else:
@@ -309,7 +309,7 @@ class AdCustomization(commands.Cog):
     @app_commands.command(name="ad-settings", description="تخصيص نظام الإعلانات")
     async def ad_settings(self, interaction):
         if not self.is_admin(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى Manage Server أو Administrator.", ephemeral=True)
+            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         try:
             await self.show_panel(interaction)
         except Exception as exc:
