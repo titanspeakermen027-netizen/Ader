@@ -257,7 +257,7 @@ class ProfileCard(commands.Cog):
 
         if len(parts) == 2 and target is None:
             await message.reply(
-                "❌ ما لقيتش هاد العضو. استعمل P @العضو أو P ID.",
+                "❌ لم يتم العثور على هذا العضو. استخدم `P @العضو` أو `P <المعرّف>`. ",
                 mention_author=False,
                 delete_after=8,
                 allowed_mentions=discord.AllowedMentions.none(),
@@ -315,7 +315,7 @@ class ProfileCard(commands.Cog):
             minutes = rem // 60
             seconds = rem % 60
             await ctx.send(
-                f"⏳ مازال خاصك تستنى {hours} ساعة و {minutes} دقيقة و {seconds} ثانية قبل ما تعطي سمعة أخرى.",
+                f"⏳ يجب الانتظار {hours} ساعة و{minutes} دقيقة و{seconds} ثانية قبل منح تقييم آخر.",
                 allowed_mentions=discord.AllowedMentions.none(),
                 delete_after=8 if ctx.interaction is None else None,
             )
@@ -352,7 +352,7 @@ class ProfileCard(commands.Cog):
 
         await ctx.send(
             f"✅ {ctx.author.mention} عطى +1 REP لـ {member.mention}.\n"
-            f"📈 السمعة الحالية ديال {member.display_name}: {reputation:+d} REP",
+            f"📈 السمعة الحالية لـ {member.display_name}: {reputation:+d} REP",
             allowed_mentions=discord.AllowedMentions(users=[ctx.author, member]),
         )
 
