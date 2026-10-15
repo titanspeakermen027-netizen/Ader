@@ -71,7 +71,7 @@ class GiveawaySettingsModal(discord.ui.Modal, title="إعدادات القيف �
         except ValueError:
             return await interaction.response.send_message("❌ تحقق من المبلغ والمدة وServer ID.", ephemeral=True)
         if server_id is not None and self.cog.bot.get_guild(server_id) is None:
-            return await interaction.response.send_message("❌ البوت خاصو يكون داخل السيرفر المعلن عنه باش يقدر يتحقق من العضوية.", ephemeral=True)
+            return await interaction.response.send_message("❌ يجب أن يكون البوت موجودًا في الخادم المُعلن عنه حتى يتمكن من التحقق من العضوية.", ephemeral=True)
         await self.cog.db.execute(
             """INSERT INTO ad_settings_v2(guild_id,post_message,giveaway_enabled,giveaway_amount,giveaway_duration,giveaway_sponsor_id,image_path,updated_at,required_guild_id)
             VALUES(?,?,?,?,?,?,?,?,?)
@@ -152,7 +152,7 @@ class ReplyTargetSelect(discord.ui.Select):
         ]
         for row in rows[:20]:
             options.append(discord.SelectOption(label=f"Reply لـ: {str(row['name'])[:85]}", value=f"custom:{row['id']}"))
-        super().__init__(placeholder="شنو بغيتي البوت يدير ليه Reply؟ بلا IDs", options=options[:25], row=2)
+        super().__init__(placeholder="ما الإجراء الذي تريد من البوت تنفيذه عند الرد؟ دون الحاجة إلى معرّفات", options=options[:25], row=2)
         self.cog = cog
 
     async def callback(self, interaction):
@@ -161,12 +161,12 @@ class ReplyTargetSelect(discord.ui.Select):
         key = (interaction.guild_id or 0, interaction.user.id)
         mid = self.cog.selected_message.get(key)
         if not mid:
-            return await interaction.response.send_message("❌ اختار الرسالة الحالية أولاً.", ephemeral=True)
+            return await interaction.response.send_message("❌ اختر الرسالة الحالية أولاً.", ephemeral=True)
         target = self.values[0]
         if target == f"custom:{mid}":
             return await interaction.response.send_message("❌ ما يمكنش الرسالة تدير Reply لنفسها.", ephemeral=True)
         await self.cog.db.execute("UPDATE ad_custom_messages SET reply_target=? WHERE id=? AND guild_id=?", (target, mid, interaction.guild.id))
-        await interaction.response.send_message("✅ تم حفظ الـReply بلا ما تحتاج تدخل أي ID.", ephemeral=True)
+        await interaction.response.send_message("✅ تم حفظ الرد دون الحاجة إلى إدخال أي معرّف.", ephemeral=True)
 
 
 class RoleSelect(discord.ui.RoleSelect):
@@ -237,14 +237,14 @@ class SettingsView(discord.ui.View):
         self.cog.selected_message.pop(self.key(interaction), None)
         await self.cog.show_panel(interaction, edit=True)
 
-    @discord.ui.button(label="↩️ Reply لرسالة ترسلها دابا", style=discord.ButtonStyle.secondary, row=4)
+    @discord.ui.button(label="↩️ الرد على رسالة ترسلها الآن", style=discord.ButtonStyle.secondary, row=4)
     async def capture_reply(self, interaction, button):
         if not await self.guard(interaction):
             return
         mid = self.cog.selected_message.get(self.key(interaction))
         if not mid:
             return await interaction.response.send_message("❌ اختر رسالة من القائمة أولاً.", ephemeral=True)
-        await interaction.response.send_message("📌 صيفط دابا الرسالة أو الصورة/Attachment اللي بغيتي البوت يدير Reply ليها خلال 60 ثانية.", ephemeral=True)
+        await interaction.response.send_message("📌 أرسل الآن الرسالة أو الصورة أو المرفق الذي تريد من البوت الرد عليه خلال 60 ثانية.", ephemeral=True)
         try:
             target = await self.cog.bot.wait_for("message", timeout=60, check=lambda m: m.author.id == interaction.user.id and m.channel.id == interaction.channel.id)
         except asyncio.TimeoutError:
