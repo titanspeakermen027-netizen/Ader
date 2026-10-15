@@ -54,7 +54,7 @@ class BotEditTextModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         if not await self.cog.authorized(interaction.user):
             return await interaction.response.send_message(
-                "❌ هاد اللوحة مخصصة لمالك البوت أو لشخص مخوّل باستعمال أوامر المالك.",
+                "❌ هذه اللوحة مخصصة لمالك البوت أو لشخص مخوّل باستخدام أوامر المالك.",
                 ephemeral=True,
             )
 
@@ -110,7 +110,7 @@ class BotEditButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         if not await self.cog.authorized(interaction.user):
             return await interaction.response.send_message(
-                "❌ ما عندكش صلاحية استعمال إعدادات البوت.",
+                "❌ ليست لديك صلاحية استخدام إعدادات البوت.",
                 ephemeral=True,
             )
         await interaction.response.send_modal(BotEditTextModal(self.cog, self.mode))
@@ -145,7 +145,7 @@ class BotEditView(discord.ui.LayoutView):
         if await self.cog.authorized(interaction.user):
             return True
         await interaction.response.send_message(
-            "❌ ما عندكش صلاحية استعمال هاد اللوحة.",
+            "❌ ليست لديك صلاحية استخدام هذه اللوحة.",
             ephemeral=True,
         )
         return False
@@ -171,10 +171,10 @@ class BotEdit(commands.Cog):
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url, allow_redirects=True) as response:
                 if response.status != 200:
-                    raise ValueError("ما قدرتش نحمّل الصورة من هاد الرابط.")
+                    raise ValueError("تعذّر تحميل الصورة من هذا الرابط.")
                 content_type = response.headers.get("Content-Type", "").lower()
                 if not content_type.startswith("image/"):
-                    raise ValueError("الرابط خاصو يشير مباشرةً إلى ملف صورة.")
+                    raise ValueError("يجب أن يشير الرابط مباشرةً إلى ملف صورة.")
                 data = await response.content.read(MAX_IMAGE_BYTES + 1)
                 if len(data) > MAX_IMAGE_BYTES:
                     raise ValueError("حجم الصورة كبير بزاف؛ الحد الأقصى هو 8 MB.")
