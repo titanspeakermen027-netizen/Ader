@@ -239,7 +239,7 @@ class Ader(commands.Bot):
                 command_cog = getattr(command, "binding", None)
                 if owner_currency is not None and getattr(command_cog, "__class__", None) is not None and command_cog.__class__.__name__ == "Economy":
                     if await owner_currency._is_blacklisted(interaction.user.id):
-                        await self._dashboard_deny(interaction, "أنت في بلاك ليست العملة، ولا يمكنك استعمال نظام العملة.")
+                        await self._dashboard_deny(interaction, "أنت مدرج في قائمة حظر نظام العملة، ولا يمكنك استخدامه.")
                         return
                 allowed, reason = await self._dashboard_allowed(interaction.guild.id, name, interaction.user, getattr(interaction.channel, "id", None))
                 if not allowed:
@@ -263,7 +263,7 @@ class Ader(commands.Bot):
             return True
         owner_currency = self.get_cog("OwnerCurrency")
         if owner_currency is not None and await owner_currency._is_blacklisted(message.author.id):
-            await message.reply("❌ أنت في بلاك ليست العملة، ولا يمكنك استعمال نظام العملة.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+            await message.reply("❌ أنت مدرج في قائمة حظر نظام العملة، ولا يمكنك استخدامه.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
         mentions = list(message.mentions)
         if len(mentions) > 1:
@@ -291,14 +291,14 @@ class Ader(commands.Bot):
                 text = await economy.format_balance_message(message.author.id, message.author.name, balance, own_balance=True)
                 await message.reply(text, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             else:
-                await message.reply("❌ الاستعمال: `A` أو `A @العضو/ID` أو `A @العضو/ID المبلغ`", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+                await message.reply("❌ الاستعمال: `A` أو `A @العضو/المعرّف` أو `A @العضو/المعرّف المبلغ`", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
 
         amount = None
         if len(parts) == 3:
             amount = NumberConverter.parse_number(parts[-1].replace(",", "").replace(" ", ""))
             if amount is None:
-                await message.reply(f"**ـ {message.author.name} اكتب المبلغ الذي تريد تحويله!** | :interrobang:", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+                await message.reply(f"**ـ {message.author.name} يرجى إدخال المبلغ الذي تريد تحويله.** | :interrobang:", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
                 return True
         elif len(parts) == 2:
             if member.bot:
@@ -309,7 +309,7 @@ class Ader(commands.Bot):
             await message.reply(text, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
         else:
-            await message.reply("❌ الاستعمال: `A` أو `A @العضو/ID` أو `A @العضو/ID المبلغ`", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+            await message.reply("❌ الاستعمال: `A` أو `A @العضو/المعرّف` أو `A @العضو/المعرّف المبلغ`", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return True
         if amount <= 0 or member.bot or member.id == message.author.id:
             await message.reply("❌ يجب تحديد مبلغ موجب وعضو آخر غير البوتات.", delete_after=8, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
@@ -317,7 +317,7 @@ class Ader(commands.Bot):
         balance = await self.db.get_balance(message.author.id)
         if balance < amount:
             await message.reply(
-                f"**ـ {message.author.name} رصيدك غير كافي لهذا!** :thinking:",
+                f"**ـ {message.author.name} رصيدك غير كافٍ لإتمام هذه العملية.** :thinking:",
                 mention_author=False,
                 allowed_mentions=discord.AllowedMentions.none(),
             )
