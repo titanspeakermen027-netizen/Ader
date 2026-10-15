@@ -356,9 +356,19 @@ class Verification(commands.Cog):
     @app_commands.describe(
         role="الرتبة التي ستُمنح بعد إتمام التحقق",
         welcome_channel="القناة التي ستُرسل فيها رسائل الترحيب",
-        method="طريقة التحقق: رسالة خاصة (dm) أو قناة (channel)",
-        verify_channel="قناة التحقق (مطلوبة عند اختيار الطريقة channel)",
-        verification_type="نوع التحقق: زر (button) أو رمز CAPTCHA (captcha)"
+        method="اختر رسالة خاصة أو التحقق داخل قناة",
+        verify_channel="قناة التحقق، وتُطلب عند اختيار التحقق داخل الخادم",
+        verification_type="اختر التحقق بزر أو برمز CAPTCHA"
+    )
+    @app_commands.choices(
+        method=[
+            app_commands.Choice(name="رسالة خاصة", value="dm"),
+            app_commands.Choice(name="داخل قناة", value="channel"),
+        ],
+        verification_type=[
+            app_commands.Choice(name="زر", value="button"),
+            app_commands.Choice(name="رمز CAPTCHA", value="captcha"),
+        ],
     )
     @is_admin()
     async def setup_verification(
@@ -375,21 +385,21 @@ class Verification(commands.Cog):
         
         if method not in ['dm', 'channel']:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("طريقة غير صالحة", "يجب أن تكون الطريقة إما dm أو channel."),
+                embed=EmbedFactory.error("طريقة غير صالحة", "يرجى اختيار طريقة تحقق صالحة من القائمة."),
                 ephemeral=True
             )
             return
         
         if method == 'channel' and not verify_channel:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("القناة مطلوبة", "يجب تحديد قناة التحقق عند اختيار الطريقة channel."),
+                embed=EmbedFactory.error("القناة مطلوبة", "يجب تحديد قناة التحقق عند اختيار التحقق داخل الخادم."),
                 ephemeral=True
             )
             return
         
         if verification_type not in ['button', 'captcha']:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("نوع غير صالح", "يجب أن يكون نوع التحقق button أو captcha."),
+                embed=EmbedFactory.error("نوع غير صالح", "يرجى اختيار نوع تحقق صالح من القائمة."),
                 ephemeral=True
             )
             return
