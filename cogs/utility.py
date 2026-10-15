@@ -215,7 +215,7 @@ class Utility(commands.Cog):
         latency = round(self.bot.latency * 1000)
         embed = discord.Embed(
             title="🤖 Ader",
-            description="يعمل البوت بشكل طبيعي ✅",
+            description="يعمل البوت بشكل طبيعي <:success:1560285005018566757>",
             color=discord.Color.green(),
         )
         embed.add_field(name="📡 زمن الاستجابة", value=f"`{latency} مللي ثانية`", inline=True)
