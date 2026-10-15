@@ -289,10 +289,10 @@ class ProfessionalCore(commands.Cog):
     @is_admin()
     async def core_settings(self,i):
         s=await self.settings(i.guild.id)
-        await i.response.send_message(embed=EmbedFactory.create(title="Ader Core Systems",color=EmbedColor.INFO,fields=[{"name":"AutoMod","value":"مفعّل" if s["automod"]["enabled"] else "متوقف","inline":True},{"name":"Anti-Nuke","value":"مفعّل" if s["antinuke"]["enabled"] else "متوقف","inline":True},{"name":"Levels","value":"مفعّل" if s["levels"]["enabled"] else "متوقف","inline":True},{"name":"AutoRole","value":"مفعّل" if s["autorole"]["enabled"] else "متوقف","inline":True}]),ephemeral=True)
+        await i.response.send_message(embed=EmbedFactory.create(title="أنظمة Ader الأساسية",color=EmbedColor.INFO,fields=[{"name":"الإشراف التلقائي","value":"مفعّل" if s["automod"]["enabled"] else "متوقف","inline":True},{"name":"الحماية من التخريب","value":"مفعّل" if s["antinuke"]["enabled"] else "متوقف","inline":True},{"name":"نظام المستويات","value":"مفعّل" if s["levels"]["enabled"] else "متوقف","inline":True},{"name":"الرتبة التلقائية","value":"مفعّل" if s["autorole"]["enabled"] else "متوقف","inline":True}]),ephemeral=True)
 
     @app_commands.command(name="automod-word",description="إضافة أو حذف كلمة محظورة")
-    @app_commands.describe(action="add أو remove",word="الكلمة")
+    @app_commands.describe(action="إضافة أو حذف",word="الكلمة")
     @app_commands.choices(action=[app_commands.Choice(name="إضافة",value="add"),app_commands.Choice(name="حذف",value="remove")])
     @is_admin()
     async def automod_word(self,i,action:app_commands.Choice[str],word:str):
@@ -301,12 +301,12 @@ class ProfessionalCore(commands.Cog):
         elif action.value=="remove": words[:]=[x for x in words if norm(x)!=norm(word)]
         await self.save(i.guild.id,s); await i.response.send_message(f"تم تحديث الفلتر. الكلمات: {len(words)}.",ephemeral=True)
 
-    @app_commands.command(name="automod-toggle",description="تشغيل أو إيقاف AutoMod")
+    @app_commands.command(name="automod-toggle",description="تشغيل أو إيقاف الإشراف التلقائي")
     @is_admin()
     async def automod_toggle(self,i,enabled:str):
         v=bool_value(enabled)
-        if v is None: return await i.response.send_message("استعمل on أو off.",ephemeral=True)
-        s=await self.settings(i.guild.id); s["automod"]["enabled"]=v; await self.save(i.guild.id,s); await i.response.send_message("تم تحديث AutoMod.",ephemeral=True)
+        if v is None: return await i.response.send_message("يرجى إدخال نعم أو لا.",ephemeral=True)
+        s=await self.settings(i.guild.id); s["automod"]["enabled"]=v; await self.save(i.guild.id,s); await i.response.send_message("تم تحديث إعدادات الإشراف التلقائي.",ephemeral=True)
 
     @app_commands.command(name="set-log-channel",description="تعيين قناة السجلات")
     @is_admin()
@@ -318,13 +318,13 @@ class ProfessionalCore(commands.Cog):
     async def set_autorole(self,i,role:discord.Role,enabled:str="on"):
         v=bool_value(enabled)
         if v is None or (i.guild.me and role>=i.guild.me.top_role): return await i.response.send_message("إعداد غير صالح أو الرتبة أعلى من البوت.",ephemeral=True)
-        s=await self.settings(i.guild.id); s["autorole"]={"enabled":v,"role":role.id}; await self.save(i.guild.id,s); await i.response.send_message("تم حفظ AutoRole.",ephemeral=True)
+        s=await self.settings(i.guild.id); s["autorole"]={"enabled":v,"role":role.id}; await self.save(i.guild.id,s); await i.response.send_message("تم حفظ إعدادات الرتبة التلقائية.",ephemeral=True)
 
-    @app_commands.command(name="level",description="عرض المستوى والXP")
+    @app_commands.command(name="level",description="عرض المستوى ونقاط الخبرة")
     async def level(self,i,user:Optional[discord.Member]=None):
         m=user or i.user; r=await self.db.fetchone("SELECT xp,level FROM users WHERE user_id=? AND guild_id=?",(m.id,i.guild.id))
         xp=int(r["xp"]) if r else 0; lv=int(r["level"]) if r else 0; base=int((await self.settings(i.guild.id))["levels"]["base"])
-        await i.response.send_message(f"{m.display_name} — المستوى {lv} — XP {xp:,}/{base*(lv+1):,}",ephemeral=True)
+        await i.response.send_message(f"{m.display_name} — المستوى {lv} — نقاط الخبرة {xp:,}/{base*(lv+1):,}",ephemeral=True)
 
     @app_commands.command(name="mod-history",description="عرض سجل إجراءات عضو")
     @is_moderator()
