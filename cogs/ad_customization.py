@@ -54,14 +54,14 @@ class GiveawaySettingsModal(discord.ui.Modal, title="إعدادات السحب")
 
     async def on_submit(self, interaction: discord.Interaction):
         if not self.cog.is_admin(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            return await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         raw = str(self.enabled.value).strip().lower()
         if raw in {"نعم", "yes", "y", "1", "on", "true"}:
             enabled = 1
         elif raw in {"لا", "no", "n", "0", "off", "false"}:
             enabled = 0
         else:
-            return await interaction.response.send_message("❌ اكتب نعم أو لا.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> اكتب نعم أو لا.", ephemeral=True)
         try:
             value = int(str(self.amount.value).replace(",", "").replace(" ", ""))
             duration = parse_duration(str(self.duration.value))
@@ -69,16 +69,16 @@ class GiveawaySettingsModal(discord.ui.Modal, title="إعدادات السحب")
                 raise ValueError
             server_id = int(str(self.required_server.value).strip()) if str(self.required_server.value).strip() else None
         except ValueError:
-            return await interaction.response.send_message("❌ تحقق من المبلغ والمدة ومعرّف الخادم.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> تحقق من المبلغ والمدة ومعرّف الخادم.", ephemeral=True)
         if server_id is not None and self.cog.bot.get_guild(server_id) is None:
-            return await interaction.response.send_message("❌ يجب أن يكون البوت موجودًا في الخادم المُعلن عنه حتى يتمكن من التحقق من العضوية.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> يجب أن يكون البوت موجودًا في الخادم المُعلن عنه حتى يتمكن من التحقق من العضوية.", ephemeral=True)
         await self.cog.db.execute(
             """INSERT INTO ad_settings_v2(guild_id,post_message,giveaway_enabled,giveaway_amount,giveaway_duration,giveaway_sponsor_id,image_path,updated_at,required_guild_id)
             VALUES(?,?,?,?,?,?,?,?,?)
             ON CONFLICT(guild_id) DO UPDATE SET giveaway_enabled=excluded.giveaway_enabled,giveaway_amount=excluded.giveaway_amount,giveaway_duration=excluded.giveaway_duration,giveaway_sponsor_id=excluded.giveaway_sponsor_id,updated_at=excluded.updated_at,required_guild_id=excluded.required_guild_id""",
             (interaction.guild.id, "", enabled, value, duration, interaction.user.id, None, time.time(), server_id),
         )
-        await interaction.response.send_message("✅ تم حفظ إعدادات السحب وشرط دخول السيرفر.", ephemeral=True)
+        await interaction.response.send_message("<:success:1560285005018566757> تم حفظ إعدادات السحب وشرط دخول السيرفر.", ephemeral=True)
 
 
 class MessageModal(discord.ui.Modal):
@@ -96,11 +96,11 @@ class MessageModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         if not self.cog.is_admin(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            return await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         name = str(self.name_input.value).strip()
         content = strip_mentions(str(self.content_input.value))
         if not name or not content:
-            return await interaction.response.send_message("❌ الرسالة غير صالحة.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> الرسالة غير صالحة.", ephemeral=True)
         key = (interaction.guild_id or 0, interaction.user.id)
         event = self.cog.selected_event.get(key, "after_ad")
         default_target = {"after_ad": "ad", "after_giveaway": "giveaway", "after_image": "image", "after_all": "none"}.get(event, "none")
@@ -111,7 +111,7 @@ class MessageModal(discord.ui.Modal):
             )
         else:
             await self.cog.db.execute("UPDATE ad_custom_messages SET name=?,content=?,event=? WHERE id=? AND guild_id=?", (name, content, event, self.message_id, interaction.guild.id))
-        await interaction.response.send_message(f"✅ تم حفظ الرسالة في توقيت **{EVENTS.get(event, event)}**.", ephemeral=True)
+        await interaction.response.send_message(f"<:success:1560285005018566757> تم حفظ الرسالة في توقيت **{EVENTS.get(event, event)}**.", ephemeral=True)
 
 
 class EventSelect(discord.ui.Select):
@@ -121,9 +121,9 @@ class EventSelect(discord.ui.Select):
 
     async def callback(self, interaction):
         if not self.cog.is_admin(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            return await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         self.cog.selected_event[(interaction.guild_id or 0, interaction.user.id)] = self.values[0]
-        await interaction.response.send_message(f"✅ تم اختيار: **{EVENTS[self.values[0]]}**", ephemeral=True)
+        await interaction.response.send_message(f"<:success:1560285005018566757> تم اختيار: **{EVENTS[self.values[0]]}**", ephemeral=True)
 
 
 class MessageSelect(discord.ui.Select):
@@ -134,12 +134,12 @@ class MessageSelect(discord.ui.Select):
 
     async def callback(self, interaction):
         if not self.cog.is_admin(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            return await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         mid = int(self.values[0]) if self.values[0].isdigit() else 0
         if not mid:
-            return await interaction.response.send_message("❌ لا توجد رسالة للاختيار.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> لا توجد رسالة للاختيار.", ephemeral=True)
         self.cog.selected_message[(interaction.guild_id or 0, interaction.user.id)] = mid
-        await interaction.response.send_message("✅ تم اختيار الرسالة.", ephemeral=True)
+        await interaction.response.send_message("<:success:1560285005018566757> تم اختيار الرسالة.", ephemeral=True)
 
 
 class ReplyTargetSelect(discord.ui.Select):
@@ -157,16 +157,16 @@ class ReplyTargetSelect(discord.ui.Select):
 
     async def callback(self, interaction):
         if not self.cog.is_admin(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            return await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         key = (interaction.guild_id or 0, interaction.user.id)
         mid = self.cog.selected_message.get(key)
         if not mid:
-            return await interaction.response.send_message("❌ اختر الرسالة الحالية أولاً.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> اختر الرسالة الحالية أولاً.", ephemeral=True)
         target = self.values[0]
         if target == f"custom:{mid}":
-            return await interaction.response.send_message("❌ لا يمكن تعيين الرسالة نفسها هدفًا للرد.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> لا يمكن تعيين الرسالة نفسها هدفًا للرد.", ephemeral=True)
         await self.cog.db.execute("UPDATE ad_custom_messages SET reply_target=? WHERE id=? AND guild_id=?", (target, mid, interaction.guild.id))
-        await interaction.response.send_message("✅ تم حفظ الرد دون الحاجة إلى إدخال أي معرّف.", ephemeral=True)
+        await interaction.response.send_message("<:success:1560285005018566757> تم حفظ الرد دون الحاجة إلى إدخال أي معرّف.", ephemeral=True)
 
 
 class RoleSelect(discord.ui.RoleSelect):
@@ -176,7 +176,7 @@ class RoleSelect(discord.ui.RoleSelect):
 
     async def callback(self, interaction):
         if not self.cog.is_admin(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            return await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         row = await self.cog.db.fetchone("SELECT allowed_roles FROM ad_settings WHERE guild_id=?", (interaction.guild.id,))
         try:
             roles = {int(x) for x in json.loads(row["allowed_roles"] or "[]")} if row else set()
@@ -190,7 +190,7 @@ class RoleSelect(discord.ui.RoleSelect):
             roles.add(role_id)
             text = "تمت إضافة الرتبة إلى المسموح لهم"
         await self.cog.db.execute("INSERT INTO ad_settings(guild_id,allowed_roles) VALUES(?,?) ON CONFLICT(guild_id) DO UPDATE SET allowed_roles=excluded.allowed_roles", (interaction.guild.id, json.dumps(sorted(roles))))
-        await interaction.response.send_message(f"✅ {text}.", ephemeral=True)
+        await interaction.response.send_message(f"<:success:1560285005018566757> {text}.", ephemeral=True)
 
 
 class SettingsView(discord.ui.View):
@@ -207,7 +207,7 @@ class SettingsView(discord.ui.View):
 
     async def guard(self, interaction):
         if not self.cog.is_admin(interaction):
-            await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
             return False
         return True
 
@@ -223,7 +223,7 @@ class SettingsView(discord.ui.View):
         mid = self.cog.selected_message.get(self.key(interaction))
         row = await self.cog.db.fetchone("SELECT * FROM ad_custom_messages WHERE id=? AND guild_id=?", (mid, interaction.guild.id)) if mid else None
         if not row:
-            return await interaction.response.send_message("❌ اختر رسالة أولاً.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> اختر رسالة أولاً.", ephemeral=True)
         await interaction.response.send_modal(MessageModal(self.cog, mid, row))
 
     @discord.ui.button(label="حذف", emoji="🗑️", style=discord.ButtonStyle.danger, row=4)
@@ -232,7 +232,7 @@ class SettingsView(discord.ui.View):
             return
         mid = self.cog.selected_message.get(self.key(interaction))
         if not mid:
-            return await interaction.response.send_message("❌ اختر رسالة أولاً.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> اختر رسالة أولاً.", ephemeral=True)
         await self.cog.db.execute("DELETE FROM ad_custom_messages WHERE id=? AND guild_id=?", (mid, interaction.guild.id))
         self.cog.selected_message.pop(self.key(interaction), None)
         await self.cog.show_panel(interaction, edit=True)
@@ -243,16 +243,16 @@ class SettingsView(discord.ui.View):
             return
         mid = self.cog.selected_message.get(self.key(interaction))
         if not mid:
-            return await interaction.response.send_message("❌ اختر رسالة من القائمة أولاً.", ephemeral=True)
+            return await interaction.response.send_message("<:failure:1560286464892469380> اختر رسالة من القائمة أولاً.", ephemeral=True)
         await interaction.response.send_message("📌 أرسل الآن الرسالة أو الصورة أو المرفق الذي تريد من البوت الرد عليه خلال 60 ثانية.", ephemeral=True)
         try:
             target = await self.cog.bot.wait_for("message", timeout=60, check=lambda m: m.author.id == interaction.user.id and m.channel.id == interaction.channel.id)
         except asyncio.TimeoutError:
             return await interaction.followup.send("⌛ انتهت المهلة.", ephemeral=True)
         if target.id == mid:
-            return await interaction.followup.send("❌ لا يمكن تعيين الرسالة نفسها هدفًا للرد.", ephemeral=True)
+            return await interaction.followup.send("<:failure:1560286464892469380> لا يمكن تعيين الرسالة نفسها هدفًا للرد.", ephemeral=True)
         await self.cog.db.execute("UPDATE ad_custom_messages SET reply_target=? WHERE id=? AND guild_id=?", (f"message:{target.id}", mid, interaction.guild.id))
-        await interaction.followup.send("✅ تم تحديد الرسالة أو المرفق هدفًا للرد دون الحاجة إلى معرّف.", ephemeral=True)
+        await interaction.followup.send("<:success:1560285005018566757> تم تحديد الرسالة أو المرفق هدفًا للرد دون الحاجة إلى معرّف.", ephemeral=True)
 
     @discord.ui.button(label="🎁 السحب", style=discord.ButtonStyle.success, row=4)
     async def giveaway(self, interaction, button):
@@ -309,15 +309,15 @@ class AdCustomization(commands.Cog):
     @app_commands.command(name="ad-settings", description="تخصيص نظام الإعلانات")
     async def ad_settings(self, interaction):
         if not self.is_admin(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
+            return await interaction.response.send_message("<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         try:
             await self.show_panel(interaction)
         except Exception as exc:
             self.bot.logger.error("ad-settings failed: %s", exc, exc_info=True)
             if interaction.response.is_done():
-                await interaction.followup.send("❌ حدث خطأ أثناء فتح الإعدادات. راجع Logs.", ephemeral=True)
+                await interaction.followup.send("<:failure:1560286464892469380> حدث خطأ أثناء فتح الإعدادات. راجع Logs.", ephemeral=True)
             else:
-                await interaction.response.send_message("❌ حدث خطأ أثناء فتح الإعدادات. راجع Logs.", ephemeral=True)
+                await interaction.response.send_message("<:failure:1560286464892469380> حدث خطأ أثناء فتح الإعدادات. راجع Logs.", ephemeral=True)
 
 
 async def setup(bot):
