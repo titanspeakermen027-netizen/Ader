@@ -202,7 +202,7 @@ class ExclusiveRoleSelect(discord.ui.Select):
             await interaction.user.add_roles(selected_role, reason="Exclusive role menu selection")
 
             embed = EmbedFactory.success(
-                "✅ تم اختيار الرتبة!",
+                "<:success:1560285005018566757> تم اختيار الرتبة!",
                 f"أصبحت تملك رتبة **{selected_role.name}** الآن!\n\n"
                 f"**ملاحظة:** لا يمكنك اختيار رتبة أخرى من هذه القائمة."
             )
@@ -281,7 +281,7 @@ class MultiRoleSelect(discord.ui.Select):
                 changes.append("لم يتم إجراء أي تغييرات.")
 
             embed = EmbedFactory.success(
-                "✅ تم تحديث الرتب!",
+                "<:success:1560285005018566757> تم تحديث الرتب!",
                 "\n".join(changes)
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
