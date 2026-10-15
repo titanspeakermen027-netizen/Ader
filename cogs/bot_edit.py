@@ -177,7 +177,7 @@ class BotEdit(commands.Cog):
                     raise ValueError("يجب أن يشير الرابط مباشرةً إلى ملف صورة.")
                 data = await response.content.read(MAX_IMAGE_BYTES + 1)
                 if len(data) > MAX_IMAGE_BYTES:
-                    raise ValueError("حجم الصورة كبير بزاف؛ الحد الأقصى هو 8 MB.")
+                    raise ValueError("حجم الصورة كبير جدًا؛ الحد الأقصى هو 8 ميغابايت.")
                 if not data:
                     raise ValueError("ملف الصورة فارغ.")
                 return data
