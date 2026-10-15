@@ -129,7 +129,7 @@ class Moderation(commands.Cog):
         warnings = await self.db.get_warnings(user.id, interaction.guild.id)
 
         embed = EmbedFactory.moderation_action("Warning", user, interaction.user, reason)
-        embed.add_field(name="Total Warnings", value=str(len(warnings)), inline=False)
+        embed.add_field(name="إجمالي التحذيرات", value=str(len(warnings)), inline=False)
 
         await interaction.response.send_message(embed=embed)
 
@@ -174,7 +174,7 @@ class Moderation(commands.Cog):
             color=EmbedColor.WARNING,
             thumbnail=user.display_avatar.url
         )
-        embed.set_footer(text=f"Total warnings: {len(warnings)}")
+        embed.set_footer(text=f"إجمالي التحذيرات: {len(warnings)}")
 
         await interaction.response.send_message(embed=embed)
 
@@ -212,7 +212,7 @@ class Moderation(commands.Cog):
         try:
             await user.timeout(timedelta(seconds=seconds), reason=reason)
             embed = EmbedFactory.moderation_action("Timeout", user, interaction.user, reason)
-            embed.add_field(name="Duration", value=TimeConverter.format_seconds(seconds), inline=False)
+            embed.add_field(name="المدة", value=TimeConverter.format_seconds(seconds), inline=False)
             await interaction.response.send_message(embed=embed)
 
             # DM user
