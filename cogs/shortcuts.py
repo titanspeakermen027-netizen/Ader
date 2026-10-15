@@ -413,15 +413,6 @@ class Shortcuts(commands.Cog):
                     delete_after=8,
                 )
 
-            if argument.id == ctx.guild.owner_id:
-                return await ctx.send("❌ لا يمكن إسناد الرتب إلى مالك الخادم عبر هذا الاختصار.", delete_after=7)
-
-            if argument.top_role >= bot_member.top_role:
-                return await ctx.send(
-                    "❌ لا يستطيع البوت إدارة هذا العضو لأن رتبته تساوي رتبة البوت أو تتجاوزها.",
-                    delete_after=8,
-                )
-
             if (
                 ctx.author.id != ctx.guild.owner_id
                 and not author_permissions.administrator
