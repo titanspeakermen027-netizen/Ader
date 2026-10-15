@@ -167,17 +167,17 @@ class AutoReply(commands.Cog):
         reply_to_bots: bool = False,
     ):
         if not await self._can_manage(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى Manage Server أو Administrator.", ephemeral=True)
+            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         trigger = trigger.strip()
         response = response.strip()
         matching = matching_type.value if matching_type else "contains"
         reply = reply_type.value if reply_type else "reply"
         if not trigger or not response:
-            return await interaction.response.send_message("❌ يجب إدخال trigger و response.", ephemeral=True)
+            return await interaction.response.send_message("❌ يجب إدخال عبارة التفعيل ونص الرد.", ephemeral=True)
         if len(trigger) > 200:
-            return await interaction.response.send_message("❌ الـtrigger طويل بزاف (الحد 200 حرف).", ephemeral=True)
+            return await interaction.response.send_message("❌ عبارة التفعيل طويلة جدًا (الحد الأقصى 200 حرف).", ephemeral=True)
         if len(response) > 4000:
-            return await interaction.response.send_message("❌ الـresponse طويل بزاف (الحد 4000 حرف).", ephemeral=True)
+            return await interaction.response.send_message("❌ نص الرد طويل جدًا (الحد الأقصى 4000 حرف).", ephemeral=True)
         if matching not in MATCHING_TYPES or reply not in REPLY_TYPES:
             return await interaction.response.send_message("❌ إعدادات المطابقة غير صالحة.", ephemeral=True)
         try:
@@ -205,12 +205,12 @@ class AutoReply(commands.Cog):
         bot_text = "✅ نعم" if reply_to_bots else "❌ لا"
         role_text = role.mention if role else "الجميع"
         embed = discord.Embed(title="✅ تم إضافة الرد التلقائي", colour=discord.Colour.green())
-        embed.add_field(name="Trigger", value=f"`{trigger}`", inline=False)
-        embed.add_field(name="Response", value=response, inline=False)
+        embed.add_field(name="عبارة التفعيل", value=f"`{trigger}`", inline=False)
+        embed.add_field(name="نص الرد", value=response, inline=False)
         embed.add_field(name="نوع المطابقة", value=MATCHING_TYPES[matching], inline=True)
         embed.add_field(name="نوع الرد", value=REPLY_TYPES[reply], inline=True)
         embed.add_field(name="الرتبة", value=role_text, inline=True)
-        embed.add_field(name="case_sensitive", value="✅ نعم" if case_sensitive else "❌ لا", inline=True)
+        embed.add_field(name="مراعاة حالة الأحرف", value="✅ نعم" if case_sensitive else "❌ لا", inline=True)
         embed.add_field(name="الرد على رسائل البوتات", value=bot_text, inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -219,7 +219,7 @@ class AutoReply(commands.Cog):
     @app_commands.default_permissions(manage_guild=True)
     async def remove(self, interaction: discord.Interaction, id: int):
         if not await self._can_manage(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى Manage Server أو Administrator.", ephemeral=True)
+            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         cur = await self.db.execute("DELETE FROM autoreplies WHERE id=? AND guild_id=?", (id, interaction.guild.id))
         if cur.rowcount != 1:
             return await interaction.response.send_message("❌ لم يتم العثور على هذا الرد التلقائي.", ephemeral=True)
@@ -229,7 +229,7 @@ class AutoReply(commands.Cog):
     @app_commands.default_permissions(manage_guild=True)
     async def list_rules(self, interaction: discord.Interaction):
         if not await self._can_manage(interaction):
-            return await interaction.response.send_message("❌ تحتاج إلى Manage Server أو Administrator.", ephemeral=True)
+            return await interaction.response.send_message("❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول.", ephemeral=True)
         rows = await self.db.fetchall(
             "SELECT id,trigger,response,matching_type,reply_type,role_id,case_sensitive,reply_to_bots,enabled FROM autoreplies WHERE guild_id=? ORDER BY id ASC",
             (interaction.guild.id,),
