@@ -63,41 +63,41 @@ class Line(commands.Cog):
         guild = interaction.guild
         if guild is None:
             return await interaction.response.send_message(
-                "❌ هذا الأمر متاح داخل السيرفر فقط.", ephemeral=True
+                "<:failure:1560286464892469380> هذا الأمر متاح داخل السيرفر فقط.", ephemeral=True
             )
 
         if not self._can_manage(interaction):
             return await interaction.response.send_message(
-                "❌ تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول لإعداد /line.",
+                "<:no_access:1560284872403062904> تحتاج إلى صلاحية إدارة الخادم أو صلاحية المسؤول لإعداد /line.",
                 ephemeral=True,
             )
 
         keyword = keyword.strip()
         if not keyword:
             return await interaction.response.send_message(
-                "❌ يجب تحديد الكلمة أو العبارة التي ستفعّل الصورة.",
+                "<:failure:1560286464892469380> يجب تحديد الكلمة أو العبارة التي ستفعّل الصورة.",
                 ephemeral=True,
             )
         if len(keyword) > 100:
             return await interaction.response.send_message(
-                "❌ الكلمة طويلة جدًا؛ الحد الأقصى هو 100 حرف.",
+                "<:failure:1560286464892469380> الكلمة طويلة جدًا؛ الحد الأقصى هو 100 حرف.",
                 ephemeral=True,
             )
         if role.is_default():
             return await interaction.response.send_message(
-                "❌ لا يمكن اختيار رتبة @everyone. اختر رتبة محددة.",
+                "<:failure:1560286464892469380> لا يمكن اختيار رتبة @everyone. اختر رتبة محددة.",
                 ephemeral=True,
             )
         if image.size > MAX_IMAGE_BYTES:
             return await interaction.response.send_message(
-                "❌ حجم الصورة كبير جدًا. الحد الأقصى هو 25 ميغابايت.",
+                "<:failure:1560286464892469380> حجم الصورة كبير جدًا. الحد الأقصى هو 25 ميغابايت.",
                 ephemeral=True,
             )
 
         content_type = image.content_type or mimetypes.guess_type(image.filename)[0] or ""
         if not content_type.lower().startswith("image/") and Path(image.filename).suffix.lower() not in IMAGE_EXTENSIONS:
             return await interaction.response.send_message(
-                "❌ يجب أن يكون الملف صورة بصيغة معروفة، مثل PNG أو JPG أو GIF أو WEBP.",
+                "<:failure:1560286464892469380> يجب أن يكون الملف صورة بصيغة معروفة، مثل PNG أو JPG أو GIF أو WEBP.",
                 ephemeral=True,
             )
 
@@ -106,7 +106,7 @@ class Line(commands.Cog):
             bot_member = guild.get_member(self.bot.user.id)
         if bot_member is None:
             return await interaction.response.send_message(
-                "❌ تعذّر التحقق من صلاحيات البوت في هذا الخادم.",
+                "<:failure:1560286464892469380> تعذّر التحقق من صلاحيات البوت في هذا الخادم.",
                 ephemeral=True,
             )
         bot_permissions = bot_member.guild_permissions
@@ -119,7 +119,7 @@ class Line(commands.Cog):
             missing.append("إرفاق الملفات")
         if missing:
             return await interaction.response.send_message(
-                "❌ يحتاج البوت إلى الصلاحيات التالية لتشغيل /line: "
+                "<:no_access:1560284872403062904> يحتاج البوت إلى الصلاحيات التالية لتشغيل /line: "
                 + ", ".join(missing)
                 + ".",
                 ephemeral=True,
@@ -130,12 +130,12 @@ class Line(commands.Cog):
             image_data = await image.read()
             if not image_data:
                 return await interaction.followup.send(
-                    "❌ تعذّرت قراءة الصورة المرفوعة. يرجى رفعها مرة أخرى.",
+                    "<:failure:1560286464892469380> تعذّرت قراءة الصورة المرفوعة. يرجى رفعها مرة أخرى.",
                     ephemeral=True,
                 )
             if len(image_data) > MAX_IMAGE_BYTES:
                 return await interaction.followup.send(
-                    "❌ حجم الصورة كبير جدًا. الحد الأقصى هو 25 ميغابايت.",
+                    "<:failure:1560286464892469380> حجم الصورة كبير جدًا. الحد الأقصى هو 25 ميغابايت.",
                     ephemeral=True,
                 )
 
@@ -157,18 +157,18 @@ class Line(commands.Cog):
         except (discord.HTTPException, OSError, ValueError) as exc:
             logger.warning("Could not save /line image for guild %s: %s", guild.id, exc)
             return await interaction.followup.send(
-                "❌ حدث خطأ أثناء حفظ الصورة. يرجى تجربة صورة أخرى.",
+                "<:failure:1560286464892469380> حدث خطأ أثناء حفظ الصورة. يرجى تجربة صورة أخرى.",
                 ephemeral=True,
             )
         except Exception:
             logger.exception("Failed to store /line config for guild %s", guild.id)
             return await interaction.followup.send(
-                "❌ تعذّر على البوت حفظ إعدادات /line بسبب خطأ داخلي.",
+                "<:failure:1560286464892469380> تعذّر على البوت حفظ إعدادات /line بسبب خطأ داخلي.",
                 ephemeral=True,
             )
 
         await interaction.followup.send(
-            f"✅ تم تفعيل /line بنجاح.\n"
+            f"<:success:1560285005018566757> تم تفعيل /line بنجاح.\n"
             f"**الكلمة:** `{keyword}`\n"
             f"**الرتبة المسموح لها:** {role.mention}\n"
             "أي عضو يمتلك هذه الرتبة ويكتب الكلمة المحددة، سيحذف البوت رسالته ويرسل الصورة. "
