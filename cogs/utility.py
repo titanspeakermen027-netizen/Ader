@@ -215,7 +215,7 @@ class Utility(commands.Cog):
         latency = round(self.bot.latency * 1000)
         embed = discord.Embed(
             title="🤖 Ader",
-            description="البوت خدام بشكل طبيعي ✅",
+            description="يعمل البوت بشكل طبيعي ✅",
             color=discord.Color.green(),
         )
         embed.add_field(name="📡 Ping", value=f"`{latency}ms`", inline=True)
