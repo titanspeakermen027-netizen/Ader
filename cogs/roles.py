@@ -212,13 +212,13 @@ class ExclusiveRoleSelect(discord.ui.Select):
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "لا يملك البوت صلاحية إدارة رتبك. يرجى التواصل مع أحد المسؤولين."),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية إدارة رتبك. يرجى التواصل مع أحد المسؤولين."),
                 ephemeral=True
             )
         except Exception as e:
             logger.error(f"Error in role selection: {e}", exc_info=True)
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", f"تعذر إسناد الرتبة: {str(e)}"),
+                embed=EmbedFactory.error("خطأ", f"تعذر إسناد الرتبة: {str(e)}"),
                 ephemeral=True
             )
 
@@ -288,13 +288,13 @@ class MultiRoleSelect(discord.ui.Select):
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "لا يملك البوت صلاحية إدارة رتبك. يرجى التواصل مع أحد المسؤولين."),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية إدارة رتبك. يرجى التواصل مع أحد المسؤولين."),
                 ephemeral=True
             )
         except Exception as e:
             logger.error(f"Error in multi-role selection: {e}", exc_info=True)
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", f"Failed to update roles: {str(e)}"),
+                embed=EmbedFactory.error("خطأ", f"تعذر تحديث الرتب: {str(e)}"),
                 ephemeral=True
             )
 
@@ -410,7 +410,7 @@ class Roles(commands.Cog):
         
         if not role_list:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("لا توجد رتب صالحة", "Please select valid roles."),
+                embed=EmbedFactory.error("لا توجد رتب صالحة", "يرجى اختيار رتب صالحة."),
                 ephemeral=True
             )
             return
@@ -442,7 +442,7 @@ class Roles(commands.Cog):
         await interaction.response.send_message(
             embed=EmbedFactory.success(
                 "تم إنشاء قائمة الرتب!",
-                f"{'Exclusive' if is_exclusive else 'Multi-select'} role menu created in {target_channel.mention}"
+                f"تم إنشاء قائمة {'حصرية' if is_exclusive else 'متعددة الاختيارات'} في {target_channel.mention}"
             ),
             ephemeral=True
         )
@@ -468,7 +468,7 @@ class Roles(commands.Cog):
             logger.info(f"{interaction.user} added role {role} to {user}")
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "لا يملك البوت صلاحية إدارة الرتب."),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية إدارة الرتب."),
                 ephemeral=True
             )
 
@@ -491,7 +491,7 @@ class Roles(commands.Cog):
             logger.info(f"{interaction.user} removed role {role} from {user}")
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", "لا يملك البوت صلاحية إدارة الرتب."),
+                embed=EmbedFactory.error("خطأ", "لا يملك البوت صلاحية إدارة الرتب."),
                 ephemeral=True
             )
 
