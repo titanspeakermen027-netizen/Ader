@@ -98,7 +98,7 @@ class TempVoice(commands.Cog):
         except Exception as e:
             logger.error(f"Error creating temp channel: {e}", exc_info=True)
 
-    @app_commands.command(name="setup-tempvoice", description="Setup temporary voice channels (Admin)")
+    @app_commands.command(name="setup-tempvoice", description="إعداد القنوات الصوتية المؤقتة (للمسؤولين)")
     @app_commands.describe(
         category="Category for temporary channels",
         creator_name="Name for the creator channel (default: '➕ Create Channel')"
@@ -139,22 +139,22 @@ class TempVoice(commands.Cog):
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Permission Error", "I don't have permission to create channels"),
+                embed=EmbedFactory.error("خطأ في الصلاحيات", "لا يملك البوت صلاحية إنشاء القنوات."),
                 ephemeral=True
             )
         except Exception as e:
             logger.error(f"Error setting up temp voice: {e}", exc_info=True)
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Error", f"Failed to setup temporary voice: {str(e)}"),
+                embed=EmbedFactory.error("خطأ", f"تعذر إعداد القنوات الصوتية المؤقتة: {str(e)}"),
                 ephemeral=True
             )
 
-    @app_commands.command(name="voice-lock", description="Lock your temporary voice channel")
+    @app_commands.command(name="voice-lock", description="قفل قناتك الصوتية المؤقتة")
     async def voice_lock(self, interaction: discord.Interaction):
         """Lock temporary voice channel"""
         if not interaction.user.voice or not interaction.user.voice.channel:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Not in Voice", "You must be in a voice channel"),
+                embed=EmbedFactory.error("لست في قناة صوتية", "يجب أن تكون داخل قناة صوتية."),
                 ephemeral=True
             )
             return
@@ -163,7 +163,7 @@ class TempVoice(commands.Cog):
 
         if channel.id not in self.temp_channels:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Not a Temp Channel", "This is not a temporary voice channel"),
+                embed=EmbedFactory.error("ليست قناة مؤقتة", "هذه ليست قناة صوتية مؤقتة."),
                 ephemeral=True
             )
             return
@@ -173,20 +173,20 @@ class TempVoice(commands.Cog):
                 interaction.guild.default_role,
                 connect=False
             )
-            embed = EmbedFactory.success("🔒 Locked", f"Locked {channel.mention}")
+            embed = EmbedFactory.success("🔒 تم القفل", f"تم قفل {channel.mention}.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Permission Error", "I don't have permission to modify this channel"),
+                embed=EmbedFactory.error("خطأ في الصلاحيات", "لا يملك البوت صلاحية تعديل هذه القناة."),
                 ephemeral=True
             )
 
-    @app_commands.command(name="voice-unlock", description="Unlock your temporary voice channel")
+    @app_commands.command(name="voice-unlock", description="فتح قناتك الصوتية المؤقتة")
     async def voice_unlock(self, interaction: discord.Interaction):
         """Unlock temporary voice channel"""
         if not interaction.user.voice or not interaction.user.voice.channel:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Not in Voice", "You must be in a voice channel"),
+                embed=EmbedFactory.error("لست في قناة صوتية", "يجب أن تكون داخل قناة صوتية."),
                 ephemeral=True
             )
             return
@@ -195,7 +195,7 @@ class TempVoice(commands.Cog):
 
         if channel.id not in self.temp_channels:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Not a Temp Channel", "This is not a temporary voice channel"),
+                embed=EmbedFactory.error("ليست قناة مؤقتة", "هذه ليست قناة صوتية مؤقتة."),
                 ephemeral=True
             )
             return
@@ -205,21 +205,21 @@ class TempVoice(commands.Cog):
                 interaction.guild.default_role,
                 connect=True
             )
-            embed = EmbedFactory.success("🔓 Unlocked", f"Unlocked {channel.mention}")
+            embed = EmbedFactory.success("🔓 تم الفتح", f"تم فتح {channel.mention}.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Permission Error", "I don't have permission to modify this channel"),
+                embed=EmbedFactory.error("خطأ في الصلاحيات", "لا يملك البوت صلاحية تعديل هذه القناة."),
                 ephemeral=True
             )
 
-    @app_commands.command(name="voice-limit", description="Set user limit for your temporary voice channel")
-    @app_commands.describe(limit="User limit (0 for no limit)")
+    @app_commands.command(name="voice-limit", description="تحديد عدد المستخدمين في قناتك الصوتية المؤقتة")
+    @app_commands.describe(limit="الحد الأقصى للمستخدمين (0 لعدم وضع حد)")
     async def voice_limit(self, interaction: discord.Interaction, limit: int):
         """Set user limit for temporary voice channel"""
         if not interaction.user.voice or not interaction.user.voice.channel:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Not in Voice", "You must be in a voice channel"),
+                embed=EmbedFactory.error("لست في قناة صوتية", "يجب أن تكون داخل قناة صوتية."),
                 ephemeral=True
             )
             return
@@ -228,14 +228,14 @@ class TempVoice(commands.Cog):
 
         if channel.id not in self.temp_channels:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Not a Temp Channel", "This is not a temporary voice channel"),
+                embed=EmbedFactory.error("ليست قناة مؤقتة", "هذه ليست قناة صوتية مؤقتة."),
                 ephemeral=True
             )
             return
 
         if limit < 0 or limit > 99:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Invalid Limit", "Limit must be between 0 and 99"),
+                embed=EmbedFactory.error("حد غير صالح", "يجب أن يكون الحد بين 0 و99."),
                 ephemeral=True
             )
             return
@@ -243,21 +243,21 @@ class TempVoice(commands.Cog):
         try:
             await channel.edit(user_limit=limit)
             limit_text = "No limit" if limit == 0 else f"{limit} users"
-            embed = EmbedFactory.success("👥 Limit Set", f"User limit set to: {limit_text}")
+            embed = EmbedFactory.success("👥 تم تحديد الحد", f"الحد الأقصى للمستخدمين: {limit_text}")
             await interaction.response.send_message(embed=embed, ephemeral=True)
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Permission Error", "I don't have permission to modify this channel"),
+                embed=EmbedFactory.error("خطأ في الصلاحيات", "لا يملك البوت صلاحية تعديل هذه القناة."),
                 ephemeral=True
             )
 
-    @app_commands.command(name="voice-rename", description="Rename your temporary voice channel")
-    @app_commands.describe(name="New channel name")
+    @app_commands.command(name="voice-rename", description="إعادة تسمية قناتك الصوتية المؤقتة")
+    @app_commands.describe(name="اسم القناة الجديد")
     async def voice_rename(self, interaction: discord.Interaction, name: str):
         """Rename temporary voice channel"""
         if not interaction.user.voice or not interaction.user.voice.channel:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Not in Voice", "You must be in a voice channel"),
+                embed=EmbedFactory.error("لست في قناة صوتية", "يجب أن تكون داخل قناة صوتية."),
                 ephemeral=True
             )
             return
@@ -266,14 +266,14 @@ class TempVoice(commands.Cog):
 
         if channel.id not in self.temp_channels:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Not a Temp Channel", "This is not a temporary voice channel"),
+                embed=EmbedFactory.error("ليست قناة مؤقتة", "هذه ليست قناة صوتية مؤقتة."),
                 ephemeral=True
             )
             return
 
         if len(name) > 100:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Name Too Long", "Channel name must be 100 characters or less"),
+                embed=EmbedFactory.error("الاسم طويل جدًا", "يجب ألا يتجاوز اسم القناة 100 حرف."),
                 ephemeral=True
             )
             return
@@ -281,20 +281,20 @@ class TempVoice(commands.Cog):
         try:
             old_name = channel.name
             await channel.edit(name=name)
-            embed = EmbedFactory.success("✏️ Renamed", f"Renamed channel from **{old_name}** to **{name}**")
+            embed = EmbedFactory.success("✏️ تمت إعادة التسمية", f"تم تغيير اسم القناة من **{old_name}** إلى **{name}**.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Permission Error", "I don't have permission to modify this channel"),
+                embed=EmbedFactory.error("خطأ في الصلاحيات", "لا يملك البوت صلاحية تعديل هذه القناة."),
                 ephemeral=True
             )
 
-    @app_commands.command(name="voice-claim", description="Claim ownership of an abandoned temporary voice channel")
+    @app_commands.command(name="voice-claim", description="تولي ملكية قناة صوتية مؤقتة لا يملكها أحد")
     async def voice_claim(self, interaction: discord.Interaction):
         """Claim ownership of temporary voice channel"""
         if not interaction.user.voice or not interaction.user.voice.channel:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Not in Voice", "You must be in a voice channel"),
+                embed=EmbedFactory.error("لست في قناة صوتية", "يجب أن تكون داخل قناة صوتية."),
                 ephemeral=True
             )
             return
@@ -303,7 +303,7 @@ class TempVoice(commands.Cog):
 
         if channel.id not in self.temp_channels:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Not a Temp Channel", "This is not a temporary voice channel"),
+                embed=EmbedFactory.error("ليست قناة مؤقتة", "هذه ليست قناة صوتية مؤقتة."),
                 ephemeral=True
             )
             return
@@ -318,11 +318,11 @@ class TempVoice(commands.Cog):
                 mute_members=True,
                 deafen_members=True
             )
-            embed = EmbedFactory.success("👑 Claimed", f"You now own {channel.mention}")
+            embed = EmbedFactory.success("👑 أصبحت المالك", f"أصبحت مالك {channel.mention}.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
         except discord.Forbidden:
             await interaction.response.send_message(
-                embed=EmbedFactory.error("Permission Error", "I don't have permission to modify this channel"),
+                embed=EmbedFactory.error("خطأ في الصلاحيات", "لا يملك البوت صلاحية تعديل هذه القناة."),
                 ephemeral=True
             )
 
