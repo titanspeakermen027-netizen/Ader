@@ -968,3 +968,65 @@ input[type="color"]{height:40px;padding:4px;cursor:pointer}
 @media(max-width:480px){
   .snapshot{grid-template-columns:1fr}
 }
+
+
+/* ANO BOT / Nova-inspired visual layer. Keeps existing dashboard structure and API behavior intact. */
+:root{
+  --bg:#080914;
+  --bg-elevated:#0b0d1b;
+  --sidebar:#090d1b;
+  --panel:#0d1122;
+  --panel-strong:#11162b;
+  --panel-soft:#17102d;
+  --line:#242949;
+  --line-strong:#34245e;
+  --text:#f5f3ff;
+  --muted:#929bbd;
+  --subtle:#6f7aa5;
+  --accent:#8b43f7;
+  --accent-2:#b77aff;
+  --accent-soft:rgba(139,67,247,.14);
+  --good:#25d7a0;
+  --shadow:0 18px 60px rgba(0,0,0,.3);
+  --radius:15px;
+  --radius-sm:10px;
+}
+body{
+ background:
+  radial-gradient(ellipse at 70% -15%,rgba(89,33,185,.22),transparent 42%),
+  radial-gradient(circle at 8% 90%,rgba(139,67,247,.07),transparent 26%),
+  var(--bg);
+}
+#sidebar{
+ background:linear-gradient(180deg,#090d1b,#090a17);
+ border-color:var(--line);
+}
+.logo,.loading-logo,.avatar{
+ background:linear-gradient(140deg,#b25cff,#5920c6);
+ box-shadow:0 8px 28px rgba(124,58,237,.2);
+}
+button.primary,.primary,.discord-login,.action:hover,.server:hover,.server.active{
+ background:linear-gradient(110deg,#8b43f7,#5921b9);
+ border-color:#7540c7;
+}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
+ outline:2px solid #b77aff;
+ outline-offset:2px;
+}
+.card,.stat,.hero-card,.server,.login-panel,.login-feature,.warning,.empty{
+ border-color:var(--line);
+}
+.card,.stat{
+ background:linear-gradient(145deg,#0e1326,#0a0e1c);
+}
+.card-head{border-color:var(--line)}
+.status-dot,.on{color:var(--good)}
+nav button.active,nav button:hover{
+ background:linear-gradient(90deg,rgba(81,33,169,.75),rgba(37,16,67,.55));
+ border-color:#6330b5;
+}
+input[type="checkbox"]:checked{accent-color:var(--accent)}
+a{color:#c18aff}
+@media(max-width:720px){
+ #sidebar{box-shadow:-15px 0 40px #0009}
+}
