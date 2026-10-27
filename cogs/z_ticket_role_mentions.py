@@ -52,7 +52,7 @@ class TicketRoleMentions(commands.Cog):
                     return
                 ticket = tickets[0]
 
-                panel = await db.get_ticket_panel(panel_id)
+                panel = await ticket_manager.db.get_ticket_panel(panel_id)
                 if not panel or int(panel.get("guild_id") or 0) != guild.id:
                     return
 
