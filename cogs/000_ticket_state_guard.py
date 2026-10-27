@@ -27,7 +27,7 @@ class TicketStateGuard(commands.Cog):
         async with self._cleanup_lock:
             rows = await db.fetchall(
                 "SELECT id, guild_id, channel_id FROM tickets "
-                "WHERE status='open' AND channel_id IS NOT NULL"
+                "WHERE status IN ('open','locked') AND channel_id IS NOT NULL"
             )
             stale_ids: list[int] = []
             for row in rows:
@@ -48,7 +48,7 @@ class TicketStateGuard(commands.Cog):
             now = time.time()
             await db.execute(
                 f"UPDATE tickets SET status='deleted', closed_at=COALESCE(closed_at, ?) "
-                f"WHERE id IN ({placeholders}) AND status='open'",
+                f"WHERE id IN ({placeholders}) AND status IN ('open','locked')",
                 tuple([now, *stale_ids]),
             )
             await db.connection.commit()
@@ -68,7 +68,7 @@ class TicketStateGuard(commands.Cog):
         try:
             cleaned = await self._cleanup_stale_open_tickets()
             if cleaned:
-                print(f"[TicketStateGuard] cleaned {cleaned} stale open ticket(s)")
+                print(f"[TicketStateGuard] cleaned {cleaned} stale active ticket(s)")
         except Exception as exc:
             print(f"[TicketStateGuard] ready cleanup error: {exc!r}")
 
@@ -81,7 +81,7 @@ class TicketStateGuard(commands.Cog):
         try:
             cur = await db.execute(
                 "UPDATE tickets SET status='deleted', closed_at=COALESCE(closed_at, ?) "
-                "WHERE channel_id=? AND status='open'",
+                "WHERE channel_id=? AND status IN ('open','locked')",
                 (time.time(), int(channel.id)),
             )
             if cur.rowcount:
