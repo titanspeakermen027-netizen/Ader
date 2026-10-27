@@ -331,7 +331,7 @@ def create_app(bot):
         guild_cfg = await bot.db.get_guild(guild_id)
         modules = (guild_cfg or {}).get("modules", {}) if guild_cfg else {}
         economy = modules.get("economy", {}) if isinstance(modules, dict) else {}
-        name = str(economy.get("currency_name") or "ANOCoin")
+        name = str(economy.get("currency_name") or "ANORIS")
         symbol = str(economy.get("currency_symbol") or "🪙")
         leaderboard = await bot.db.fetchall("SELECT user_id, balance FROM global_balances WHERE user_id IN (SELECT user_id FROM users WHERE guild_id=?) ORDER BY balance DESC LIMIT 10", (guild_id,))
         return {"config":{"currency_name":name,"currency_symbol":symbol},"leaderboard":[dict(x) for x in leaderboard]}
@@ -352,7 +352,7 @@ def create_app(bot):
             symbol = str(data.get("currency_symbol") or "").strip()[:12]
             if symbol: economy["currency_symbol"] = symbol
         await bot.db.update_guild(guild_id, {"economy":economy})
-        return {"ok":True,"config":{"currency_name":economy.get("currency_name","ANOCoin"),"currency_symbol":economy.get("currency_symbol","🪙")}}
+        return {"ok":True,"config":{"currency_name":economy.get("currency_name","ANORIS"),"currency_symbol":economy.get("currency_symbol","🪙")}}
 
     @app.get("/api/guilds/{guild_id}/levels")
     async def cloud_levels_get(request: Request, guild_id: int):
