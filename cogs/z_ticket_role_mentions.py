@@ -37,25 +37,20 @@ class TicketRoleMentions(commands.Cog):
             # Serialize clicks by the same user so two rapid clicks cannot
             # generate duplicate support-role notifications.
             async with self._lock_for(guild.id, interaction.user.id):
-                db = ticket_manager.db
-                existing = await db.fetchone(
-                    "SELECT channel_id FROM tickets WHERE guild_id=? AND user_id=? AND status='open' LIMIT 1",
-                    (guild.id, interaction.user.id),
-                )
+                # Use the manager's live-channel check instead of trusting database status alone.
+                existing = await ticket_manager.get_open_tickets_for_user(guild, interaction.user.id)
 
                 await self._original(interaction, panel_id, option_index)
 
-                # If a ticket already existed before this click, the original
+                # If an active ticket already existed before this click, the original
                 # manager did not create anything; never send another mention.
                 if existing:
                     return
 
-                ticket = await db.fetchone(
-                    "SELECT channel_id FROM tickets WHERE guild_id=? AND user_id=? AND status='open' LIMIT 1",
-                    (guild.id, interaction.user.id),
-                )
-                if not ticket:
+                tickets = await ticket_manager.get_open_tickets_for_user(guild, interaction.user.id)
+                if not tickets:
                     return
+                ticket = tickets[0]
 
                 panel = await db.get_ticket_panel(panel_id)
                 if not panel or int(panel.get("guild_id") or 0) != guild.id:
@@ -66,7 +61,13 @@ class TicketRoleMentions(commands.Cog):
                     return
 
                 role = guild.get_role(role_id)
-                channel = guild.get_channel(int(ticket["channel_id"]))
+                channel_id = int(ticket["channel_id"])
+                channel = guild.get_channel(channel_id)
+                if channel is None:
+                    try:
+                        channel = await guild.fetch_channel(channel_id)
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                        return
                 if role is None or not isinstance(channel, discord.TextChannel):
                     return
 
