@@ -543,6 +543,40 @@ class TicketManager(commands.Cog):
         row = await self.db.fetchone("SELECT * FROM tickets WHERE channel_id=? AND status IN ('open','locked','closed') LIMIT 1", (channel_id,))
         return dict(row) if row else None
 
+    async def get_open_tickets_for_user(self, guild: discord.Guild, user_id: int) -> list[dict[str, Any]]:
+        """Return active tickets only when their Discord text channels still exist."""
+        rows = await self.db.fetchall(
+            "SELECT * FROM tickets WHERE guild_id=? AND user_id=? AND status IN ('open','locked') ORDER BY id DESC",
+            (guild.id, user_id),
+        )
+        active: list[dict[str, Any]] = []
+        for row in rows:
+            ticket = dict(row)
+            channel_id = as_int(ticket.get("channel_id"))
+            channel = guild.get_channel(channel_id) if channel_id else None
+
+            if channel is None and channel_id:
+                try:
+                    channel = await guild.fetch_channel(channel_id)
+                except discord.NotFound:
+                    channel = None
+                except (discord.Forbidden, discord.HTTPException):
+                    # A temporary/API permission failure is not proof the room was deleted.
+                    active.append(ticket)
+                    continue
+
+            if isinstance(channel, discord.TextChannel) and channel.guild.id == guild.id:
+                active.append(ticket)
+                continue
+
+            # Clean up stale rows so a deleted channel does not block ticket creation.
+            await self.db.execute(
+                "UPDATE tickets SET status='deleted', closed_at=COALESCE(closed_at, ?) "
+                "WHERE id=? AND status IN ('open','locked')",
+                (time.time(), int(ticket["id"])),
+            )
+        return active
+
     def option_for(self, panel: dict[str, Any], index: int) -> dict[str, Any]:
         options = panel.get("options") or []
         try:
@@ -592,18 +626,23 @@ class TicketManager(commands.Cog):
         support_role = guild.get_role(support_role_id) if support_role_id else None
         limit = as_int(item.get("max_open")) or int(settings.get("max_open_per_user", 1))
         limit = max(1, min(MAX_OPEN_PER_USER, limit))
-        count_row = await self.db.fetchone("SELECT COUNT(*) AS n FROM tickets WHERE guild_id=? AND user_id=? AND status IN ('open','locked')", (guild.id, interaction.user.id))
-        current_count = int(count_row["n"]) if count_row else 0
+        open_tickets = await self.get_open_tickets_for_user(guild, interaction.user.id)
+        current_count = len(open_tickets)
         if current_count >= limit:
-            row = await self.db.fetchone("SELECT channel_id FROM tickets WHERE guild_id=? AND user_id=? AND status IN ('open','locked') ORDER BY id DESC LIMIT 1", (guild.id, interaction.user.id))
-            channel_ref = f"<#{row['channel_id']}>" if row and row["channel_id"] else "التذكرة الحالية"
+            row = open_tickets[0] if open_tickets else None
+            channel_ref = f"<#{row['channel_id']}>" if row and row.get("channel_id") else "التذكرة الحالية"
             return await interaction.response.send_message(f"لقد بلغت الحد الأقصى للتذاكر المفتوحة ({limit}). {channel_ref}", ephemeral=True)
 
         lock = self._create_locks.setdefault((guild.id, interaction.user.id), asyncio.Lock())
         async with lock:
-            count_row = await self.db.fetchone("SELECT COUNT(*) AS n FROM tickets WHERE guild_id=? AND user_id=? AND status IN ('open','locked')", (guild.id, interaction.user.id))
-            if int(count_row["n"] or 0) >= limit:
-                return await interaction.response.send_message("لديك تذكرة مفتوحة بالفعل وفق الحد المحدد.", ephemeral=True)
+            open_tickets = await self.get_open_tickets_for_user(guild, interaction.user.id)
+            if len(open_tickets) >= limit:
+                row = open_tickets[0] if open_tickets else None
+                channel_ref = f"<#{row['channel_id']}>" if row and row.get("channel_id") else "التذكرة الحالية"
+                return await interaction.response.send_message(
+                    f"لقد بلغت الحد الأقصى للتذاكر المفتوحة ({limit}). {channel_ref}",
+                    ephemeral=True,
+                )
             await interaction.response.defer(ephemeral=True)
             channel = None
             try:
