@@ -421,7 +421,11 @@ class Ader(commands.Bot):
             else:
                 self.logger.warning(f"Target guild {self.TARGET_GUILD_ID} is not visible to the bot")
             self._ready_sync_done = True
-            self.logger.info(f"Ader ready as {self.user} in {len(self.guilds)} guilds")
+            self.logger.info("Ader ready as %s in %d guilds", self.user, len(self.guilds))
+            self.logger.info(
+                "Ader live guild IDs: %s",
+                ", ".join(f"{guild.name} ({guild.id})" for guild in sorted(self.guilds, key=lambda item: item.name.casefold())),
+            )
         except Exception:
             self.logger.error("Command synchronization failed", exc_info=True)
 
