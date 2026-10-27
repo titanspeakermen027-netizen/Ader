@@ -483,7 +483,7 @@ def create_app(bot):
 
     @app.get("/api/guilds/{guild_id}/tickets")
     async def cloud_ticket_data(request: Request, guild_id: int):
-        await _require_guild(bot, request, guild_id)
+        guild = await _require_guild(bot, request, guild_id)
         await _require_premium(bot, guild_id)
         panels = await bot.db.list_ticket_panels(guild_id)
         settings = await bot.db.get_ticket_settings(guild_id)
@@ -492,14 +492,41 @@ def create_app(bot):
             "FROM tickets WHERE guild_id=? ORDER BY id DESC LIMIT 100", (guild_id,)
         )
         tickets = []
+        repaired = False
         for row in rows:
             item = dict(row)
+            if item.get("status") in {"open", "locked"}:
+                channel_id = int(item.get("channel_id") or 0)
+                channel = guild.get_channel(channel_id) if channel_id else None
+                missing = not channel_id
+                if channel is None and channel_id:
+                    try:
+                        channel = await guild.fetch_channel(channel_id)
+                    except discord.NotFound:
+                        missing = True
+                    except (discord.Forbidden, discord.HTTPException):
+                        # API/permission failures do not prove the room was deleted.
+                        pass
+                if channel is not None and not isinstance(channel, discord.TextChannel):
+                    missing = True
+                if missing:
+                    closed_at = float(item.get("closed_at") or time.time())
+                    await bot.db.execute(
+                        "UPDATE tickets SET status='deleted', closed_at=COALESCE(closed_at, ?) "
+                        "WHERE id=? AND status IN ('open','locked')",
+                        (closed_at, int(item["id"])),
+                    )
+                    item["status"] = "deleted"
+                    item["closed_at"] = closed_at
+                    repaired = True
             try:
                 item["data"] = json.loads(item.get("data") or "{}")
             except (TypeError, ValueError, json.JSONDecodeError):
                 item["data"] = {}
             item["rating"] = await bot.db.get_ticket_rating(int(item["id"])) if hasattr(bot.db, "get_ticket_rating") else None
             tickets.append(item)
+        if repaired and getattr(bot.db, "connection", None) is not None:
+            await bot.db.connection.commit()
         return {"settings": settings, "panels": panels, "tickets": tickets}
 
     @app.put("/api/guilds/{guild_id}/tickets/settings")
