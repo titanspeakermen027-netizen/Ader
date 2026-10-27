@@ -326,6 +326,7 @@ class Shortcuts(commands.Cog):
             # than being reported as already locked or unlocked.
             everyone_overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
             everyone_send_state = everyone_overwrite.send_messages
+            effective_permissions = ctx.channel.permissions_for(ctx.guild.default_role)
 
             if key == "lock" and all((
                 everyone_send_state is False,
@@ -334,22 +335,41 @@ class Shortcuts(commands.Cog):
                 everyone_overwrite.create_public_threads is False,
             )):
                 return await ctx.send(f"**القناة مقفلة بالفعل: {ctx.channel.mention}**")
+
+            # A channel can be open through category/server inheritance even
+            # when its own send_messages overwrite is None.
             if key == "unlock" and all((
-                everyone_send_state is True,
-                everyone_overwrite.send_messages_in_threads is None,
-                everyone_overwrite.create_private_threads is None,
-                everyone_overwrite.create_public_threads is None,
+                effective_permissions.send_messages,
+                effective_permissions.send_messages_in_threads,
+                effective_permissions.create_private_threads,
+                effective_permissions.create_public_threads,
+                everyone_overwrite.send_messages is not False,
+                everyone_overwrite.send_messages_in_threads is not False,
+                everyone_overwrite.create_private_threads is not False,
+                everyone_overwrite.create_public_threads is not False,
             )):
                 return await ctx.send(f"**القناة مفتوحة بالفعل: {ctx.channel.mention}**")
 
             try:
-                # On lock, deny sending/creating threads. On unlock, restore
-                # the thread-related permissions to None (inherit), as requested.
-                # Every unrelated @everyone permission remains unchanged.
-                everyone_overwrite.send_messages = False if key == "lock" else None
-                everyone_overwrite.send_messages_in_threads = False if key == "lock" else None
-                everyone_overwrite.create_private_threads = False if key == "lock" else None
-                everyone_overwrite.create_public_threads = False if key == "lock" else None
+                # On lock, explicitly deny sending and thread creation. On
+                # unlock, inherit each permission from the category when it is
+                # allowed there; explicitly allow it when the category denies
+                # it, so "فتح" really opens a category-locked channel too.
+                inherited_permissions = (
+                    ctx.channel.category.permissions_for(ctx.guild.default_role)
+                    if getattr(ctx.channel, "category", None)
+                    else ctx.guild.default_role.permissions
+                )
+                if key == "lock":
+                    everyone_overwrite.send_messages = False
+                    everyone_overwrite.send_messages_in_threads = False
+                    everyone_overwrite.create_private_threads = False
+                    everyone_overwrite.create_public_threads = False
+                else:
+                    everyone_overwrite.send_messages = None if inherited_permissions.send_messages else True
+                    everyone_overwrite.send_messages_in_threads = None if inherited_permissions.send_messages_in_threads else True
+                    everyone_overwrite.create_private_threads = None if inherited_permissions.create_private_threads else True
+                    everyone_overwrite.create_public_threads = None if inherited_permissions.create_public_threads else True
                 await ctx.channel.set_permissions(
                     ctx.guild.default_role,
                     overwrite=everyone_overwrite,
