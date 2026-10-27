@@ -340,9 +340,6 @@ class Shortcuts(commands.Cog):
             # when its own send_messages overwrite is None.
             if key == "unlock" and all((
                 effective_permissions.send_messages,
-                effective_permissions.send_messages_in_threads,
-                effective_permissions.create_private_threads,
-                effective_permissions.create_public_threads,
                 everyone_overwrite.send_messages is not False,
                 everyone_overwrite.send_messages_in_threads is not False,
                 everyone_overwrite.create_private_threads is not False,
