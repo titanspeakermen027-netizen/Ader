@@ -337,7 +337,7 @@ class Economy(commands.Cog):
 
         embed = discord.Embed(
             title=f"🏆 أغنى أعضاء {currency_name}",
-            description="\\n".join(lines),
+            description="\n".join(lines),
             color=discord.Color.gold(),
         )
         embed.set_footer(text=f"يعرض الترتيب أعلى {len(rows)} أرصدة على مستوى البوت")
