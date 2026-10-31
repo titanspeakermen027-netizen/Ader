@@ -20,23 +20,42 @@ except ImportError:  # Keep the leaderboard usable if optional shaping deps are 
     arabic_reshaper = None
     get_display = None
 
+try:
+    from fontTools.ttLib import TTFont
+except ImportError:  # The normal renderer still works; automatic cmap matching is optional.
+    TTFont = None
+
 
 WIDTH = 1400
 HEIGHT = 1180
 
 _MATH_FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/stixtwomath/STIXTwoMath-Regular.ttf"
 _SPECIAL_FONT_URLS = {
-    "lao": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanslao/NotoSansLao%5Bwdth,wght%5D.ttf",
+    "arabic": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/NotoSansArabic%5Bwdth,wght%5D.ttf",
+    "devanagari": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth,wght%5D.ttf",
+    "hebrew": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanshebrew/NotoSansHebrew%5Bwght%5D.ttf",
     "japanese": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf",
+    "khmer": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanskhmer/NotoSansKhmer%5Bwdth,wght%5D.ttf",
+    "lao": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanslao/NotoSansLao%5Bwdth,wght%5D.ttf",
+    "myanmar": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansmyanmar/NotoSansMyanmar%5Bwdth,wght%5D.ttf",
     "symbols": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanssymbols2/NotoSansSymbols2-Regular.ttf",
+    "thai": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansthai/NotoSansThai%5Bwdth,wght%5D.ttf",
 }
 _SPECIAL_FONT_MAX_BYTES = {
-    "lao": 2_000_000,
+    "arabic": 5_000_000,
+    "devanagari": 5_000_000,
+    "hebrew": 3_000_000,
     "japanese": 15_000_000,
+    "khmer": 4_000_000,
+    "lao": 2_000_000,
+    "myanmar": 4_000_000,
     "symbols": 3_000_000,
+    "thai": 4_000_000,
 }
 _SPECIAL_FONT_BYTES: dict[str, bytes] = {}
 _SPECIAL_FONT_DOWNLOAD_ATTEMPTED: set[str] = set()
+_FONT_CMAP_CACHE: dict[str, set[int]] = {}
+_BASE_FONT_CMAP: set[int] | None = None
 _MATH_FONT_BYTES: bytes | None = None
 _MATH_FONT_DOWNLOAD_ATTEMPTED = False
 
@@ -207,32 +226,115 @@ async def _ensure_special_fonts(texts: list[str]) -> None:
         return
 
 
+def _font_cmap(source: Any, cache_key: str) -> set[int]:
+    """Read the Unicode cmap of a font, so fallback selection is based on real glyph coverage."""
+    if cache_key in _FONT_CMAP_CACHE:
+        return _FONT_CMAP_CACHE[cache_key]
+    result: set[int] = set()
+    if TTFont is not None:
+        font = None
+        try:
+            font = TTFont(source, lazy=True, recalcBBoxes=False, recalcTimestamp=False)
+            for table in font["cmap"].tables:
+                if table.isUnicode():
+                    result.update(table.cmap.keys())
+        except Exception:
+            result = set()
+        finally:
+            if font is not None:
+                try:
+                    font.close()
+                except Exception:
+                    pass
+    _FONT_CMAP_CACHE[cache_key] = result
+    return result
+
+
+def _base_font_codepoints() -> set[int]:
+    """Collect glyph coverage from the regular system fonts used by the base renderer."""
+    global _BASE_FONT_CMAP
+    if _BASE_FONT_CMAP is not None:
+        return _BASE_FONT_CMAP
+
+    paths = (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSans-Bold.ttf",
+    )
+    coverage: set[int] = set()
+    for path in paths:
+        if os.path.isfile(path):
+            coverage.update(_font_cmap(path, f"file:{path}"))
+    _BASE_FONT_CMAP = coverage
+    return coverage
+
+
+def _family_for_codepoint(code: int) -> str | None:
+    """Map major Unicode scripts to a suitable Noto fallback family."""
+    if (
+        0x1D400 <= code <= 0x1D7FF
+        or 0x2100 <= code <= 0x214F
+        or 0x2460 <= code <= 0x24FF
+    ):
+        return "math"
+    if (
+        0x0750 <= code <= 0x08FF
+        or 0xFB50 <= code <= 0xFDFF
+        or 0xFE70 <= code <= 0xFEFF
+        or 0x1EE00 <= code <= 0x1EEFF
+    ):
+        return "arabic"
+    if 0x0590 <= code <= 0x05FF or 0xFB1D <= code <= 0xFB4F:
+        return "hebrew"
+    if (
+        0x0900 <= code <= 0x097F
+        or 0xA8E0 <= code <= 0xA8FF
+        or 0x11B00 <= code <= 0x11B5F
+    ):
+        return "devanagari"
+    if 0x0E00 <= code <= 0x0E7F:
+        return "thai"
+    if 0x0E80 <= code <= 0x0EFF:
+        return "lao"
+    if 0x1000 <= code <= 0x109F or 0xAA60 <= code <= 0xAA7F:
+        return "myanmar"
+    if 0x1780 <= code <= 0x17FF or 0x19E0 <= code <= 0x19FF:
+        return "khmer"
+    if (
+        0x3000 <= code <= 0x30FF
+        or 0x31F0 <= code <= 0x31FF
+        or 0x3400 <= code <= 0x4DBF
+        or 0x4E00 <= code <= 0x9FFF
+        or 0xFF00 <= code <= 0xFFEF
+        or 0x1100 <= code <= 0x11FF
+        or 0xAC00 <= code <= 0xD7AF
+    ):
+        return "japanese"
+    if (
+        0x2000 <= code <= 0x2BFF
+        or 0x2E00 <= code <= 0x2E7F
+        or 0x1D300 <= code <= 0x1D37F
+    ):
+        return "symbols"
+    return None
+
+
 def _special_font_families(text: str) -> set[str]:
-    """Return the fallback font families needed for the characters in a name."""
+    """Find script-specific fonts and a broad fallback for any missing base glyph."""
     families: set[str] = set()
+    base_cmap = _base_font_codepoints()
     for char in text:
         code = ord(char)
-        if (
-            0x1D400 <= code <= 0x1D7FF
-            or 0x2100 <= code <= 0x214F
-            or 0x2460 <= code <= 0x24FF
-        ):
-            families.add("math")
-        elif 0x0E80 <= code <= 0x0EFF:
-            families.add("lao")
-        elif (
-            0x3000 <= code <= 0x30FF
-            or 0x31F0 <= code <= 0x31FF
-            or 0x3400 <= code <= 0x4DBF
-            or 0x4E00 <= code <= 0x9FFF
-            or 0xFF00 <= code <= 0xFFEF
-        ):
-            families.add("japanese")
-        elif (
-            0x2000 <= code <= 0x2BFF
-            or 0x2E00 <= code <= 0x2E7F
-            or 0x1D300 <= code <= 0x1D37F
-        ):
+        if code in (0xFE0E, 0xFE0F, 0x200D, 0x20E3) or 0x1F3FB <= code <= 0x1F3FF:
+            continue
+        family = _family_for_codepoint(code)
+        if family:
+            if family != "math":
+                families.add(family)
+        elif code not in base_cmap and TTFont is not None:
+            # Noto Sans Symbols 2 is a broad catch-all for uncommon symbols,
+            # enclosed characters, and Unicode blocks not covered above.
             families.add("symbols")
     return families
 
@@ -266,18 +368,39 @@ def _name_font_for_family(family: str | None, size: int):
 
 
 def _name_runs(text: str) -> list[tuple[str | None, str]]:
-    """Split a left-to-right name into runs that can use the right Unicode font."""
+    """Split text only when a different font is required for actual glyph coverage."""
     runs: list[tuple[str | None, str]] = []
     current_family: str | None = None
     current_text = ""
 
-    for char in text:
+    def choose_family(char: str) -> str | None:
         code = ord(char)
         if code in (0xFE0E, 0xFE0F, 0x200D, 0x20E3) or 0x1F3FB <= code <= 0x1F3FF:
-            family = current_family
-        else:
-            family = next(iter(_special_font_families(char)), None)
+            return current_family
 
+        preferred = _family_for_codepoint(code)
+        if preferred == "math":
+            if _MATH_FONT_BYTES and code in _font_cmap(io.BytesIO(_MATH_FONT_BYTES), "math:downloaded"):
+                return "math"
+            return None
+
+        if preferred and preferred in _SPECIAL_FONT_BYTES:
+            cmap = _font_cmap(
+                io.BytesIO(_SPECIAL_FONT_BYTES[preferred]),
+                f"special:{preferred}",
+            )
+            if code in cmap:
+                return preferred
+
+        # Check every downloaded fallback by its real Unicode cmap. This also
+        # catches characters outside the manually classified script ranges.
+        for family, data in _SPECIAL_FONT_BYTES.items():
+            if code in _font_cmap(io.BytesIO(data), f"special:{family}"):
+                return family
+        return None
+
+    for char in text:
+        family = choose_family(char)
         if current_text and family != current_family:
             runs.append((current_family, current_text))
             current_text = ""
