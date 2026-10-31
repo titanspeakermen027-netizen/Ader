@@ -151,6 +151,27 @@ def _fit_name_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, size: i
             except (OSError, TypeError, ValueError):
                 continue
 
+    # If the dedicated font could not be downloaded, try local math fonts.
+    math_font_paths = [
+        "/usr/share/fonts/opentype/stix2/STIXTwoMath-Regular.otf",
+        "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
+        "/usr/share/fonts/opentype/asana-math/Asana-Math.otf",
+    ]
+    for candidate_size in range(size, 11, -1):
+        for path in math_font_paths:
+            try:
+                font = ImageFont.truetype(path, candidate_size)
+                direction = "rtl" if _is_arabic(text) else "ltr"
+                box = draw.textbbox((0, 0), text, font=font, direction=direction)
+                if box[2] - box[0] <= max_width:
+                    return font
+            except (OSError, TypeError, ValueError):
+                continue
+
+    return _fit_font(draw, text, max_width, size)
+
+
 async def _ensure_special_fonts(texts: list[str]) -> None:
     """Download only the script-specific fonts required by visible leaderboard names."""
     needed = set().union(*(_special_font_families(text) for text in texts)) if texts else set()
@@ -321,27 +342,6 @@ def _draw_decorated_ltr_name(
 
     paint_runs()
     return True
-
-
-    # If the dedicated font could not be downloaded, try local math fonts.
-    math_font_paths = [
-        "/usr/share/fonts/opentype/stix2/STIXTwoMath-Regular.otf",
-        "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
-        "/usr/share/fonts/opentype/asana-math/Asana-Math.otf",
-    ]
-    for candidate_size in range(size, 11, -1):
-        for path in math_font_paths:
-            try:
-                font = ImageFont.truetype(path, candidate_size)
-                direction = "rtl" if _is_arabic(text) else "ltr"
-                box = draw.textbbox((0, 0), text, font=font, direction=direction)
-                if box[2] - box[0] <= max_width:
-                    return font
-            except (OSError, TypeError, ValueError):
-                continue
-
-    return _fit_font(draw, text, max_width, size)
 
 
 def _draw_name(
