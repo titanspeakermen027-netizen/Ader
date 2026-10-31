@@ -29,7 +29,10 @@ except ImportError:  # The normal renderer still works; automatic cmap matching 
 WIDTH = 1400
 HEIGHT = 1180
 
-_MATH_FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/stixtwomath/STIXTwoMath-Regular.ttf"
+_MATH_FONT_URLS = (
+    "https://raw.githubusercontent.com/google/fonts/main/ofl/stixtwomath/STIXTwoMath-Regular.ttf",
+    "https://raw.githubusercontent.com/stipub/stixfonts/master/fonts/static_ttf/STIXTwoMath-Regular.ttf",
+)
 _SPECIAL_FONT_URLS = {
     "arabic": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/NotoSansArabic%5Bwdth,wght%5D.ttf",
     "devanagari": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth,wght%5D.ttf",
@@ -123,31 +126,45 @@ def _fit_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, size: int, b
 
 
 async def _ensure_math_font() -> None:
-    """Load a math-capable font on demand if the host does not provide one."""
+    """Load a math font with explicit coverage for mathematical alphanumeric alphabets."""
     global _MATH_FONT_BYTES, _MATH_FONT_DOWNLOAD_ATTEMPTED
 
-    if _MATH_FONT_DOWNLOAD_ATTEMPTED:
+    if _MATH_FONT_BYTES is not None:
         return
-    _MATH_FONT_DOWNLOAD_ATTEMPTED = True
 
-    # Always fetch STIX Two Math: it explicitly includes Mathematical Alphanumeric
-    # Symbols (U+1D400–U+1D7FF), unlike many general-purpose system fonts.
-
+    # Try Google Fonts first, then the upstream STIX repository. A temporary
+    # CDN error should not permanently disable mathematical-name rendering.
+    timeout = aiohttp.ClientTimeout(total=10, connect=5)
     try:
-        timeout = aiohttp.ClientTimeout(total=6)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(_MATH_FONT_URL) as response:
-                if response.status != 200:
-                    return
-                data = await response.content.read(4_000_001)
-                if not 20_000 <= len(data) <= 4_000_000:
-                    return
-                # Validate the downloaded font before keeping it in memory.
-                ImageFont.truetype(io.BytesIO(data), 20)
-                _MATH_FONT_BYTES = data
+            for url in _MATH_FONT_URLS:
+                try:
+                    async with session.get(url) as response:
+                        if response.status != 200:
+                            continue
+                        data = await response.content.read(8_000_001)
+                        if not 20_000 <= len(data) <= 8_000_000:
+                            continue
+
+                        test_font = ImageFont.truetype(io.BytesIO(data), 20)
+                        required = (0x1D46D, 0x1D405, 0x1D5D9)
+                        if TTFont is not None:
+                            cmap = _font_cmap(io.BytesIO(data), "math:download-validation")
+                            if cmap and not all(code in cmap for code in required):
+                                continue
+
+                        # The file was successfully parsed by Pillow. Keep it
+                        # even when optional fontTools cmap parsing is absent.
+                        if test_font is not None:
+                            _MATH_FONT_BYTES = data
+                            _MATH_FONT_DOWNLOAD_ATTEMPTED = True
+                            return
+                except Exception:
+                    continue
     except Exception:
-        # Offline hosts still use any suitable fonts already installed.
         return
+
+    _MATH_FONT_DOWNLOAD_ATTEMPTED = True
 
 
 def _has_styled_unicode(text: str) -> bool:
@@ -384,9 +401,14 @@ def _name_runs(text: str) -> list[tuple[str | None, str]]:
         preferred = _family_for_codepoint(code)
         if preferred == "math":
             if _MATH_FONT_BYTES:
-                if TTFont is None or code in _font_cmap(io.BytesIO(_MATH_FONT_BYTES), "math:downloaded"):
+                # STIX Two Math is dedicated to mathematical alphabets. Do not
+                # reject its glyphs just because optional cmap parsing is absent.
+                if TTFont is None:
                     return "math"
-            return None
+                cmap = _font_cmap(io.BytesIO(_MATH_FONT_BYTES), "math:downloaded")
+                if not cmap or code in cmap:
+                    return "math"
+            # If STIX did not load or lacks this glyph, let other font cmaps try.
 
         if preferred and preferred in _SPECIAL_FONT_BYTES:
             if TTFont is None:
