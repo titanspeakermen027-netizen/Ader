@@ -309,6 +309,41 @@ class Economy(commands.Cog):
             await ctx.send(text, allowed_mentions=discord.AllowedMentions(users=[member], replied_user=False))
 
 
+    @commands.command(name="اغنياء", aliases=["الأغنياء", "توب"])
+    @commands.guild_only()
+    async def richest_members(self, ctx: commands.Context):
+        """عرض أغنى عشرة أعضاء حسب أرصدة ANORIS العالمية."""
+        rows = await self.db.fetchall(
+            "SELECT user_id, balance FROM global_balances WHERE balance > 0 ORDER BY balance DESC, user_id ASC LIMIT 10"
+        )
+
+        currency_name = await self._currency_name(ctx.guild.id)
+        if not rows:
+            return await ctx.send(
+                f"لا توجد أرصدة موجبة مسجلة في {currency_name} حتى الآن.",
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+
+        medals = ("🥇", "🥈", "🥉")
+        lines = []
+        for index, row in enumerate(rows, start=1):
+            user_id = int(row["user_id"])
+            balance = int(row["balance"])
+            member = ctx.guild.get_member(user_id)
+            user = self.bot.get_user(user_id)
+            display_name = member.display_name if member else (user.name if user else f"عضو {user_id}")
+            rank = medals[index - 1] if index <= 3 else f"**{index}.**"
+            lines.append(f"{rank} {display_name} — **{balance:,} {currency_name}**")
+
+        embed = discord.Embed(
+            title=f"🏆 أغنى أعضاء {currency_name}",
+            description="\\n".join(lines),
+            color=discord.Color.gold(),
+        )
+        embed.set_footer(text=f"يعرض الترتيب أعلى {len(rows)} أرصدة على مستوى البوت")
+        await ctx.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Economy(bot, bot.db, bot.config))
