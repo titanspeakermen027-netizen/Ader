@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import io
+import os
 from typing import Any
 
+import aiohttp
 import discord
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
@@ -14,6 +16,10 @@ except ImportError:  # Optional fallback if dependency installation is incomplet
 
 WIDTH = 1400
 HEIGHT = 1180
+
+_MATH_FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansmath/NotoSansMath-Regular.ttf"
+_MATH_FONT_BYTES: bytes | None = None
+_MATH_FONT_DOWNLOAD_ATTEMPTED = False
 
 PALETTE = {
     "background_top": (11, 10, 20),
@@ -78,6 +84,41 @@ def _fit_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, size: int, b
     return _font(14, bold)
 
 
+async def _ensure_math_font() -> None:
+    """Load a math-capable font on demand if the host does not provide one."""
+    global _MATH_FONT_BYTES, _MATH_FONT_DOWNLOAD_ATTEMPTED
+
+    if _MATH_FONT_DOWNLOAD_ATTEMPTED:
+        return
+    _MATH_FONT_DOWNLOAD_ATTEMPTED = True
+
+    local_paths = (
+        "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
+        "/usr/share/fonts/opentype/asana-math/Asana-Math.otf",
+        "/usr/share/fonts/truetype/noto/NotoSansMath-Regular.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSansMath-Regular.otf",
+    )
+    if any(os.path.isfile(path) for path in local_paths):
+        return
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=6)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(_MATH_FONT_URL) as response:
+                if response.status != 200:
+                    return
+                data = await response.content.read(4_000_001)
+                if not 20_000 <= len(data) <= 4_000_000:
+                    return
+                # Validate the downloaded font before keeping it in memory.
+                ImageFont.truetype(io.BytesIO(data), 20)
+                _MATH_FONT_BYTES = data
+    except Exception:
+        # Offline hosts still use any suitable fonts already installed.
+        return
+
+
 def _has_styled_unicode(text: str) -> bool:
     # Mathematical alphanumeric symbols are used by names such as 𝑉𝐸𝑆𝑃𝐸𝑅.
     return any(
@@ -107,6 +148,17 @@ def _fit_name_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, size: i
         for path in math_font_paths:
             try:
                 font = ImageFont.truetype(path, candidate_size)
+                direction = "rtl" if _is_arabic(text) else "ltr"
+                box = draw.textbbox((0, 0), text, font=font, direction=direction)
+                if box[2] - box[0] <= max_width:
+                    return font
+            except (OSError, TypeError, ValueError):
+                continue
+
+    if _MATH_FONT_BYTES:
+        for candidate_size in range(size, 13, -2):
+            try:
+                font = ImageFont.truetype(io.BytesIO(_MATH_FONT_BYTES), candidate_size)
                 direction = "rtl" if _is_arabic(text) else "ltr"
                 box = draw.textbbox((0, 0), text, font=font, direction=direction)
                 if box[2] - box[0] <= max_width:
@@ -324,6 +376,9 @@ async def render_richest_leaderboard(
     entries = []
     for row in rows[:10]:
         entries.append(await _get_member_data(bot, guild, row))
+
+    if any(_has_styled_unicode(name) for name, _, _ in entries):
+        await _ensure_math_font()
 
     # Top three: the winner is deliberately larger and slightly higher.
     positions = {
