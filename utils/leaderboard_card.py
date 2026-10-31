@@ -13,6 +13,13 @@ try:
 except ImportError:  # Optional fallback if dependency installation is incomplete.
     Pilmoji = None
 
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+except ImportError:  # Keep the leaderboard usable if optional shaping deps are absent.
+    arabic_reshaper = None
+    get_display = None
+
 
 WIDTH = 1400
 HEIGHT = 1180
@@ -289,9 +296,20 @@ def _draw_decorated_ltr_name(
     max_width: int,
     size: int,
 ) -> bool:
-    """Draw mixed-script LTR names with script-specific fonts and Pilmoji."""
+    """Draw names containing fallback glyphs, including mixed Arabic and symbols."""
     draw = ImageDraw.Draw(image, "RGBA")
-    runs = _name_runs(text)
+    render_text = text
+
+    # Convert mixed Arabic text to visual order while preserving Arabic letter shaping.
+    if _is_arabic(text):
+        if arabic_reshaper is None or get_display is None:
+            return False
+        try:
+            render_text = get_display(arabic_reshaper.reshape(text), base_dir="R")
+        except Exception:
+            return False
+
+    runs = _name_runs(render_text)
     if not any(family is not None for family, _ in runs):
         return False
 
@@ -347,7 +365,6 @@ def _draw_decorated_ltr_name(
                 paint_runs(renderer)
             return True
         except Exception:
-            # Use monochrome glyphs as a fallback if the emoji renderer is unavailable.
             paint_runs()
             return True
 
@@ -364,9 +381,9 @@ def _draw_name(
 ) -> None:
     draw = ImageDraw.Draw(image, "RGBA")
 
-    # Pillow has no automatic per-character font fallback. Preserve Arabic shaping
-    # through the existing path and use script-specific runs for other Unicode names.
-    if not _is_arabic(text) and _draw_decorated_ltr_name(image, center, text, max_width, size):
+    # Use script-specific font runs whenever a name contains unsupported glyphs.
+    # Mixed Arabic names go through the bidi-aware renderer above.
+    if _draw_decorated_ltr_name(image, center, text, max_width, size):
         return
 
     font = _fit_name_font(draw, text, max_width, size)
@@ -571,7 +588,7 @@ async def render_richest_leaderboard(
 
     if any(_has_styled_unicode(name) for name, _, _ in entries):
         await _ensure_math_font()
-    await _ensure_special_fonts([name for name, _, _ in entries if not _is_arabic(name)])
+    await _ensure_special_fonts([name for name, _, _ in entries])
 
     # Top three: the winner is deliberately larger and slightly higher.
     positions = {
