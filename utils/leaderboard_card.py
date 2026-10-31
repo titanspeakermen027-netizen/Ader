@@ -231,11 +231,22 @@ def _special_font_families(text: str) -> set[str]:
 
 
 def _name_font_for_family(family: str | None, size: int):
-    if family == "math" and _MATH_FONT_BYTES:
-        try:
-            return ImageFont.truetype(io.BytesIO(_MATH_FONT_BYTES), size)
-        except OSError:
-            pass
+    if family == "math":
+        if _MATH_FONT_BYTES:
+            try:
+                return ImageFont.truetype(io.BytesIO(_MATH_FONT_BYTES), size)
+            except OSError:
+                pass
+        for path in (
+            "/usr/share/fonts/opentype/stix2/STIXTwoMath-Regular.otf",
+            "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
+            "/usr/share/fonts/opentype/asana-math/Asana-Math.otf",
+        ):
+            try:
+                return ImageFont.truetype(path, size)
+            except OSError:
+                continue
 
     font_data = _SPECIAL_FONT_BYTES.get(family or "")
     if font_data:
