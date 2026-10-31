@@ -12,3 +12,4 @@ itsdangerous>=2.2,<3
 PyNaCl>=1.5,<2
 arabic-reshaper==3.0.0
 python-bidi==0.6.6
+fonttools>=4.59,<5
