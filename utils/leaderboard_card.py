@@ -61,6 +61,19 @@ _FONT_CMAP_CACHE: dict[str, set[int]] = {}
 _BASE_FONT_CMAP: set[int] | None = None
 _MATH_FONT_BYTES: bytes | None = None
 _MATH_FONT_DOWNLOAD_ATTEMPTED = False
+_MATH_FONT_PATHS = (
+    # Common Debian/Ubuntu font package locations.
+    "/usr/share/fonts/opentype/stix-word/STIXMath-Regular.otf",
+    "/usr/share/fonts/opentype/stix/STIXGeneral-Regular.otf",
+    "/usr/share/fonts/opentype/asana-math/Asana-Math.otf",
+    "/usr/share/fonts/opentype/freefont/FreeSerif.otf",
+    "/usr/share/fonts/opentype/freefont/FreeSerifBold.otf",
+    # Alternate locations used by some container images.
+    "/usr/share/fonts/truetype/stix/STIXMath-Regular.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
+)
+_MATH_FONT_PATH: str | None = None
 
 PALETTE = {
     "background_top": (11, 10, 20),
@@ -162,6 +175,32 @@ async def _ensure_math_font() -> None:
     _MATH_FONT_DOWNLOAD_ATTEMPTED = True
 
 
+def _local_math_font_path() -> str | None:
+    """Find an installed font that really contains the mathematical alphabets."""
+    global _MATH_FONT_PATH
+
+    if _MATH_FONT_PATH and os.path.isfile(_MATH_FONT_PATH):
+        return _MATH_FONT_PATH
+
+    required_glyphs = {0x1D46D, 0x1D405, 0x1D5D9}
+    for path in _MATH_FONT_PATHS:
+        if not os.path.isfile(path):
+            continue
+        try:
+            # Verify both that Pillow can load the font and that it supports
+            # the exact Mathematical Alphanumeric blocks used in Discord names.
+            ImageFont.truetype(path, 20)
+            if TTFont is not None:
+                cmap = _font_cmap(path, f"local-math:{path}")
+                if not required_glyphs.issubset(cmap):
+                    continue
+            _MATH_FONT_PATH = path
+            return path
+        except Exception:
+            continue
+    return None
+
+
 def _has_styled_unicode(text: str) -> bool:
     # Mathematical alphanumeric symbols are used by names such as 𝑉𝐸𝑆𝑃𝐸𝑅.
     return any(
@@ -176,30 +215,19 @@ def _fit_name_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, size: i
     if not _has_styled_unicode(text):
         return _fit_font(draw, text, max_width, size)
 
-    # Prefer STIX Two Math because it contains the mathematical styled alphabets
-    # used in names such as 𝑉𝐸𝑆𝑃𝐸𝑅.
+    # Prefer the downloaded font, then a verified local STIX/Asana/FreeSerif font.
+    math_sources: list[Any] = []
     if _MATH_FONT_BYTES:
-        for candidate_size in range(size, 11, -1):
-            try:
-                font = ImageFont.truetype(io.BytesIO(_MATH_FONT_BYTES), candidate_size)
-                direction = "rtl" if _is_arabic(text) else "ltr"
-                box = draw.textbbox((0, 0), text, font=font, direction=direction)
-                if box[2] - box[0] <= max_width:
-                    return font
-            except (OSError, TypeError, ValueError):
-                continue
+        math_sources.append(io.BytesIO(_MATH_FONT_BYTES))
+    else:
+        local_path = _local_math_font_path()
+        if local_path:
+            math_sources.append(local_path)
 
-    # If the dedicated font could not be downloaded, try local math fonts.
-    math_font_paths = [
-        "/usr/share/fonts/opentype/stix2/STIXTwoMath-Regular.otf",
-        "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
-        "/usr/share/fonts/opentype/asana-math/Asana-Math.otf",
-    ]
-    for candidate_size in range(size, 11, -1):
-        for path in math_font_paths:
+    for source in math_sources:
+        for candidate_size in range(size, 10, -1):
             try:
-                font = ImageFont.truetype(path, candidate_size)
+                font = ImageFont.truetype(source, candidate_size)
                 direction = "rtl" if _is_arabic(text) else "ltr"
                 box = draw.textbbox((0, 0), text, font=font, direction=direction)
                 if box[2] - box[0] <= max_width:
@@ -361,16 +389,13 @@ def _name_font_for_family(family: str | None, size: int):
                 return ImageFont.truetype(io.BytesIO(_MATH_FONT_BYTES), size)
             except OSError:
                 pass
-        for path in (
-            "/usr/share/fonts/opentype/stix2/STIXTwoMath-Regular.otf",
-            "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
-            "/usr/share/fonts/opentype/asana-math/Asana-Math.otf",
-        ):
+
+        local_path = _local_math_font_path()
+        if local_path:
             try:
-                return ImageFont.truetype(path, size)
+                return ImageFont.truetype(local_path, size)
             except OSError:
-                continue
+                pass
 
     font_data = _SPECIAL_FONT_BYTES.get(family or "")
     if font_data:
@@ -395,11 +420,11 @@ def _name_runs(text: str) -> list[tuple[str | None, str]]:
 
         preferred = _family_for_codepoint(code)
         if preferred == "math":
-            if _MATH_FONT_BYTES:
-                # This font was validated by Pillow and is dedicated to the
-                # mathematical alphabets; never gate these glyphs on cmap parsing.
+            if _MATH_FONT_BYTES or _local_math_font_path():
+                # Crucially, local fonts must be selected here as well as loaded
+                # later by _name_font_for_family; otherwise they are never used.
                 return "math"
-            # If STIX did not load, let other downloaded font cmaps try.
+            # If no downloaded or local math font exists, try other fallbacks.
 
         if preferred and preferred in _SPECIAL_FONT_BYTES:
             if TTFont is None:
