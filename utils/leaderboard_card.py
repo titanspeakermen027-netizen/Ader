@@ -398,6 +398,11 @@ def _name_runs(text: str) -> list[tuple[str | None, str]]:
             if code in cmap:
                 return preferred
 
+        # Prefer the regular renderer whenever it already has the glyph. This
+        # prevents broad fallback fonts from replacing ordinary Latin/Arabic text.
+        if code in _base_font_codepoints():
+            return None
+
         # Check every downloaded fallback by its real Unicode cmap. This also
         # catches characters outside the manually classified script ranges.
         for family, data in _SPECIAL_FONT_BYTES.items():
