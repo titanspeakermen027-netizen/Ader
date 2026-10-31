@@ -126,14 +126,15 @@ def _fit_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, size: int, b
 
 
 async def _ensure_math_font() -> None:
-    """Load a math font with explicit coverage for mathematical alphanumeric alphabets."""
+    """Load STIX Two Math for mathematical alphanumeric characters."""
     global _MATH_FONT_BYTES, _MATH_FONT_DOWNLOAD_ATTEMPTED
 
     if _MATH_FONT_BYTES is not None:
         return
 
-    # Try Google Fonts first, then the upstream STIX repository. A temporary
-    # CDN error should not permanently disable mathematical-name rendering.
+    # Try Google Fonts first, then the upstream STIX repository. Do not make
+    # fontTools cmap parsing a requirement: Pillow can load and render the TTF
+    # even on hosts where cmap inspection is unavailable or incomplete.
     timeout = aiohttp.ClientTimeout(total=10, connect=5)
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -146,19 +147,13 @@ async def _ensure_math_font() -> None:
                         if not 20_000 <= len(data) <= 8_000_000:
                             continue
 
-                        test_font = ImageFont.truetype(io.BytesIO(data), 20)
-                        required = (0x1D46D, 0x1D405, 0x1D5D9)
-                        if TTFont is not None:
-                            cmap = _font_cmap(io.BytesIO(data), "math:download-validation")
-                            if cmap and not all(code in cmap for code in required):
-                                continue
-
-                        # The file was successfully parsed by Pillow. Keep it
-                        # even when optional fontTools cmap parsing is absent.
-                        if test_font is not None:
-                            _MATH_FONT_BYTES = data
-                            _MATH_FONT_DOWNLOAD_ATTEMPTED = True
-                            return
+                        # A successful FreeType/Pillow load confirms the font
+                        # is usable by the renderer. STIX Two Math includes the
+                        # mathematical bold, bold-italic and sans-serif-bold alphabets.
+                        ImageFont.truetype(io.BytesIO(data), 20)
+                        _MATH_FONT_BYTES = data
+                        _MATH_FONT_DOWNLOAD_ATTEMPTED = True
+                        return
                 except Exception:
                     continue
     except Exception:
