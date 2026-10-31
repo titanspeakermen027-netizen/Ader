@@ -33,7 +33,7 @@ _MATH_FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/stixtw
 _SPECIAL_FONT_URLS = {
     "arabic": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/NotoSansArabic%5Bwdth,wght%5D.ttf",
     "devanagari": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth,wght%5D.ttf",
-    "hebrew": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanshebrew/NotoSansHebrew%5Bwght%5D.ttf",
+    "hebrew": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanshebrew/NotoSansHebrew%5Bwdth,wght%5D.ttf",
     "japanese": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf",
     "khmer": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanskhmer/NotoSansKhmer%5Bwdth,wght%5D.ttf",
     "lao": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanslao/NotoSansLao%5Bwdth,wght%5D.ttf",
@@ -332,6 +332,9 @@ def _special_font_families(text: str) -> set[str]:
         if family:
             if family != "math":
                 families.add(family)
+            elif code not in base_cmap and TTFont is not None:
+                # Keep a generic fallback ready if STIX Two Math is unavailable.
+                families.add("symbols")
         elif code not in base_cmap and TTFont is not None:
             # Noto Sans Symbols 2 is a broad catch-all for uncommon symbols,
             # enclosed characters, and Unicode blocks not covered above.
