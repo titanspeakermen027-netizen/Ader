@@ -292,8 +292,8 @@ async def render_richest_leaderboard(
             width=1,
         )
         _draw_text(draw, (x2 - 166, avatar_y), f"#{rank}", _font(17, True), PALETTE["purple_light"])
-        _draw_text(draw, (x + 330, y + 31), name, _fit_font(draw, name, 310, 22), PALETTE["text"])
-        _draw_text(draw, (x + 330, y + 62), f"{balance:,} ANORIS", _fit_font(draw, f"{balance:,} ANORIS", 310, 18), PALETTE["muted"])
+        _draw_text(draw, (x + 300, y + 31), name, _fit_font(draw, name, 260, 22), PALETTE["text"])
+        _draw_text(draw, (x + 300, y + 62), f"{balance:,} ANORIS", _fit_font(draw, f"{balance:,} ANORIS", 260, 18), PALETTE["muted"])
 
     draw = ImageDraw.Draw(image, "RGBA")
     draw.line((70, 1140, WIDTH - 70, 1140), fill=(157, 126, 205, 55), width=1)
