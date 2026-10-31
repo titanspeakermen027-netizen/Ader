@@ -383,11 +383,14 @@ def _name_runs(text: str) -> list[tuple[str | None, str]]:
 
         preferred = _family_for_codepoint(code)
         if preferred == "math":
-            if _MATH_FONT_BYTES and code in _font_cmap(io.BytesIO(_MATH_FONT_BYTES), "math:downloaded"):
-                return "math"
+            if _MATH_FONT_BYTES:
+                if TTFont is None or code in _font_cmap(io.BytesIO(_MATH_FONT_BYTES), "math:downloaded"):
+                    return "math"
             return None
 
         if preferred and preferred in _SPECIAL_FONT_BYTES:
+            if TTFont is None:
+                return preferred
             cmap = _font_cmap(
                 io.BytesIO(_SPECIAL_FONT_BYTES[preferred]),
                 f"special:{preferred}",
