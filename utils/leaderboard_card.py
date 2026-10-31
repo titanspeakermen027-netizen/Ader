@@ -17,7 +17,7 @@ except ImportError:  # Optional fallback if dependency installation is incomplet
 WIDTH = 1400
 HEIGHT = 1180
 
-_MATH_FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansmath/NotoSansMath-Regular.ttf"
+_MATH_FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/stixtwomath/STIXTwoMath-Regular.ttf"
 _MATH_FONT_BYTES: bytes | None = None
 _MATH_FONT_DOWNLOAD_ATTEMPTED = False
 
@@ -92,15 +92,8 @@ async def _ensure_math_font() -> None:
         return
     _MATH_FONT_DOWNLOAD_ATTEMPTED = True
 
-    local_paths = (
-        "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
-        "/usr/share/fonts/opentype/asana-math/Asana-Math.otf",
-        "/usr/share/fonts/truetype/noto/NotoSansMath-Regular.ttf",
-        "/usr/share/fonts/opentype/noto/NotoSansMath-Regular.otf",
-    )
-    if any(os.path.isfile(path) for path in local_paths):
-        return
+    # Always fetch STIX Two Math: it explicitly includes Mathematical Alphanumeric
+    # Symbols (U+1D400–U+1D7FF), unlike many general-purpose system fonts.
 
     try:
         timeout = aiohttp.ClientTimeout(total=6)
@@ -133,21 +126,12 @@ def _fit_name_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, size: i
     if not _has_styled_unicode(text):
         return _fit_font(draw, text, max_width, size)
 
-    # Use a Unicode math-capable font when one is installed on the host.
-    math_font_paths = [
-        "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
-        "/usr/share/fonts/opentype/freefont/FreeSerifBold.otf",
-        "/usr/share/fonts/opentype/freefont/FreeSerif.otf",
-        "/usr/share/fonts/opentype/asana-math/Asana-Math.otf",
-        "/usr/share/fonts/truetype/noto/NotoSansMath-Regular.ttf",
-        "/usr/share/fonts/opentype/noto/NotoSansMath-Regular.otf",
-    ]
-
-    for candidate_size in range(size, 13, -2):
-        for path in math_font_paths:
+    # Prefer STIX Two Math because it contains the mathematical styled alphabets
+    # used in names such as 𝑉𝐸𝑆𝑃𝐸𝑅.
+    if _MATH_FONT_BYTES:
+        for candidate_size in range(size, 11, -1):
             try:
-                font = ImageFont.truetype(path, candidate_size)
+                font = ImageFont.truetype(io.BytesIO(_MATH_FONT_BYTES), candidate_size)
                 direction = "rtl" if _is_arabic(text) else "ltr"
                 box = draw.textbbox((0, 0), text, font=font, direction=direction)
                 if box[2] - box[0] <= max_width:
@@ -155,10 +139,17 @@ def _fit_name_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, size: i
             except (OSError, TypeError, ValueError):
                 continue
 
-    if _MATH_FONT_BYTES:
-        for candidate_size in range(size, 13, -2):
+    # If the dedicated font could not be downloaded, try local math fonts.
+    math_font_paths = [
+        "/usr/share/fonts/opentype/stix2/STIXTwoMath-Regular.otf",
+        "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
+        "/usr/share/fonts/opentype/asana-math/Asana-Math.otf",
+    ]
+    for candidate_size in range(size, 11, -1):
+        for path in math_font_paths:
             try:
-                font = ImageFont.truetype(io.BytesIO(_MATH_FONT_BYTES), candidate_size)
+                font = ImageFont.truetype(path, candidate_size)
                 direction = "rtl" if _is_arabic(text) else "ltr"
                 box = draw.textbbox((0, 0), text, font=font, direction=direction)
                 if box[2] - box[0] <= max_width:
