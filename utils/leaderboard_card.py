@@ -372,8 +372,13 @@ def _special_font_families(text: str) -> set[str]:
         if family:
             if family != "math":
                 families.add(family)
-            elif code not in base_cmap and TTFont is not None:
-                # Keep a generic fallback ready if STIX Two Math is unavailable.
+            elif (
+                code not in base_cmap
+                and TTFont is not None
+                and not _MATH_FONT_BYTES
+                and not _local_math_font_path()
+            ):
+                # Use Symbols 2 only when no dedicated local/downloaded math font exists.
                 families.add("symbols")
         elif code not in base_cmap and TTFont is not None:
             # Noto Sans Symbols 2 is a broad catch-all for uncommon symbols,
@@ -759,7 +764,10 @@ async def render_richest_leaderboard(
         entries.append(await _get_member_data(bot, guild, row))
 
     if any(_has_styled_unicode(name) for name, _, _ in entries):
-        await _ensure_math_font()
+        # Prefer an already-installed math font: it avoids network delays and
+        # works in hosts where outbound font downloads are disabled.
+        if not _local_math_font_path():
+            await _ensure_math_font()
     await _ensure_special_fonts([name for name, _, _ in entries])
 
     # Top three: the winner is deliberately larger and slightly higher.
