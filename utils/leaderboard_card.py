@@ -6,6 +6,11 @@ from typing import Any
 import discord
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
+try:
+    from pilmoji import Pilmoji
+except ImportError:  # Optional fallback if dependency installation is incomplete.
+    Pilmoji = None
+
 
 WIDTH = 1400
 HEIGHT = 1180
@@ -71,6 +76,88 @@ def _fit_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, size: int, b
         if box[2] - box[0] <= max_width:
             return font
     return _font(14, bold)
+
+
+def _has_styled_unicode(text: str) -> bool:
+    # Mathematical alphanumeric symbols are used by names such as 𝑉𝐸𝑆𝑃𝐸𝑅.
+    return any(
+        0x1D400 <= ord(char) <= 0x1D7FF
+        or 0x2100 <= ord(char) <= 0x214F
+        or 0x2460 <= ord(char) <= 0x24FF
+        for char in text
+    )
+
+
+def _fit_name_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, size: int):
+    if not _has_styled_unicode(text):
+        return _fit_font(draw, text, max_width, size)
+
+    # Use a Unicode math-capable font when one is installed on the host.
+    math_font_paths = [
+        "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
+        "/usr/share/fonts/opentype/freefont/FreeSerifBold.otf",
+        "/usr/share/fonts/opentype/freefont/FreeSerif.otf",
+        "/usr/share/fonts/opentype/asana-math/Asana-Math.otf",
+        "/usr/share/fonts/truetype/noto/NotoSansMath-Regular.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSansMath-Regular.otf",
+    ]
+
+    for candidate_size in range(size, 13, -2):
+        for path in math_font_paths:
+            try:
+                font = ImageFont.truetype(path, candidate_size)
+                direction = "rtl" if _is_arabic(text) else "ltr"
+                box = draw.textbbox((0, 0), text, font=font, direction=direction)
+                if box[2] - box[0] <= max_width:
+                    return font
+            except (OSError, TypeError, ValueError):
+                continue
+
+    return _fit_font(draw, text, max_width, size)
+
+
+def _draw_name(
+    image: Image.Image,
+    center: tuple[int, int],
+    text: str,
+    max_width: int,
+    size: int,
+) -> None:
+    draw = ImageDraw.Draw(image, "RGBA")
+    font = _fit_name_font(draw, text, max_width, size)
+    direction = "rtl" if _is_arabic(text) else "ltr"
+
+    try:
+        box = draw.textbbox((0, 0), text, font=font, direction=direction)
+    except (TypeError, ValueError):
+        box = draw.textbbox((0, 0), text, font=font)
+
+    # Pilmoji draws emoji as images; calculate a centered top-left position.
+    x = round(center[0] - ((box[0] + box[2]) / 2))
+    y = round(center[1] - ((box[1] + box[3]) / 2))
+
+    if Pilmoji is not None:
+        try:
+            with Pilmoji(image) as emoji_renderer:
+                try:
+                    emoji_renderer.text(
+                        (x, y),
+                        text,
+                        fill=PALETTE["text"],
+                        font=font,
+                        direction=direction,
+                        language="ar" if direction == "rtl" else "en",
+                    )
+                except TypeError:
+                    # Compatibility fallback for older Pillow/Pilmoji combinations.
+                    emoji_renderer.text((x, y), text, fill=PALETTE["text"], font=font)
+            return
+        except Exception:
+            # An unavailable emoji CDN must not prevent the leaderboard from rendering.
+            pass
+
+    _draw_text(draw, center, text, font, PALETTE["text"], anchor="mm")
 
 
 def _round_avatar(raw: bytes | None, size: int) -> Image.Image:
@@ -174,7 +261,7 @@ def _draw_podium_card(
     _draw_text(draw, (center_x, badge_y), f"#{rank}", _font(21 if is_first else 19, True), PALETTE["text"])
 
     name_y = avatar_center[1] + avatar_size // 2 + 37
-    _draw_text(draw, (center_x, name_y), name, _fit_font(draw, name, card_width - 48, 27 if is_first else 23), PALETTE["text"])
+    _draw_name(image, (center_x, name_y), name, card_width - 48, 27 if is_first else 23)
     balance_y = name_y + 43
     _draw_text(draw, (center_x, balance_y), f"{balance:,} ANORIS", _fit_font(draw, f"{balance:,} ANORIS", card_width - 48, 24 if is_first else 21), PALETTE["purple_light"])
 
@@ -190,8 +277,9 @@ async def _get_member_data(bot: discord.Client, guild: discord.Guild, row: Any) 
         except (discord.NotFound, discord.Forbidden, discord.HTTPException):
             user = None
 
-    name = getattr(user, "display_name", None) or getattr(user, "global_name", None) or getattr(user, "name", None)
-    name = str(name or f"عضو {user_id}")[:24]
+    # Prefer the account's global display name; never use a server-specific nickname.
+    name = getattr(user, "global_name", None) or getattr(user, "name", None)
+    name = str(name or f"عضو {user_id}")
 
     raw = None
     if user is not None:
@@ -292,7 +380,7 @@ async def render_richest_leaderboard(
             width=1,
         )
         _draw_text(draw, (x2 - 166, avatar_y), f"#{rank}", _font(17, True), PALETTE["purple_light"])
-        _draw_text(draw, (x + 300, y + 31), name, _fit_font(draw, name, 260, 22), PALETTE["text"])
+        _draw_name(image, (x + 300, y + 31), name, 260, 22)
         _draw_text(draw, (x + 300, y + 62), f"{balance:,} ANORIS", _fit_font(draw, f"{balance:,} ANORIS", 260, 18), PALETTE["muted"])
 
     draw = ImageDraw.Draw(image, "RGBA")
