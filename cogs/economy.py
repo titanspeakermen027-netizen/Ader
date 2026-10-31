@@ -14,6 +14,7 @@ from discord.ext import commands
 from PIL import Image, ImageDraw, ImageFont
 
 from utils.embeds import EmbedFactory, EmbedColor
+from utils.leaderboard_card import render_richest_leaderboard
 
 logger = logging.getLogger(__name__)
 OWNER_ID = 1472570059367911587
@@ -312,7 +313,7 @@ class Economy(commands.Cog):
     @commands.command(name="اغنياء", aliases=["الأغنياء", "توب"])
     @commands.guild_only()
     async def richest_members(self, ctx: commands.Context):
-        """عرض أغنى عشرة أعضاء حسب أرصدة ANORIS العالمية."""
+        """عرض أغنى عشرة أعضاء في صورة مرتبة حسب أرصدة ANORIS العالمية."""
         rows = await self.db.fetchall(
             "SELECT user_id, balance FROM global_balances WHERE balance > 0 ORDER BY balance DESC, user_id ASC LIMIT 10"
         )
@@ -324,24 +325,16 @@ class Economy(commands.Cog):
                 allowed_mentions=discord.AllowedMentions.none(),
             )
 
-        medals = ("🥇", "🥈", "🥉")
-        lines = []
-        for index, row in enumerate(rows, start=1):
-            user_id = int(row["user_id"])
-            balance = int(row["balance"])
-            member = ctx.guild.get_member(user_id)
-            user = self.bot.get_user(user_id)
-            display_name = member.display_name if member else (user.name if user else f"عضو {user_id}")
-            rank = medals[index - 1] if index <= 3 else f"**{index}.**"
-            lines.append(f"{rank} {display_name} — **{balance:,} {currency_name}**")
-
-        embed = discord.Embed(
-            title=f"🏆 أغنى أعضاء {currency_name}",
-            description="\n".join(lines),
-            color=discord.Color.gold(),
+        card = await render_richest_leaderboard(self.bot, ctx.guild, rows, currency_name)
+        filename = "anoris-leaderboard.png"
+        embed = discord.Embed(color=discord.Color.from_rgb(34, 26, 52))
+        embed.set_image(url=f"attachment://{filename}")
+        embed.set_footer(text=f"يعرض أعلى {len(rows)} أرصدة على مستوى البوت")
+        await ctx.send(
+            embed=embed,
+            file=discord.File(card, filename=filename),
+            allowed_mentions=discord.AllowedMentions.none(),
         )
-        embed.set_footer(text=f"يعرض الترتيب أعلى {len(rows)} أرصدة على مستوى البوت")
-        await ctx.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
 
 
 
