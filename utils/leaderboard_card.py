@@ -396,14 +396,10 @@ def _name_runs(text: str) -> list[tuple[str | None, str]]:
         preferred = _family_for_codepoint(code)
         if preferred == "math":
             if _MATH_FONT_BYTES:
-                # STIX Two Math is dedicated to mathematical alphabets. Do not
-                # reject its glyphs just because optional cmap parsing is absent.
-                if TTFont is None:
-                    return "math"
-                cmap = _font_cmap(io.BytesIO(_MATH_FONT_BYTES), "math:downloaded")
-                if not cmap or code in cmap:
-                    return "math"
-            # If STIX did not load or lacks this glyph, let other font cmaps try.
+                # This font was validated by Pillow and is dedicated to the
+                # mathematical alphabets; never gate these glyphs on cmap parsing.
+                return "math"
+            # If STIX did not load, let other downloaded font cmaps try.
 
         if preferred and preferred in _SPECIAL_FONT_BYTES:
             if TTFont is None:
