@@ -18,6 +18,18 @@ WIDTH = 1400
 HEIGHT = 1180
 
 _MATH_FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/stixtwomath/STIXTwoMath-Regular.ttf"
+_SPECIAL_FONT_URLS = {
+    "lao": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanslao/NotoSansLao%5Bwdth,wght%5D.ttf",
+    "japanese": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf",
+    "symbols": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanssymbols2/NotoSansSymbols2-Regular.ttf",
+}
+_SPECIAL_FONT_MAX_BYTES = {
+    "lao": 2_000_000,
+    "japanese": 15_000_000,
+    "symbols": 3_000_000,
+}
+_SPECIAL_FONT_BYTES: dict[str, bytes] = {}
+_SPECIAL_FONT_DOWNLOAD_ATTEMPTED: set[str] = set()
 _MATH_FONT_BYTES: bytes | None = None
 _MATH_FONT_DOWNLOAD_ATTEMPTED = False
 
@@ -139,6 +151,178 @@ def _fit_name_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, size: i
             except (OSError, TypeError, ValueError):
                 continue
 
+async def _ensure_special_fonts(texts: list[str]) -> None:
+    """Download only the script-specific fonts required by visible leaderboard names."""
+    needed = set().union(*(_special_font_families(text) for text in texts)) if texts else set()
+    needed = {family for family in needed if family in _SPECIAL_FONT_URLS}
+    pending = needed - _SPECIAL_FONT_DOWNLOAD_ATTEMPTED
+    if not pending:
+        return
+
+    _SPECIAL_FONT_DOWNLOAD_ATTEMPTED.update(pending)
+    timeout = aiohttp.ClientTimeout(total=18, connect=7)
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            for family in pending:
+                try:
+                    async with session.get(_SPECIAL_FONT_URLS[family]) as response:
+                        if response.status != 200:
+                            continue
+                        data = await response.content.read(_SPECIAL_FONT_MAX_BYTES[family] + 1)
+                        if not 20_000 <= len(data) <= _SPECIAL_FONT_MAX_BYTES[family]:
+                            continue
+                        ImageFont.truetype(io.BytesIO(data), 18)
+                        _SPECIAL_FONT_BYTES[family] = data
+                except Exception:
+                    continue
+    except Exception:
+        return
+
+
+def _special_font_families(text: str) -> set[str]:
+    """Return the fallback font families needed for the characters in a name."""
+    families: set[str] = set()
+    for char in text:
+        code = ord(char)
+        if (
+            0x1D400 <= code <= 0x1D7FF
+            or 0x2100 <= code <= 0x214F
+            or 0x2460 <= code <= 0x24FF
+        ):
+            families.add("math")
+        elif 0x0E80 <= code <= 0x0EFF:
+            families.add("lao")
+        elif (
+            0x3000 <= code <= 0x30FF
+            or 0x31F0 <= code <= 0x31FF
+            or 0x3400 <= code <= 0x4DBF
+            or 0x4E00 <= code <= 0x9FFF
+            or 0xFF00 <= code <= 0xFFEF
+        ):
+            families.add("japanese")
+        elif (
+            0x2000 <= code <= 0x2BFF
+            or 0x2E00 <= code <= 0x2E7F
+            or 0x1D300 <= code <= 0x1D37F
+        ):
+            families.add("symbols")
+    return families
+
+
+def _name_font_for_family(family: str | None, size: int):
+    if family == "math" and _MATH_FONT_BYTES:
+        try:
+            return ImageFont.truetype(io.BytesIO(_MATH_FONT_BYTES), size)
+        except OSError:
+            pass
+
+    font_data = _SPECIAL_FONT_BYTES.get(family or "")
+    if font_data:
+        try:
+            return ImageFont.truetype(io.BytesIO(font_data), size)
+        except OSError:
+            pass
+
+    return _font(size, True)
+
+
+def _name_runs(text: str) -> list[tuple[str | None, str]]:
+    """Split a left-to-right name into runs that can use the right Unicode font."""
+    runs: list[tuple[str | None, str]] = []
+    current_family: str | None = None
+    current_text = ""
+
+    for char in text:
+        code = ord(char)
+        if code in (0xFE0E, 0xFE0F, 0x200D, 0x20E3) or 0x1F3FB <= code <= 0x1F3FF:
+            family = current_family
+        else:
+            family = next(iter(_special_font_families(char)), None)
+
+        if current_text and family != current_family:
+            runs.append((current_family, current_text))
+            current_text = ""
+        current_family = family
+        current_text += char
+
+    if current_text:
+        runs.append((current_family, current_text))
+    return runs
+
+
+def _draw_decorated_ltr_name(
+    image: Image.Image,
+    center: tuple[int, int],
+    text: str,
+    max_width: int,
+    size: int,
+) -> bool:
+    """Draw mixed-script LTR names with script-specific fonts and Pilmoji."""
+    draw = ImageDraw.Draw(image, "RGBA")
+    runs = _name_runs(text)
+    if not any(family is not None for family, _ in runs):
+        return False
+
+    chosen: list[tuple[str | None, str, Any, float]] = []
+    total_width = 0.0
+    for candidate_size in range(size, 10, -1):
+        candidate_runs = []
+        width_sum = 0.0
+        for family, run_text in runs:
+            font = _name_font_for_family(family, candidate_size)
+            try:
+                run_width = float(font.getlength(run_text))
+            except (AttributeError, TypeError, ValueError):
+                box = draw.textbbox((0, 0), run_text, font=font)
+                run_width = float(box[2] - box[0])
+            candidate_runs.append((family, run_text, font, run_width))
+            width_sum += run_width
+        chosen = candidate_runs
+        total_width = width_sum
+        if total_width <= max_width:
+            break
+
+    if not chosen:
+        return False
+
+    start_x = center[0] - total_width / 2
+
+    def paint_runs(renderer=None):
+        x = start_x
+        for family, run_text, font, run_width in chosen:
+            box = draw.textbbox((0, 0), run_text, font=font)
+            run_y = round(center[1] - ((box[1] + box[3]) / 2))
+            run_x = round(x - box[0])
+            if renderer is not None:
+                try:
+                    renderer.text(
+                        (run_x, run_y),
+                        run_text,
+                        fill=PALETTE["text"],
+                        font=font,
+                        direction="ltr",
+                        language="en",
+                    )
+                except TypeError:
+                    renderer.text((run_x, run_y), run_text, fill=PALETTE["text"], font=font)
+            else:
+                draw.text((run_x, run_y), run_text, font=font, fill=PALETTE["text"])
+            x += run_width
+
+    if Pilmoji is not None:
+        try:
+            with Pilmoji(image) as renderer:
+                paint_runs(renderer)
+            return True
+        except Exception:
+            # Use monochrome glyphs as a fallback if the emoji renderer is unavailable.
+            paint_runs()
+            return True
+
+    paint_runs()
+    return True
+
+
     # If the dedicated font could not be downloaded, try local math fonts.
     math_font_paths = [
         "/usr/share/fonts/opentype/stix2/STIXTwoMath-Regular.otf",
@@ -168,6 +352,12 @@ def _draw_name(
     size: int,
 ) -> None:
     draw = ImageDraw.Draw(image, "RGBA")
+
+    # Pillow has no automatic per-character font fallback. Preserve Arabic shaping
+    # through the existing path and use script-specific runs for other Unicode names.
+    if not _is_arabic(text) and _draw_decorated_ltr_name(image, center, text, max_width, size):
+        return
+
     font = _fit_name_font(draw, text, max_width, size)
     direction = "rtl" if _is_arabic(text) else "ltr"
 
@@ -370,6 +560,7 @@ async def render_richest_leaderboard(
 
     if any(_has_styled_unicode(name) for name, _, _ in entries):
         await _ensure_math_font()
+    await _ensure_special_fonts([name for name, _, _ in entries if not _is_arabic(name)])
 
     # Top three: the winner is deliberately larger and slightly higher.
     positions = {
