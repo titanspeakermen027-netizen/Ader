@@ -6,7 +6,7 @@ import asyncio
 from fastapi import HTTPException
 
 
-async def wait_for_bot_ready(bot, timeout: float = 20.0) -> None:
+async def wait_for_bot_ready(bot, timeout: float = 12.0) -> None:
     """Wait for the Discord gateway READY state before checking its guild cache."""
     is_ready = getattr(bot, "is_ready", None)
     if callable(is_ready) and is_ready():
