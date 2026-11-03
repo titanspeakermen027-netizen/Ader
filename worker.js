@@ -80,11 +80,16 @@ async function proxyBackend(request, env, backend, publicUrl, options = {}) {
     });
 
     if (options.publicHealth) {
+      const health = await response.clone().json().catch(() => ({}));
       return new Response(
         JSON.stringify({
           worker: "ok",
           backend_status: response.status,
-          backend_ok: response.ok
+          backend_ok: response.ok,
+          bot_ready: Boolean(health.bot_ready),
+          database: Boolean(health.database),
+          guilds: Number(health.guilds || 0),
+          time: Number(health.time || 0)
         }),
         {
           status: response.ok ? 200 : 502,
