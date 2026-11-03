@@ -22,7 +22,7 @@ from web import dashboard_app as base
 from cogs.professional_core import normalize_reaction_emojis
 from utils.premium import describe as describe_premium, has_feature, FEATURES
 from utils.secrets_store import TokenCipher
-from web.dashboard_guild_access import get_cached_guild, wait_for_bot_ready
+from web.dashboard_guild_access import get_cached_guild, resolve_bot_guild, wait_for_bot_ready
 
 
 class CloudflareSessionBridge(BaseHTTPMiddleware):
@@ -62,15 +62,12 @@ async def _require_guild(bot, request: Request, guild_id: int):
     if not session:
         raise HTTPException(status_code=401, detail="تسجيل الدخول مطلوب")
 
-    # Wait for the gateway READY event: this route can be hit while the bot
-    # process is alive but Discord.py is still rebuilding its guild cache.
-    await wait_for_bot_ready(bot)
-    guild = get_cached_guild(bot, guild_id)
+    # Do not infer bot removal from a local gateway cache miss. Confirm
+    # membership with Discord's bot-authenticated REST API and only report
+    # absence when Discord itself returns NotFound.
+    guild = await resolve_bot_guild(bot, guild_id)
     if guild is None:
-        raise HTTPException(
-            status_code=404,
-            detail="البوت غير موجود في هذا الخادم. تأكد من إضافته إلى السيرفر بنفس حساب البوت.",
-        )
+        raise HTTPException(status_code=409, detail="bot_not_in_guild")
 
     key = str(guild_id)
     managed = session.get("managed_guilds", {}) or {}
