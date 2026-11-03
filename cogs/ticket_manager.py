@@ -853,12 +853,28 @@ class TicketManager(commands.Cog):
         guild = self.bot.get_guild(int(ticket["guild_id"]))
         if not guild:
             return
+        payload = {
+            "ticket_id": int(ticket["id"]),
+            "user_id": int(ticket.get("user_id") or 0),
+            "channel_id": int(ticket.get("channel_id") or 0),
+            "event": event,
+            **{str(k): v for k, v in data.items()},
+        }
+        try:
+            await self.db.record_analytics(guild.id, f"ticket.{event}", payload)
+        except Exception:
+            pass
+
         settings = merge_settings(await self.db.get_ticket_settings(guild.id))
         destination_id = as_int(settings.get("log_channel_id"))
         channel = guild.get_channel(destination_id or 0) if destination_id else None
         if not isinstance(channel, discord.TextChannel):
             return
-        embed = discord.Embed(title=f"سجل التذاكر • {self.EVENT_LABELS.get(event, event)}", color=EmbedColor.PRIMARY, timestamp=discord.utils.utcnow())
+        embed = discord.Embed(
+            title=f"🎫 سجل التذاكر • {self.EVENT_LABELS.get(event, event)}",
+            color=EmbedColor.PRIMARY,
+            timestamp=discord.utils.utcnow(),
+        )
         embed.add_field(name="رقم التذكرة", value=f"#{ticket['id']}", inline=True)
         embed.add_field(name="صاحب التذكرة", value=f"<@{ticket['user_id']}>", inline=True)
         for key, value in list(data.items())[:8]:
