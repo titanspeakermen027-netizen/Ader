@@ -718,7 +718,7 @@ def create_app(bot):
         if settings["antinuke"].get("action") not in {"timeout", "ban"}:
             settings["antinuke"]["action"] = "timeout"
         role_id = settings["autorole"].get("role")
-        guild = bot.get_guild(guild_id)
+        guild = get_cached_guild(bot, guild_id)
         if role_id:
             role = guild.get_role(int(role_id)) if guild else None
             me = guild.me if guild else None
