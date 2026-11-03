@@ -368,7 +368,10 @@ def create_app(bot):
         channel_id = None
         if "channel_id" in data:
             raw_channel = data.get("channel_id")
-            channel_id = int(raw_channel or 0)
+            try:
+                channel_id = int(raw_channel or 0)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="معرّف قناة السجلات غير صالح.")
             if channel_id:
                 channel = guild.get_channel(channel_id)
                 if not isinstance(channel, discord.TextChannel):
