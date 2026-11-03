@@ -424,9 +424,11 @@ def create_app(bot):
         if not isinstance(data, dict):
             raise HTTPException(status_code=400, detail="بيانات اللوحة غير صالحة.")
         panel = await cog.get_panel(guild_id, number)
-        panel["title"] = str(data.get("title", panel.get("title") or "" )).strip()[:256]
+        panel["title"] = str(data.get("title", panel.get("title") or "")).strip()[:256]
         panel["description"] = str(data.get("description", panel.get("description") or "")).strip()[:4000]
         panel["button_label"] = str(data.get("button_label", panel.get("button_label") or "ابدأ التقديم")).strip()[:80]
+        if not panel["title"] or not panel["button_label"]:
+            raise HTTPException(status_code=400, detail="عنوان اللوحة واسم زر التقديم مطلوبان.")
         panel["button_emoji"] = str(data.get("button_emoji", panel.get("button_emoji") or "📝")).strip()[:64] or None
         style = str(data.get("button_style", panel.get("button_style") or "primary"))
         panel["button_style"] = style if style in {"primary", "secondary", "success", "danger"} else "primary"
@@ -437,7 +439,10 @@ def create_app(bot):
 
         if "results_channel_id" in data:
             raw_id = data.get("results_channel_id")
-            channel_id = int(raw_id or 0)
+            try:
+                channel_id = int(raw_id or 0)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="معرّف قناة النتائج غير صالح.")
             if channel_id:
                 channel = guild.get_channel(channel_id)
                 if not isinstance(channel, discord.TextChannel):
@@ -447,7 +452,10 @@ def create_app(bot):
         for field, key in (("accept_role_id", "accept_role"), ("reject_role_id", "reject_role")):
             if field in data:
                 raw_role = data.get(field)
-                role_id = int(raw_role or 0)
+                try:
+                    role_id = int(raw_role or 0)
+                except (TypeError, ValueError):
+                    raise HTTPException(status_code=400, detail="معرّف رتبة التقديم غير صالح.")
                 if role_id and guild.get_role(role_id) is None:
                     raise HTTPException(status_code=400, detail="إحدى رتب التقديم غير صالحة.")
                 panel[key] = role_id or None
@@ -482,7 +490,12 @@ def create_app(bot):
         if cog is None or not hasattr(cog, "publish_panel"):
             raise HTTPException(status_code=503, detail="نظام تقديم الإدارة غير متاح حالياً.")
         data = await request.json()
-        channel_id = int((data or {}).get("channel_id") or 0)
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="بيانات النشر غير صالحة.")
+        try:
+            channel_id = int(data.get("channel_id") or 0)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="معرّف قناة النشر غير صالح.")
         channel = guild.get_channel(channel_id)
         if not isinstance(channel, discord.TextChannel):
             raise HTTPException(status_code=400, detail="اختر قناة نصية صالحة لنشر لوحة التقديم.")
