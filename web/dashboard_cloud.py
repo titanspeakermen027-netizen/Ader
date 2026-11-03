@@ -393,7 +393,10 @@ def create_app(bot):
         cog = bot.get_cog("AppV4")
         if cog is None or not hasattr(cog, "get_panel"):
             raise HTTPException(status_code=503, detail="نظام تقديم الإدارة غير متاح حالياً.")
-        panels = [await cog.get_panel(guild.id, number) for number in range(1, 4)]
+        panels = []
+        for number in range(1, 4):
+            panel = await cog.get_panel(guild.id, number)
+            panels.append({"number": number, **panel})
         rows = await bot.db.fetchall(
             "SELECT id,user_id,panel,status,answers,created_at,reviewer_id,reason "
             "FROM applications WHERE guild_id=? ORDER BY id DESC LIMIT 100",
