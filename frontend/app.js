@@ -524,8 +524,8 @@ async function logs(){
   const settings=config.settings||{},categories=settings.categories||{};
   const names={messages:"الرسائل",members:"الأعضاء",moderation:"الإشراف",channels:"القنوات",roles:"الرتب"};
   const labels={
-    "audit.message_deleted":"حذف رسالة","audit.message_edited":"تعديل رسالة",
-    "audit.member_joined":"انضمام عضو","audit.member_left":"مغادرة عضو",
+    "audit.message_deleted":"حذف رسالة","audit.message_edited":"تعديل رسالة","audit.messages_bulk_deleted":"حذف مجموعة رسائل",
+    "audit.member_joined":"انضمام عضو","audit.member_left":"مغادرة عضو","audit.member_updated":"تعديل بيانات عضو",
     "audit.member_banned":"حظر عضو","audit.member_unbanned":"إلغاء حظر عضو",
     "audit.channel_created":"إنشاء قناة","audit.channel_updated":"تعديل قناة","audit.channel_deleted":"حذف قناة",
     "audit.role_created":"إنشاء رتبة","audit.role_updated":"تعديل رتبة","audit.role_deleted":"حذف رتبة",
