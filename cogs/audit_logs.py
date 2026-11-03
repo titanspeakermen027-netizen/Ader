@@ -229,6 +229,51 @@ class AuditLogs(commands.Cog):
         )
 
     @commands.Cog.listener()
+    async def on_raw_bulk_message_delete(self, payload: discord.RawBulkMessageDeleteEvent):
+        guild = self.bot.get_guild(payload.guild_id) if payload.guild_id else None
+        cached = list(payload.cached_messages or [])
+        authors = sorted({str(message.author.id) for message in cached if not message.author.bot})
+        await self._emit(
+            guild, "messages", "messages_bulk_deleted", "🧹 حذف مجموعة رسائل",
+            f"القناة: <#{payload.channel_id}>\n"
+            f"عدد الرسائل: {len(payload.message_ids)}\n"
+            f"عدد أصحاب الرسائل المتاحين في الذاكرة: {len(authors)}",
+            {
+                "channel_id": payload.channel_id,
+                "message_ids": list(payload.message_ids)[:100],
+                "deleted_count": len(payload.message_ids),
+                "cached_author_ids": authors[:50],
+            },
+        )
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+        changes = []
+        if before.nick != after.nick:
+            changes.append("تم تغيير الاسم المستعار.")
+        before_roles = {role.id: role.name for role in before.roles}
+        after_roles = {role.id: role.name for role in after.roles}
+        added = [name for role_id, name in after_roles.items() if role_id not in before_roles and role_id != after.guild.id]
+        removed = [name for role_id, name in before_roles.items() if role_id not in after_roles and role_id != before.guild.id]
+        if added:
+            changes.append("رتب مضافة: " + ", ".join(added[:8]))
+        if removed:
+            changes.append("رتب محذوفة: " + ", ".join(removed[:8]))
+        if changes:
+            await self._emit(
+                after.guild, "members", "member_updated", "🛠️ تعديل بيانات عضو",
+                f"العضو: {after.mention}\n" + "\n".join(changes),
+                {
+                    "user_id": after.id,
+                    "changes": changes,
+                    "roles_added": added[:20],
+                    "roles_removed": removed[:20],
+                    "nickname_before": before.nick,
+                    "nickname_after": after.nick,
+                },
+            )
+
+    @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         await self._emit(
             member.guild, "members", "member_joined", "📥 انضمام عضو",
