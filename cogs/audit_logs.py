@@ -89,6 +89,15 @@ class AuditLogs(commands.Cog):
                 time.time(),
             ),
         )
+        # Keep the legacy moderation logger pointed at the same destination.
+        core = self.bot.get_cog("ProfessionalCore")
+        if core is not None and hasattr(core, "settings") and hasattr(core, "save"):
+            try:
+                core_settings = await core.settings(int(guild_id))
+                core_settings.setdefault("logs", {})["channel"] = current["channel_id"]
+                await core.save(int(guild_id), core_settings)
+            except Exception:
+                pass
         return current
 
     async def _emit(
