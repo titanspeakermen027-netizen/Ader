@@ -166,7 +166,7 @@ function overview(){
   const apiLabel=backendOk?"Connected":"Unavailable";
   const dbLabel=databaseReady?"Connected":backendOk?"Disconnected":"Unknown";
   $("#root").innerHTML=
-    '<section class="hero-card dashboard-hero"><div><div class="page-kicker">LIVE SERVER OVERVIEW</div><h2>مرحباً، '+display+'</h2><p>إدارة ANO BOT ومراقبة أنظمة السيرفر من لوحة واحدة، مع بيانات مباشرة من الخادم.</p></div><div class="dashboard-hero-status"><span class="status-dot"></span><div><b>'+esc(g.name||"Your server")+'</b><small>ANO BOT · '+botLabel+'</small></div></div></section>'+
+    '<section class="hero-card dashboard-hero"><div><div class="page-kicker">LIVE SERVER OVERVIEW</div><h2>مرحباً، '+display+'</h2><p>إدارة ANO BOT ومراقبة أنظمة السيرفر من لوحة واحدة، مع بيانات مباشرة من الخادم.</p></div><div class="dashboard-hero-status"><span class="status-dot '+(botReady?"":"status-off")+'"></span><div><b>'+esc(g.name||"Your server")+'</b><small>ANO BOT · '+botLabel+'</small></div></div></section>'+
     '<div class="stats">'+stat("الأعضاء",Number(o.members||0).toLocaleString(),"♙")+stat("القنوات",Number(o.channels||0).toLocaleString(),"#")+stat("الرتب",Number(o.roles||0).toLocaleString(),"◆")+stat("التذاكر المفتوحة",Number(o.open_tickets||0).toLocaleString(),"🎫")+'</div>'+
     '<div class="cards overview-cards">'+
       card("حالة النظام المباشرة",'<div class="health"><div><span>ANO BOT Runtime</span><b class="'+(botReady?"on":"off")+'">● '+botLabel+'</b></div><div><span>Backend API</span><b class="'+(backendOk?"on":"off")+'">● '+apiLabel+'</b></div><div><span>Database</span><b class="'+(databaseReady?"on":"off")+'">● '+dbLabel+'</b></div><div><span>Commands</span><b>'+Number(o.commands||0).toLocaleString()+' registered</b></div><div><span>Guild Access</span><b>'+s.guilds.length+' manageable</b></div><div><span>Worker</span><b class="'+(h.worker==="ok"?"on":"off")+'">● '+(h.worker==="ok"?"Online":"Unknown")+'</b></div></div>')+
@@ -174,7 +174,7 @@ function overview(){
     '</div>'+
     '<div class="cards overview-cards secondary-overview">'+
       card("ملخص السيرفر",'<div class="snapshot"><div><span>Members</span><b>'+Number(o.members||0).toLocaleString()+'</b></div><div><span>Channels</span><b>'+Number(o.channels||0).toLocaleString()+'</b></div><div><span>Roles</span><b>'+Number(o.roles||0).toLocaleString()+'</b></div><div><span>Open Tickets</span><b>'+Number(o.open_tickets||0).toLocaleString()+'</b></div></div>')+
-      card("حالة ANO BOT",'<div class="status-summary"><div><span class="status-dot"></span><b>'+ (botReady?"البوت متصل وجاهز":backendOk?"الخادم الخلفي متصل والبوت غير جاهز":"تعذر الوصول إلى الخادم الخلفي")+'</b></div><p>حالة الاتصال و قاعدة البيانات هنا كتجي من فحص Backend الحقيقي، ماشي حالة ثابتة فالتصميم.</p></div>')+
+      card("حالة ANO BOT",'<div class="status-summary"><div><span class="status-dot '+(botReady?"":"status-off")+'"></span><b>'+ (botReady?"البوت متصل وجاهز":backendOk?"الخادم الخلفي متصل والبوت غير جاهز":"تعذر الوصول إلى الخادم الخلفي")+'</b></div><p>حالة الاتصال و قاعدة البيانات هنا كتجي من فحص Backend الحقيقي، ماشي حالة ثابتة فالتصميم.</p></div>')+
     '</div>';
 }
 function servers(){$("#root").innerHTML=head("السيرفرات","اختار السيرفر للإدارة.")+'<div class="server-grid">'+s.guilds.map(g=>'<button class="server" data-guild="'+g.id+'"><div class="avatar">'+icon(g)+'</div><b>'+esc(g.name)+'</b><small>'+(g.administrator?"Administrator":"Manage Server")+'</small></button>').join("")+'</div>'}
