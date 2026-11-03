@@ -1,6 +1,7 @@
 (()=>{"use strict";
 const API=String((window.ADER_CONFIG||{}).API_BASE||"").replace(/\/$/,"");
 const s={user:null,guilds:[],guild:null,overview:{},health:{},resources:{roles:[],channels:[]},page:"overview"};
+const appEditor={panelNumber:1,draft:null,panels:[],applications:[]};
 const $=x=>document.querySelector(x),esc=x=>String(x??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 async function api(p,o={}){
   const method=String(o.method||"GET").toUpperCase();
@@ -97,8 +98,8 @@ async function pick(id){
   await loadGuild();
   await render();
 }
-const titles={overview:"Overview",servers:"السيرفرات",analytics:"Analytics",moderation:"Moderation",automod:"AutoMod",economy:"ANORIS Economy",tickets:"التذاكر",levels:"Levels",giveaways:"Giveaways",welcome:"Welcome",commands:"Commands",shortcuts:"Shortcuts",resources:"القنوات والرتب",teams:"Teams",logs:"Logs",security:"Security",premium:"Ader Premium",settings:"Settings"};
-const desc={overview:"نظرة شاملة على حالة Ader والسيرفر.",analytics:"إحصائيات النشاط المسجلة فعلياً.",moderation:"الإشراف والتحذيرات والحماية التلقائية.",automod:"إعدادات AutoMod المبنية على نظام Ader.",economy:"إعدادات ANORIS وترتيب الأرصدة.",tickets:"لوحات التذاكر والتذاكر المفتوحة.",levels:"ترتيب XP والمستويات.",giveaways:"بيانات الهدايا المحفوظة.",welcome:"الترحيب والتحقق.",commands:"تحكم مباشر في أوامر Ader.",shortcuts:"إدارة الاختصارات النصية.",resources:"القنوات والرتب المتاحة.",teams:"الفرق الموثقة وإعداداتها.",logs:"سجل الأحداث والتحذيرات.",security:"حالة جلسة الدخول وصلاحياتك.",premium:"إدارة خطة Premium والـLinked Bot بنفس بيانات Ader.",settings:"تفعيل وتعطيل أنظمة Ader."};
+const titles={overview:"Overview",servers:"السيرفرات",analytics:"Analytics",moderation:"Moderation",automod:"AutoMod",economy:"ANORIS Economy",tickets:"التذاكر",levels:"Levels",giveaways:"Giveaways",welcome:"Welcome",commands:"Commands",shortcuts:"Shortcuts",resources:"القنوات والرتب",teams:"Teams",applications:"تقديم الإدارة",logs:"السجلات",security:"Security",premium:"Ader Premium",settings:"Settings"};
+const desc={overview:"نظرة شاملة على حالة ANO BOT والسيرفر.",analytics:"إحصائيات النشاط المسجلة فعلياً.",moderation:"الإشراف والتحذيرات والحماية التلقائية.",automod:"إعدادات AutoMod المبنية على نظام ANO BOT.",economy:"إعدادات ANORIS وترتيب الأرصدة.",tickets:"لوحات التذاكر والتذاكر المفتوحة.",levels:"ترتيب XP والمستويات.",giveaways:"بيانات الهدايا المحفوظة.",welcome:"الترحيب والتحقق.",commands:"تحكم مباشر في أوامر ANO BOT.",shortcuts:"إدارة الاختصارات النصية.",resources:"القنوات والرتب المتاحة.",teams:"الفرق الموثقة وإعداداتها.",applications:"أنشئ لوحات تقديم الإدارة، عدّل الأسئلة، وانظر الطلبات وراجعها من مكان واحد.",logs:"سجل أحداث الأعضاء والرسائل والقنوات والرتب والتذاكر والتقديمات.",security:"حالة جلسة الدخول وصلاحياتك.",premium:"إدارة خطة Premium والـLinked Bot بنفس بيانات ANO BOT.",settings:"تفعيل وتعطيل أنظمة ANO BOT."};
 function showSectionError(error){
   const message=String(error?.message||"تعذر الاتصال بخادم Ader.");
   const premium=error?.status===402;
@@ -125,6 +126,7 @@ async function render(){
     else if(p==="commands")await commands();
     else if(p==="shortcuts")await shortcuts();
     else if(p==="teams")await teams();
+    else if(p==="applications")await applications();
     else if(p==="logs")await logs();
     else if(p==="security")security();
     else if(p==="premium")await premium();
@@ -377,7 +379,185 @@ async function teams(){const [d,ts]=await Promise.all([api("/api/guilds/"+s.guil
     await teams();
   }catch(e){warn("تعذر حفظ إعدادات الفرق: "+e.message)}
   }}
-async function logs(){const d=await api("/api/guilds/"+s.guild.id+"/logs");$("#root").innerHTML=head("Logs",desc.logs)+card("Recent Activity",'<div class="list">'+(d.logs||[]).map(x=>'<div><b>'+esc(x.type)+'</b><small>'+esc(new Date(Number(x.timestamp)*1000).toLocaleString())+' · '+esc(JSON.stringify(x.data||{}))+'</small></div>').join("")+'</div>')}
+function appQuestionsFromDOM(){
+  return Array.from(document.querySelectorAll("[data-app-question]")).map(row=>({
+    label:row.querySelector("[data-app-q-label]").value.trim(),
+    required:row.querySelector("[data-app-q-required]").checked,
+    paragraph:row.querySelector("[data-app-q-paragraph]").value==="true"
+  })).filter(q=>q.label);
+}
+function renderAppQuestions(){
+  const host=$("#app-question-list");
+  if(!host)return;
+  const questions=appEditor.draft?.questions||[];
+  host.innerHTML=questions.map((q,i)=>
+    '<div class="application-question" data-app-question="'+i+'">'+
+      '<span class="question-number">'+String(i+1).padStart(2,"0")+'</span>'+
+      '<input data-app-q-label maxlength="45" value="'+esc(q.label||"")+'" placeholder="اكتب السؤال هنا">'+
+      '<select data-app-q-paragraph><option value="false" '+(!q.paragraph?"selected":"")+'>إجابة قصيرة</option><option value="true" '+(q.paragraph?"selected":"")+'>إجابة مطولة</option></select>'+
+      '<label class="question-required"><input type="checkbox" data-app-q-required '+(q.required!==false?"checked":"")+'> مطلوب</label>'+
+      '<button type="button" class="action danger" data-app-q-remove="'+i+'">حذف</button>'+
+    '</div>'
+  ).join("");
+  host.querySelectorAll("[data-app-q-remove]").forEach(button=>button.onclick=()=>{
+    const items=appQuestionsFromDOM();
+    items.splice(Number(button.dataset.appQRemove),1);
+    appEditor.draft.questions=items;
+    renderAppQuestions();
+  });
+}
+function applicationPanelPayload(){
+  return {
+    title:$("#app-title").value.trim(),
+    description:$("#app-description").value.trim(),
+    button_label:$("#app-button-label").value.trim(),
+    button_emoji:$("#app-button-emoji").value.trim(),
+    button_style:$("#app-button-style").value,
+    image:$("#app-image").value.trim(),
+    results_channel_id:$("#app-results-channel").value||null,
+    accept_role_id:$("#app-accept-role").value||null,
+    reject_role_id:$("#app-reject-role").value||null,
+    questions:appQuestionsFromDOM()
+  };
+}
+async function saveApplicationPanel(){
+  const payload=applicationPanelPayload();
+  await api("/api/guilds/"+s.guild.id+"/applications/panels/"+appEditor.panelNumber,{method:"PUT",body:JSON.stringify(payload)});
+  return payload;
+}
+async function applications(){
+  const data=await api("/api/guilds/"+s.guild.id+"/applications");
+  appEditor.panels=data.panels||[];
+  appEditor.applications=data.applications||[];
+  const panel=appEditor.panels.find(x=>Number(x.number)===Number(appEditor.panelNumber))||appEditor.panels[0]||{};
+  appEditor.panelNumber=Number(panel.number||1);
+  appEditor.draft=JSON.parse(JSON.stringify(panel));
+  const pending=appEditor.applications.filter(x=>x.status==="pending").length;
+  const accepted=appEditor.applications.filter(x=>x.status==="accepted").length;
+  const rejected=appEditor.applications.filter(x=>x.status==="rejected").length;
+  const statusLabel={pending:"قيد المراجعة",accepted:"مقبول",rejected:"مرفوض"};
+  const applicationRows=appEditor.applications.length?appEditor.applications.map(item=>{
+    const answers=Array.isArray(item.answers)?item.answers:[];
+    const answerText=answers.map((answer,i)=>(i+1)+". "+String(answer||"")).join("\n");
+    const reviewButtons=item.status==="pending"
+      ? '<div class="application-review-actions"><button class="primary smallbtn" data-app-review="'+item.id+'" data-status="accepted">✅ قبول</button><button class="action danger" data-app-review="'+item.id+'" data-status="rejected">رفض</button></div>'
+      : '<span class="application-status '+esc(item.status)+'">'+esc(statusLabel[item.status]||item.status)+'</span>';
+    return '<article class="application-entry">'+
+      '<div class="application-entry-top"><div><b>طلب #'+item.id+'</b><small>العضو ID '+item.user_id+' · اللوحة '+item.panel+'</small></div>'+
+      '<time>'+esc(new Date(Number(item.created_at||0)*1000).toLocaleString())+'</time></div>'+
+      '<details><summary>عرض الإجابات ('+answers.length+')</summary><pre>'+esc(answerText||"لا توجد إجابات")+'</pre></details>'+
+      '<div class="application-entry-bottom">'+reviewButtons+'</div></article>';
+  }).join(""):'<div class="empty small">لا توجد طلبات تقديم بعد. انشر لوحة التقديم وسيتم عرض الطلبات هنا.</div>';
+  $("#root").innerHTML=head("تقديم الإدارة",desc.applications)+
+    '<div class="stats application-stats">'+stat("طلبات قيد المراجعة",pending,"◷")+stat("طلبات مقبولة",accepted,"✓")+stat("طلبات مرفوضة",rejected,"×")+stat("إجمالي الطلبات",appEditor.applications.length,"▤")+'</div>'+
+    '<div class="application-layout">'+
+      '<section class="card application-editor">'+
+        '<div class="card-head"><b>إعداد لوحة التقديم</b><span class="system-pill">لوحات متعددة</span></div>'+
+        '<div class="card-body">'+
+          '<div class="form-grid"><label>اختيار اللوحة<select id="app-panel-number">'+[1,2,3].map(n=>'<option value="'+n+'" '+(n===appEditor.panelNumber?"selected":"")+'>لوحة '+n+'</option>').join("")+'</select></label>'+
+          '<label>عنوان اللوحة<input id="app-title" maxlength="256" value="'+esc(panel.title||"")+'"></label></div>'+
+          '<label>وصف التقديم<textarea id="app-description" rows="3" maxlength="4000">'+esc(panel.description||"")+'</textarea></label>'+
+          '<div class="form-grid"><label>اسم الزر<input id="app-button-label" maxlength="80" value="'+esc(panel.button_label||"ابدأ التقديم")+'"></label>'+
+          '<label>إيموجي الزر<input id="app-button-emoji" maxlength="64" value="'+esc(panel.button_emoji||"📝")+'"></label>'+
+          '<label>لون الزر<select id="app-button-style">'+
+            '<option value="primary" '+(panel.button_style==="primary"?"selected":"")+'>أزرق / بنفسجي</option>'+
+            '<option value="success" '+(panel.button_style==="success"?"selected":"")+'>أخضر</option>'+
+            '<option value="secondary" '+(panel.button_style==="secondary"?"selected":"")+'>رمادي</option>'+
+            '<option value="danger" '+(panel.button_style==="danger"?"selected":"")+'>أحمر</option>'+
+          '</select></label>'+
+          '<label>رابط صورة اللوحة<input id="app-image" type="url" placeholder="https://..." value="'+esc(panel.image||"")+'"></label></div>'+
+          '<div class="form-grid"><label>قناة استقبال الطلبات'+selectChannels("app-results-channel",panel.results)+'</label>'+
+          '<label>رتبة المقبولين'+selectRoles("app-accept-role",panel.accept_role)+'</label>'+
+          '<label>رتبة المرفوضين'+selectRoles("app-reject-role",panel.reject_role)+'</label>'+
+          '<label>قناة نشر اللوحة'+selectChannels("app-publish-channel",panel.published_channel_id)+'</label></div>'+
+          '<div class="application-questions-head"><div><b>أسئلة التقديم</b><small>من 1 إلى 25 سؤالاً. إجابات مطولة أو قصيرة.</small></div><button class="action" id="app-add-question">＋ إضافة سؤال</button></div>'+
+          '<div id="app-question-list" class="application-question-list"></div>'+
+          '<div class="application-editor-actions"><button class="primary smallbtn" id="app-save">حفظ الإعدادات</button><button class="action" id="app-publish">نشر / تحديث اللوحة</button></div>'+
+        '</div>'+
+      '</section>'+
+      '<section class="card application-requests"><div class="card-head"><b>طلبات الإدارة</b><span class="system-pill">'+appEditor.applications.length+' طلب</span></div><div class="card-body"><div class="application-entry-list">'+applicationRows+'</div></div></section>'+
+    '</div>';
+  renderAppQuestions();
+  $("#app-panel-number").onchange=()=>{appEditor.panelNumber=Number($("#app-panel-number").value);applications()};
+  $("#app-add-question").onclick=()=>{
+    const questions=appQuestionsFromDOM();
+    if(questions.length>=25)return warn("الحد الأقصى هو 25 سؤالاً.");
+    questions.push({label:"سؤال جديد",required:true,paragraph:false});
+    appEditor.draft.questions=questions;
+    renderAppQuestions();
+  };
+  $("#app-save").onclick=async()=>{
+    try{await saveApplicationPanel();clearWarn();await applications();warn("تم حفظ إعدادات لوحة التقديم بنجاح.");}
+    catch(e){warn("تعذر حفظ التقديم: "+e.message)}
+  };
+  $("#app-publish").onclick=async()=>{
+    try{
+      await saveApplicationPanel();
+      const channelId=$("#app-publish-channel").value;
+      if(!channelId)throw Error("اختر قناة نشر اللوحة أولاً.");
+      const result=await api("/api/guilds/"+s.guild.id+"/applications/panels/"+appEditor.panelNumber+"/publish",{method:"POST",body:JSON.stringify({channel_id:channelId})});
+      await applications();
+      warn("تم نشر لوحة التقديم بنجاح. رابط الرسالة: "+result.message_url);
+    }catch(e){warn("تعذر نشر لوحة التقديم: "+e.message)}
+  };
+  document.querySelectorAll("[data-app-review]").forEach(button=>button.onclick=async()=>{
+    const applicationId=Number(button.dataset.appReview);
+    const status=button.dataset.status;
+    let reason="";
+    if(status==="rejected"){
+      const value=window.prompt("سبب رفض التقديم (اختياري):");
+      if(value===null)return;
+      reason=value;
+    }
+    try{
+      await api("/api/guilds/"+s.guild.id+"/applications/"+applicationId+"/review",{method:"POST",body:JSON.stringify({status,reason})});
+      await applications();
+      warn("تم حفظ قرار مراجعة الطلب.");
+    }catch(e){warn("تعذرت مراجعة الطلب: "+e.message)}
+  });
+}
+async function logs(){
+  const [data,config]=await Promise.all([
+    api("/api/guilds/"+s.guild.id+"/logs"),
+    api("/api/guilds/"+s.guild.id+"/logs/settings")
+  ]);
+  const settings=config.settings||{},categories=settings.categories||{};
+  const names={messages:"الرسائل",members:"الأعضاء",moderation:"الإشراف",channels:"القنوات",roles:"الرتب"};
+  const labels={
+    "audit.message_deleted":"حذف رسالة","audit.message_edited":"تعديل رسالة",
+    "audit.member_joined":"انضمام عضو","audit.member_left":"مغادرة عضو",
+    "audit.member_banned":"حظر عضو","audit.member_unbanned":"إلغاء حظر عضو",
+    "audit.channel_created":"إنشاء قناة","audit.channel_updated":"تعديل قناة","audit.channel_deleted":"حذف قناة",
+    "audit.role_created":"إنشاء رتبة","audit.role_updated":"تعديل رتبة","audit.role_deleted":"حذف رتبة",
+    "ticket.created":"إنشاء تذكرة","ticket.closed":"إغلاق تذكرة","ticket.reopened":"إعادة فتح تذكرة",
+    "ticket.claim":"استلام تذكرة","ticket.deleted":"حذف تذكرة","ticket.snapshot":"سجل تذكرة",
+    "application.submitted":"إرسال طلب تقديم","application.reviewed":"مراجعة طلب تقديم"
+  };
+  const items=(data.logs||[]).map(item=>{
+    const type=String(item.type||"حدث"),body=item.data||{};
+    const title=labels[type]||type.replace(/[._]/g," ");
+    const description=Object.entries(body).slice(0,5).map(([key,value])=>'<span><b>'+esc(key)+'</b> '+esc(typeof value==="object"?JSON.stringify(value):String(value??""))+'</span>').join("");
+    return '<article class="log-event"><div class="log-event-icon">◈</div><div class="log-event-main"><b>'+esc(title)+'</b><div class="log-event-meta">'+esc(type)+' · '+esc(new Date(Number(item.timestamp||0)*1000).toLocaleString())+'</div><div class="log-event-data">'+description+'</div></div></article>';
+  }).join("");
+  $("#root").innerHTML=head("سجلات السيرفر",desc.logs)+
+    '<div class="application-layout logs-layout">'+
+      '<section class="card"><div class="card-head"><b>إعدادات السجلات</b><span class="system-pill">تسجيل تلقائي</span></div><div class="card-body">'+
+        '<label>قناة إرسال السجلات'+selectChannels("logs-channel",settings.channel_id)+'</label>'+
+        '<div class="log-category-grid">'+Object.entries(names).map(([key,label])=>'<label><input type="checkbox" data-log-category="'+key+'" '+(categories[key]!==false?"checked":"")+'> '+esc(label)+'</label>').join("")+'</div>'+
+        '<button class="primary smallbtn" id="save-logs">حفظ إعدادات السجلات</button>'+
+        '<p class="muted">تُحفظ الأحداث في قاعدة البيانات وتظهر هنا حتى إذا لم يتم تعيين قناة Discord. القناة اختيارية لإرسال نسخة منها داخل السيرفر.</p>'+
+      '</div></section>'+
+      '<section class="card"><div class="card-head"><b>آخر الأحداث</b><span class="system-pill">'+(data.logs||[]).length+' حدث</span></div><div class="card-body"><div class="log-event-list">'+(items||'<div class="empty small">لا توجد أحداث مسجلة بعد.</div>')+'</div></div></section>'+
+    '</div>';
+  $("#save-logs").onclick=async()=>{
+    const payload={
+      channel_id:$("#logs-channel").value||null,
+      categories:Object.fromEntries(Array.from(document.querySelectorAll("[data-log-category]")).map(x=>[x.dataset.logCategory,x.checked]))
+    };
+    try{await api("/api/guilds/"+s.guild.id+"/logs/settings",{method:"PUT",body:JSON.stringify(payload)});await logs();warn("تم حفظ إعدادات السجلات.");}
+    catch(e){warn("تعذر حفظ إعدادات السجلات: "+e.message)}
+  };
+}
 async function premium(){
   const d=await api("/api/guilds/"+s.guild.id+"/premium");
   const active=Boolean(d.active);
