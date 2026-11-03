@@ -189,7 +189,7 @@ class Ader(commands.Bot):
             "cogs.admin", "cogs.analytics", "cogs.economy", "cogs.shop",
             "cogs.ad_settings_v2", "cogs.advertising_shop", "cogs.ad_room_command",
             "cogs.ad_customization", "cogs.shortcuts", "cogs.autoreply",
-            "cogs.moderation", "cogs.roles", "cogs.ticket_manager", "cogs.utility",
+            "cogs.moderation", "cogs.roles", "cogs.ticket_manager", "cogs.application_system_v4", "cogs.audit_logs", "cogs.utility",
             "cogs.verification", "cogs.games", "cogs.teams_v2", "cogs.temp_voice",
             "cogs.dashboard_config", "cogs.dashboard_server", "cogs.owner_currency", "cogs.server_invites", "cogs.profile_card",
             "cogs.bot_edit", "cogs.line",
