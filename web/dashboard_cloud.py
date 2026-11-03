@@ -22,6 +22,7 @@ from web import dashboard_app as base
 from cogs.professional_core import normalize_reaction_emojis
 from utils.premium import describe as describe_premium, has_feature, FEATURES
 from utils.secrets_store import TokenCipher
+from web.dashboard_guild_access import get_cached_guild, wait_for_bot_ready
 
 
 class CloudflareSessionBridge(BaseHTTPMiddleware):
@@ -61,9 +62,15 @@ async def _require_guild(bot, request: Request, guild_id: int):
     if not session:
         raise HTTPException(status_code=401, detail="تسجيل الدخول مطلوب")
 
-    guild = bot.get_guild(guild_id)
+    # Wait for the gateway READY event: this route can be hit while the bot
+    # process is alive but Discord.py is still rebuilding its guild cache.
+    await wait_for_bot_ready(bot)
+    guild = get_cached_guild(bot, guild_id)
     if guild is None:
-        raise HTTPException(status_code=404, detail="البوت غير متصل بهذا الخادم حالياً")
+        raise HTTPException(
+            status_code=404,
+            detail="البوت غير موجود في هذا الخادم. تأكد من إضافته إلى السيرفر بنفس حساب البوت.",
+        )
 
     key = str(guild_id)
     managed = session.get("managed_guilds", {}) or {}
@@ -274,7 +281,7 @@ def create_app(bot):
         if not isinstance(data,dict): raise HTTPException(status_code=400,detail="إعدادات غير صالحة")
         coach=data.get("coach_role_id")
         max_players=max(1,min(50,int(data.get("max_players",15))))
-        guild=bot.get_guild(guild_id)
+        guild=get_cached_guild(bot, guild_id)
         if coach and (not guild or not guild.get_role(int(coach))): coach=None
         await bot.db.execute("INSERT INTO team_settings(guild_id,coach_role_id,max_players,updated_at) VALUES(?,?,?,?) ON CONFLICT(guild_id) DO UPDATE SET coach_role_id=excluded.coach_role_id,max_players=excluded.max_players,updated_at=excluded.updated_at",(guild_id,int(coach) if coach else None,max_players,time.time()))
         row=await bot.db.fetchone("SELECT * FROM team_settings WHERE guild_id=?", (guild_id,))
