@@ -60,32 +60,111 @@ function card(t,b){return '<section class="card"><div class="card-head"><b>'+t+'
 function stat(a,b,c){return '<div class="stat"><span>'+a+'</span><i>'+c+'</i><strong>'+b+'</strong></div>'}
 function selectRoles(id,value){return '<select id="'+id+'"><option value="">اختار رتبة…</option>'+s.resources.roles.map(r=>'<option value="'+r.id+'" '+(String(value||"")===String(r.id)?"selected":"")+'>'+esc(r.name)+'</option>').join("")+'</select>'}
 function selectChannels(id,value){return '<select id="'+id+'"><option value="">اختار قناة…</option>'+s.resources.channels.filter(c=>["text","news"].includes(c.type)).map(c=>'<option value="'+c.id+'" '+(String(value||"")===String(c.id)?"selected":"")+'># '+esc(c.name)+'</option>').join("")+'</select>'}
+function updateGuildSelector(){
+  const select=$("#guildSelect");
+  if(!select)return;
+  select.innerHTML=s.guilds.map(g=>
+    '<option value="'+g.id+'">'+esc(g.name)+(g.bot_in_guild===false?" · البوت غير موجود":"")+'</option>'
+  ).join("");
+  if(s.guild?.id)select.value=String(s.guild.id);
+}
+function renderGuildUnavailable(){
+  const inviteId=s.health?.bot_user_id;
+  const inviteUrl=inviteId
+    ? "https://discord.com/oauth2/authorize?client_id="+encodeURIComponent(inviteId)+"&scope=bot%20applications.commands"
+    : "";
+  $("#root").innerHTML=head("إضافة ANO BOT للسيرفر","حالة اتصال البوت بهذا السيرفر")+
+    card("البوت غير موجود في هذا السيرفر",
+      '<div class="empty"><b>'+esc(s.guild?.name||"السيرفر المحدد")+'</b>'+
+      '<p>حساب Discord الذي سجلت به يملك صلاحية إدارة هذا السيرفر، لكن حساب ANO BOT نفسه غير موجود فيه حالياً. أضف البوت ثم حدّث حالة السيرفر.</p>'+
+      (inviteUrl?'<a class="btn primary" href="'+inviteUrl+'" target="_blank" rel="noopener">إضافة ANO BOT إلى السيرفر</a>':'')+
+      '<button class="action" id="refresh-guild-state">إعادة التحقق</button></div>'
+    );
+  $("#refresh-guild-state")?.addEventListener("click",async()=>{
+    try{
+      const fresh=await api("/api/guilds");
+      s.guilds=(fresh.guilds||[]).filter(x=>x&&x.id);
+      const updated=s.guilds.find(g=>String(g.id)===String(s.guild.id));
+      if(updated)s.guild=updated;
+      updateGuildSelector();
+      const ok=await loadGuild();
+      if(ok)await render();
+    }catch(e){warn("تعذر تحديث حالة السيرفر: "+e.message)}
+  });
+}
+function renderGuildSyncProblem(message){
+  $("#root").innerHTML=head("جاري مزامنة السيرفر","Discord أكد حالة البوت، لكن بيانات Gateway لم تكتمل بعد.")+
+    card("الاتصال قيد التحديث",
+      '<div class="empty"><p>'+esc(message||"تعذر تحميل بيانات السيرفر الآن.")+'</p>'+
+      '<button class="primary smallbtn" id="retry-guild-sync">إعادة المحاولة</button></div>'
+    );
+  $("#retry-guild-sync")?.addEventListener("click",async()=>{
+    const ok=await loadGuild();
+    if(ok)await render();
+  });
+}
+async function refreshGuildState(){
+  const fresh=await api("/api/guilds");
+  s.guilds=(fresh.guilds||[]).filter(x=>x&&x.id);
+  const updated=s.guilds.find(g=>String(g.id)===String(s.guild?.id));
+  if(updated)s.guild=updated;
+  updateGuildSelector();
+  return updated||null;
+}
 async function loadGuild(){
-  if(!s.guild?.id)return;
+  if(!s.guild?.id)return false;
+  if(s.guild.bot_in_guild===false){
+    renderGuildUnavailable();
+    return false;
+  }
   const guildId=String(s.guild.id);
   const healthTask=api("/healthz").then(data=>{
     s.health=data||{};
   }).catch(error=>{
     s.health={backend_ok:false,bot_ready:false,database:false,error:error.message};
   });
+  let failure=null;
   try{
     [s.overview,s.resources]=await Promise.all([
       api("/api/guilds/"+guildId+"/overview"),
       api("/api/guilds/"+guildId+"/resources")
     ]);
-    clearWarn();
     localStorage.setItem("ader_selected_guild_id",guildId);
-  }catch(e){
-    const reason=e.status===403
-      ? "ما قدرناش نتحقق من صلاحية Manage Server حالياً. حدّث الصفحة، وإذا استمر المشكل سجّل الخروج ثم الدخول من Discord."
-      : e.status===404
-        ? "البوت غير متصل بهذا السيرفر حالياً. تأكد من إضافته للسيرفر ثم حدّث الصفحة."
-        : e.message;
-    warn("تعذر تحميل بيانات السيرفر: "+reason);
-  }
+  }catch(e){failure=e}
   await healthTask;
   $("#guildName").textContent=s.guild.name;
   $("#guildIcon").innerHTML=icon(s.guild);
+  if(!failure){
+    clearWarn();
+    return true;
+  }
+  if(failure.status===409&&failure.message==="bot_not_in_guild"){
+    try{
+      const updated=await refreshGuildState();
+      if(updated?.bot_in_guild===false){
+        renderGuildUnavailable();
+        warn("تأكدنا من Discord أن حساب ANO BOT غير مضاف لهذا السيرفر.");
+        return false;
+      }
+    }catch(refreshError){
+      renderGuildSyncProblem("تعذر تحديث حالة وجود البوت: "+refreshError.message);
+      warn(refreshError.message);
+      return false;
+    }
+    renderGuildSyncProblem("قائمة السيرفرات وحالة الاتصال غير متطابقتين حالياً. أعد المحاولة لتحديث الحالة من Discord.");
+    warn("تحتاج حالة اتصال البوت إلى إعادة مزامنة.");
+    return false;
+  }
+  if(failure.status===503){
+    renderGuildSyncProblem(failure.message);
+    warn(failure.message);
+    return false;
+  }
+  const reason=failure.status===403
+    ? "ما عندكش حالياً صلاحية إدارة هذا السيرفر."
+    : failure.message;
+  showSectionError(new Error(reason));
+  return false;
 }
 async function pick(id){
   const selected=s.guilds.find(g=>String(g.id)===String(id));
@@ -93,10 +172,10 @@ async function pick(id){
   s.guild=selected;
   s.overview={};
   s.resources={roles:[],channels:[]};
-  $("#guildSelect").value=String(selected.id);
+  updateGuildSelector();
   localStorage.setItem("ader_selected_guild_id",String(selected.id));
-  await loadGuild();
-  await render();
+  const ok=await loadGuild();
+  if(ok)await render();
 }
 const titles={overview:"Overview",servers:"السيرفرات",analytics:"Analytics",moderation:"Moderation",automod:"AutoMod",economy:"ANORIS Economy",tickets:"التذاكر",levels:"Levels",giveaways:"Giveaways",welcome:"Welcome",commands:"Commands",shortcuts:"Shortcuts",resources:"القنوات والرتب",teams:"Teams",applications:"تقديم الإدارة",logs:"السجلات",security:"Security",premium:"Ader Premium",settings:"Settings"};
 const desc={overview:"نظرة شاملة على حالة ANO BOT والسيرفر.",analytics:"إحصائيات النشاط المسجلة فعلياً.",moderation:"الإشراف والتحذيرات والحماية التلقائية.",automod:"إعدادات AutoMod المبنية على نظام ANO BOT.",economy:"إعدادات ANORIS وترتيب الأرصدة.",tickets:"لوحات التذاكر والتذاكر المفتوحة.",levels:"ترتيب XP والمستويات.",giveaways:"بيانات الهدايا المحفوظة.",welcome:"الترحيب والتحقق.",commands:"تحكم مباشر في أوامر ANO BOT.",shortcuts:"إدارة الاختصارات النصية.",resources:"القنوات والرتب المتاحة.",teams:"الفرق الموثقة وإعداداتها.",applications:"أنشئ لوحات تقديم الإدارة، عدّل الأسئلة، وانظر الطلبات وراجعها من مكان واحد.",logs:"سجل أحداث الأعضاء والرسائل والقنوات والرتب والتذاكر والتقديمات.",security:"حالة جلسة الدخول وصلاحياتك.",premium:"إدارة خطة Premium والـLinked Bot بنفس بيانات ANO BOT.",settings:"تفعيل وتعطيل أنظمة ANO BOT."};
@@ -110,6 +189,10 @@ function showSectionError(error){
   $("#retry-page")?.addEventListener("click",()=>render());
 }
 async function render(){
+  if(s.guild?.bot_in_guild===false){
+    renderGuildUnavailable();
+    return;
+  }
   const p=s.page;
   $("#title").textContent=titles[p]||p;
   document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));
@@ -138,29 +221,23 @@ async function render(){
       showLogin();
       return;
     }
-    if(e.status===404&&e.message==="البوت غير متصل بهذا الخادم حالياً"){
+    if(e.status===409&&e.message==="bot_not_in_guild"){
       try{
-        const fresh=await api("/api/guilds");
-        s.guilds=(fresh.guilds||[]).filter(x=>x&&x.id);
-        const stillAvailable=s.guilds.find(g=>String(g.id)===String(s.guild?.id));
-        if(!stillAvailable&&s.guilds.length){
-          s.guild=s.guilds[0];
-          $("#guildSelect").innerHTML=s.guilds.map(g=>'<option value="'+g.id+'">'+esc(g.name)+'</option>').join("");
-          $("#guildSelect").value=String(s.guild.id);
-          localStorage.setItem("ader_selected_guild_id",String(s.guild.id));
-          await loadGuild();
-          await render();
-          return;
+        const updated=await refreshGuildState();
+        if(updated?.bot_in_guild===false){
+          renderGuildUnavailable();
+          warn("تأكدنا من Discord أن حساب ANO BOT غير مضاف لهذا السيرفر.");
+        }else{
+          renderGuildSyncProblem("تحتاج حالة اتصال البوت إلى إعادة مزامنة. جرّب مرة أخرى.");
+          warn("تحتاج حالة اتصال البوت إلى إعادة مزامنة.");
         }
-        if(!s.guilds.length){
-          $("#root").innerHTML='<div class="empty">ما كاين حتى سيرفر ظاهر فيه Ader حالياً. تأكد أن البوت متصل بالسيرفر، ثم أعد تشغيل البوت وحدّث الصفحة.</div>';
-          warn("تعذر العثور على سيرفر متاح للبوت.");
-          return;
-        }
-        showSectionError(new Error("السيرفر ظاهر في القائمة، لكن الـBackend لا يراه داخل البوت. أعد تشغيل ANO BOT ثم حدّث الصفحة."));
       }catch(refreshError){
-        showSectionError(refreshError);
+        renderGuildSyncProblem(refreshError.message);
+        warn(refreshError.message);
       }
+    }else if(e.status===503){
+      renderGuildSyncProblem(e.message);
+      warn(e.message);
     }else{
       showSectionError(e);
     }
@@ -717,15 +794,15 @@ async function boot(){
 
     const saved=localStorage.getItem("ader_selected_guild_id");
     const savedGuild=s.guilds.find(x=>String(x.id)===String(saved));
-    s.guild=savedGuild||s.guilds[0];
+    const firstPresent=s.guilds.find(x=>x.bot_in_guild!==false);
+    s.guild=(savedGuild&&savedGuild.bot_in_guild!==false)?savedGuild:(firstPresent||savedGuild||s.guilds[0]);
 
     $("#user").textContent=(s.user.username||"U")[0];
-    $("#guildSelect").innerHTML=s.guilds.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");
-    $("#guildSelect").value=String(s.guild.id);
+    updateGuildSelector();
     $("#guildSelect").onchange=()=>pick($("#guildSelect").value);
 
-    await loadGuild();
-    await render();
+    const ready=await loadGuild();
+    if(ready)await render();
   }catch(e){
     if(e.message==="AUTH")showLogin();
     else{
