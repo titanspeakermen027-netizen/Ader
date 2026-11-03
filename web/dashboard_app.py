@@ -216,8 +216,6 @@ def create_app(bot) -> FastAPI:
 
     async def require_guild(request: Request, guild_id: int):
         session = await require_session(request)
-        # Wait for Discord's guild cache before filtering OAuth servers.
-        await wait_for_bot_ready(bot)
         managed = session.get("managed_guilds", {}) or {}
         oauth_guilds = session.get("oauth_guilds", {}) or {}
         key = str(guild_id)
@@ -456,6 +454,8 @@ def create_app(bot) -> FastAPI:
     @app.get("/api/guilds")
     async def guilds(request: Request):
         session = await require_session(request)
+        # Synchronize with Discord before exposing the server selector.
+        await wait_for_bot_ready(bot)
         managed = session.get("managed_guilds", {}) or {}
         oauth_guilds = session.get("oauth_guilds", {}) or {}
 
