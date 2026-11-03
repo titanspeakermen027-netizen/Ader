@@ -1,6 +1,6 @@
 (()=>{"use strict";
 const API=String((window.ADER_CONFIG||{}).API_BASE||"").replace(/\/$/,"");
-const s={user:null,guilds:[],guild:null,overview:{},resources:{roles:[],channels:[]},page:"overview"};
+const s={user:null,guilds:[],guild:null,overview:{},health:{},resources:{roles:[],channels:[]},page:"overview"};
 const $=x=>document.querySelector(x),esc=x=>String(x??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 async function api(p,o={}){
   const controller=new AbortController();
@@ -45,7 +45,7 @@ function loginError(m){
   box.classList.remove("hidden");
 }
 function clearWarn(){$("#apiWarning").classList.add("hidden")}
-function head(t,d){return '<div class="page-head"><div class="page-head-copy"><div class="page-kicker">ADER CONTROL CENTER</div><h1>'+t+'</h1><p>'+d+'</p></div>'+(s.guild?'<div class="page-meta"><span class="status-dot"></span><span>'+esc(s.guild.name)+'</span></div>':'')+'</div>'}
+function head(t,d){return '<div class="page-head"><div class="page-head-copy"><div class="page-kicker">ANO BOT CONTROL CENTER</div><h1>'+t+'</h1><p>'+d+'</p></div>'+(s.guild?'<div class="page-meta"><span class="status-dot"></span><span>'+esc(s.guild.name)+'</span></div>':'')+'</div>'}
 function card(t,b){return '<section class="card"><div class="card-head"><b>'+t+'</b></div><div class="card-body">'+b+'</div></section>'}
 function stat(a,b,c){return '<div class="stat"><span>'+a+'</span><i>'+c+'</i><strong>'+b+'</strong></div>'}
 function selectRoles(id,value){return '<select id="'+id+'"><option value="">اختار رتبة…</option>'+s.resources.roles.map(r=>'<option value="'+r.id+'" '+(String(value||"")===String(r.id)?"selected":"")+'>'+esc(r.name)+'</option>').join("")+'</select>'}
@@ -53,6 +53,11 @@ function selectChannels(id,value){return '<select id="'+id+'"><option value="">�
 async function loadGuild(){
   if(!s.guild?.id)return;
   const guildId=String(s.guild.id);
+  const healthTask=api("/healthz").then(data=>{
+    s.health=data||{};
+  }).catch(error=>{
+    s.health={backend_ok:false,bot_ready:false,database:false,error:error.message};
+  });
   try{
     [s.overview,s.resources]=await Promise.all([
       api("/api/guilds/"+guildId+"/overview"),
@@ -68,6 +73,7 @@ async function loadGuild(){
         : e.message;
     warn("تعذر تحميل بيانات السيرفر: "+reason);
   }
+  await healthTask;
   $("#guildName").textContent=s.guild.name;
   $("#guildIcon").innerHTML=icon(s.guild);
 }
@@ -114,7 +120,7 @@ async function render(){
     else if(p==="security")security();
     else if(p==="premium")await premium();
     else if(p==="settings")await settings();
-    else giveaways();
+    else showSectionError(new Error("هذا القسم غير متاح حالياً."));
     clearWarn();
   }catch(e){
     if(e.message==="AUTH"){
@@ -150,7 +156,27 @@ async function render(){
   }
   bindCommon();
 }
-function overview(){const o=s.overview||{},u=s.user||{},g=s.guild||{};const display=esc(u.global_name||u.username||"Discord User");$("#root").innerHTML='<section class="hero-card dashboard-hero"><div><div class="page-kicker">SERVER OVERVIEW</div><h2>مرحباً، '+display+'</h2><p>كل شيء واضح أمامك. راقب صحة السيرفر وتحكم في أنظمة Ader من نفس المكان بدون تشتيت.</p></div><div class="dashboard-hero-status"><span class="status-dot"></span><div><b>'+esc(g.name||"Your server")+'</b><small>Ader is connected and ready</small></div></div></section>'+'<div class="stats">'+stat("الأعضاء",o.members||0,"♙")+stat("القنوات",o.channels||0,"#")+stat("الرتب",o.roles||0,"◆")+stat("التذاكر المفتوحة",o.open_tickets||0,"🎫")+'</div>'+'<div class="cards overview-cards">'+card("System Health",'<div class="health"><div><span>Ader Bot</span><b class="on">● Online</b></div><div><span>Database</span><b class="on">● Connected</b></div><div><span>Commands</span><b>'+Number(o.commands||0).toLocaleString()+' active</b></div><div><span>Guild Access</span><b>'+s.guilds.length+' manageable</b></div></div>')+card("Quick Actions",'<p class="card-note">أكثر الإجراءات استعمالاً، مباشرة من الصفحة الرئيسية.</p><div class="quick"><button class="action" data-go="moderation">🛡 Moderation</button><button class="action" data-go="automod">🤖 AutoMod</button><button class="action" data-go="economy">🪙 Economy</button><button class="action" data-go="tickets">🎫 Tickets</button><button class="action" data-go="settings">⚙ Settings</button></div>')+'</div>'+'<div class="cards overview-cards secondary-overview">'+card("Server Snapshot",'<div class="snapshot"><div><span>Members</span><b>'+Number(o.members||0).toLocaleString()+'</b></div><div><span>Channels</span><b>'+Number(o.channels||0).toLocaleString()+'</b></div><div><span>Roles</span><b>'+Number(o.roles||0).toLocaleString()+'</b></div><div><span>Open Tickets</span><b>'+Number(o.open_tickets||0).toLocaleString()+'</b></div></div>')+card("Ader Status",'<div class="status-summary"><div><span class="status-dot"></span><b>Everything is running</b></div><p>استعمل القائمة الجانبية للوصول إلى الإشراف، التذاكر، الاقتصاد، المستويات وباقي أنظمة السيرفر.</p></div>')+'</div>'}
+function overview(){
+  const o=s.overview||{},u=s.user||{},g=s.guild||{},h=s.health||{};
+  const display=esc(u.global_name||u.username||"Discord User");
+  const backendOk=h.backend_ok===true;
+  const botReady=backendOk&&h.bot_ready===true;
+  const databaseReady=backendOk&&h.database===true;
+  const botLabel=botReady?"Online":backendOk?"Starting":"Offline";
+  const apiLabel=backendOk?"Connected":"Unavailable";
+  const dbLabel=databaseReady?"Connected":backendOk?"Disconnected":"Unknown";
+  $("#root").innerHTML=
+    '<section class="hero-card dashboard-hero"><div><div class="page-kicker">LIVE SERVER OVERVIEW</div><h2>مرحباً، '+display+'</h2><p>إدارة ANO BOT ومراقبة أنظمة السيرفر من لوحة واحدة، مع بيانات مباشرة من الخادم.</p></div><div class="dashboard-hero-status"><span class="status-dot"></span><div><b>'+esc(g.name||"Your server")+'</b><small>ANO BOT · '+botLabel+'</small></div></div></section>'+
+    '<div class="stats">'+stat("الأعضاء",Number(o.members||0).toLocaleString(),"♙")+stat("القنوات",Number(o.channels||0).toLocaleString(),"#")+stat("الرتب",Number(o.roles||0).toLocaleString(),"◆")+stat("التذاكر المفتوحة",Number(o.open_tickets||0).toLocaleString(),"🎫")+'</div>'+
+    '<div class="cards overview-cards">'+
+      card("حالة النظام المباشرة",'<div class="health"><div><span>ANO BOT Runtime</span><b class="'+(botReady?"on":"off")+'">● '+botLabel+'</b></div><div><span>Backend API</span><b class="'+(backendOk?"on":"off")+'">● '+apiLabel+'</b></div><div><span>Database</span><b class="'+(databaseReady?"on":"off")+'">● '+dbLabel+'</b></div><div><span>Commands</span><b>'+Number(o.commands||0).toLocaleString()+' registered</b></div><div><span>Guild Access</span><b>'+s.guilds.length+' manageable</b></div><div><span>Worker</span><b class="'+(h.worker==="ok"?"on":"off")+'">● '+(h.worker==="ok"?"Online":"Unknown")+'</b></div></div>')+
+      card("إجراءات سريعة",'<p class="card-note">انتقل مباشرة إلى إعدادات النظام المطلوبة.</p><div class="quick"><button class="action" data-go="moderation">🛡 Moderation</button><button class="action" data-go="automod">🤖 AutoMod</button><button class="action" data-go="economy">🪙 ANORIS</button><button class="action" data-go="tickets">🎫 Tickets</button><button class="action" data-go="settings">⚙ Settings</button></div>')+
+    '</div>'+
+    '<div class="cards overview-cards secondary-overview">'+
+      card("ملخص السيرفر",'<div class="snapshot"><div><span>Members</span><b>'+Number(o.members||0).toLocaleString()+'</b></div><div><span>Channels</span><b>'+Number(o.channels||0).toLocaleString()+'</b></div><div><span>Roles</span><b>'+Number(o.roles||0).toLocaleString()+'</b></div><div><span>Open Tickets</span><b>'+Number(o.open_tickets||0).toLocaleString()+'</b></div></div>')+
+      card("حالة ANO BOT",'<div class="status-summary"><div><span class="status-dot"></span><b>'+ (botReady?"البوت متصل وجاهز":backendOk?"الخادم الخلفي متصل والبوت غير جاهز":"تعذر الوصول إلى الخادم الخلفي")+'</b></div><p>حالة الاتصال و قاعدة البيانات هنا كتجي من فحص Backend الحقيقي، ماشي حالة ثابتة فالتصميم.</p></div>')+
+    '</div>';
+}
 function servers(){$("#root").innerHTML=head("السيرفرات","اختار السيرفر للإدارة.")+'<div class="server-grid">'+s.guilds.map(g=>'<button class="server" data-guild="'+g.id+'"><div class="avatar">'+icon(g)+'</div><b>'+esc(g.name)+'</b><small>'+(g.administrator?"Administrator":"Manage Server")+'</small></button>').join("")+'</div>'}
 function resources(){const r=s.resources||{};$("#root").innerHTML=head("القنوات والرتب",desc.resources)+'<div class="cards">'+card("الرتب",'<div class="list">'+(r.roles||[]).map(x=>'<div><b>'+esc(x.name)+'</b><small>Position '+x.position+'</small></div>').join("")+'</div>')+card("القنوات",'<div class="list">'+(r.channels||[]).map(x=>'<div><b># '+esc(x.name)+'</b><small>'+esc(x.type)+'</small></div>').join("")+'</div>')+'</div>'}
 async function analytics(){const d=await api("/api/guilds/"+s.guild.id+"/analytics?days=7"),c=d.counts||{};$("#root").innerHTML=head("Analytics",desc.analytics)+'<div class="stats">'+stat("الأحداث",d.total||0,"◔")+stat("Messages",c.message||0,"💬")+stat("Joins",c.member_join||0,"↗")+stat("Leaves",c.member_leave||0,"↘")+'</div>'+card("Daily Activity",'<div class="list">'+Object.entries(d.daily||{}).sort().map(([day,v])=>'<div><b>'+esc(day)+'</b><small>messages '+(v.message||0)+' · joins '+(v.member_join||0)+' · leaves '+(v.member_leave||0)+'</small></div>').join("")+'</div>')}
@@ -519,5 +545,5 @@ async function boot(){
     }
   }
 }
-document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{s.page=b.dataset.page;render()});$("#loginBtn").onclick=()=>location.assign("/login?force=1");$("#logoutBtn").onclick=()=>location.href=API+"/logout";$("#refresh").onclick=()=>loadGuild().then(render);$("#theme").onclick=()=>document.body.classList.toggle("light");$("#menu").onclick=()=>$("#sidebar").classList.toggle("open");boot();
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{s.page=b.dataset.page;$("#sidebar").classList.remove("open");render()});$("#loginBtn").onclick=()=>location.assign("/login?force=1");$("#logoutBtn").onclick=()=>location.href=API+"/logout";$("#refresh").onclick=()=>loadGuild().then(render);const savedTheme=localStorage.getItem("ano_dashboard_theme");if(savedTheme==="light")document.body.classList.add("light");$("#theme").onclick=()=>{document.body.classList.toggle("light");localStorage.setItem("ano_dashboard_theme",document.body.classList.contains("light")?"light":"dark")};$("#menu").onclick=()=>$("#sidebar").classList.toggle("open");boot();
 })();
