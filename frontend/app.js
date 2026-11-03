@@ -3,29 +3,38 @@ const API=String((window.ADER_CONFIG||{}).API_BASE||"").replace(/\/$/,"");
 const s={user:null,guilds:[],guild:null,overview:{},health:{},resources:{roles:[],channels:[]},page:"overview"};
 const $=x=>document.querySelector(x),esc=x=>String(x??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 async function api(p,o={}){
-  const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),15000);
-  try{
-    const r=await fetch(API+p,{
-      credentials:"include",
-      cache:"no-store",
-      headers:{"Content-Type":"application/json",...(o.headers||{})},
-      ...o,
-      signal:controller.signal
-    });
-    const t=await r.text();
-    let d={};
-    try{d=t?JSON.parse(t):{}}catch{d={detail:t}}
-    if(r.status===401)throw Error("AUTH");
-    if(!r.ok){const err=Error(d.detail||d.message||"HTTP "+r.status);err.status=r.status;err.path=p;throw err;}
-    return d;
-  }catch(e){
-    if(e.name==="AbortError")throw Error("انتهت مهلة الاتصال بخادم Ader بعد 15 ثانية.");
-    if(e instanceof TypeError)throw Error("تعذر الاتصال بالـAPI. تحقق من تشغيل Backend وعنوانه.");
-    throw e;
-  }finally{
-    clearTimeout(timeout);
+  const method=String(o.method||"GET").toUpperCase();
+  const maxAttempts=method==="GET"?3:1;
+  for(let attempt=0;attempt<maxAttempts;attempt++){
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),18000);
+    try{
+      const r=await fetch(API+p,{
+        credentials:"include",
+        cache:"no-store",
+        headers:{"Content-Type":"application/json",...(o.headers||{})},
+        ...o,
+        signal:controller.signal
+      });
+      const t=await r.text();
+      let d={};
+      try{d=t?JSON.parse(t):{}}catch{d={detail:t}}
+      if(r.status===503&&method==="GET"&&attempt<maxAttempts-1){
+        await new Promise(resolve=>setTimeout(resolve,1200));
+        continue;
+      }
+      if(r.status===401)throw Error("AUTH");
+      if(!r.ok){const err=Error(d.detail||d.message||"HTTP "+r.status);err.status=r.status;err.path=p;throw err;}
+      return d;
+    }catch(e){
+      if(e.name==="AbortError")throw Error("انتهت مهلة الاتصال بخادم Ader بعد 18 ثانية.");
+      if(e instanceof TypeError)throw Error("تعذر الاتصال بالـAPI. تحقق من تشغيل Backend وعنوانه.");
+      throw e;
+    }finally{
+      clearTimeout(timeout);
+    }
   }
+  throw Error("تعذر استعادة اتصال ANO BOT بعد عدة محاولات. تحقق من اتصال Discord.");
 }
 function icon(g){return g&&g.icon?'<img src="https://cdn.discordapp.com/icons/'+g.id+'/'+g.icon+'.png?size=128" alt="">':esc((g?.name||"A")[0])}
 function showLogin(){ $("#loading").classList.add("hidden");$("#app").classList.add("hidden");$("#login").classList.remove("hidden")}
