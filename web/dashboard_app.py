@@ -22,7 +22,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
-from web.dashboard_guild_access import get_cached_guild, wait_for_bot_ready
+from web.dashboard_guild_access import get_cached_guild, resolve_bot_guild, wait_for_bot_ready
 
 MANAGE_GUILD = 0x20
 ADMINISTRATOR = 0x8
@@ -220,13 +220,12 @@ def create_app(bot) -> FastAPI:
         oauth_guilds = session.get("oauth_guilds", {}) or {}
         key = str(guild_id)
 
-        # Do not report a missing guild while the Discord gateway is reconnecting.
-        await wait_for_bot_ready(bot)
-        guild = get_cached_guild(bot, guild_id)
+        # A gateway cache miss alone is not proof that the bot left the guild.
+        guild = await resolve_bot_guild(bot, guild_id)
         if guild is None:
             raise HTTPException(
-                status_code=404,
-                detail="البوت غير موجود في هذا الخادم. تأكد من إضافته إلى السيرفر بنفس حساب البوت.",
+                status_code=409,
+                detail="bot_not_in_guild",
             )
 
         current = managed.get(key)
@@ -309,7 +308,28 @@ def create_app(bot) -> FastAPI:
 
     @app.get("/healthz")
     async def healthz():
-        return {"ok": True, "bot_ready": bool(getattr(bot, "is_ready", lambda: False)()), "guilds": len(getattr(bot, "guilds", ())), "database": bool(getattr(bot.db, "is_connected", False)), "time": int(time.time())}
+        bot_user = getattr(bot, "user", None)
+        bot_user_id = int(bot_user.id) if getattr(bot_user, "id", None) else None
+        raw_client_id = os.getenv("DISCORD_CLIENT_ID", "").strip()
+        try:
+            oauth_client_id = int(raw_client_id) if raw_client_id else None
+        except (TypeError, ValueError):
+            oauth_client_id = None
+        identity_matches = (
+            bot_user_id == oauth_client_id
+            if bot_user_id is not None and oauth_client_id is not None
+            else None
+        )
+        return {
+            "ok": True,
+            "bot_ready": bool(getattr(bot, "is_ready", lambda: False)()),
+            "guilds": len(getattr(bot, "guilds", ())),
+            "database": bool(getattr(bot.db, "is_connected", False)),
+            "bot_user_id": bot_user_id,
+            "oauth_client_id": oauth_client_id,
+            "identity_matches": identity_matches,
+            "time": int(time.time()),
+        }
 
     @app.get("/", response_class=HTMLResponse)
     async def home(request: Request):
@@ -473,8 +493,18 @@ def create_app(bot) -> FastAPI:
         async def add_if_manageable(guild_id: int, item: dict[str, Any]):
             guild = get_cached_guild(bot, guild_id)
             if guild is None:
-                # The bot must be in the guild before it can be managed here.
-                # Keep absent-bot guilds out of the active dashboard selector.
+                # Match the proven ProSulibra flow: keep OAuth-manageable
+                # servers visible and expose bot membership as explicit state.
+                # This avoids silently dropping a server or later showing a
+                # misleading section-loading error.
+                if _guild_is_managed(item):
+                    result[str(guild_id)] = {
+                        **item,
+                        "id": guild_id,
+                        "name": str(item.get("name") or "Unknown Server"),
+                        "icon": item.get("icon"),
+                        "bot_in_guild": False,
+                    }
                 return
 
             is_owner = bool(user_id and guild.owner_id == user_id)
