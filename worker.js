@@ -89,6 +89,9 @@ async function proxyBackend(request, env, backend, publicUrl, options = {}) {
           bot_ready: Boolean(health.bot_ready),
           database: Boolean(health.database),
           guilds: Number(health.guilds || 0),
+          bot_user_id: health.bot_user_id || null,
+          oauth_client_id: health.oauth_client_id || null,
+          identity_matches: health.identity_matches ?? null,
           time: Number(health.time || 0)
         }),
         {
