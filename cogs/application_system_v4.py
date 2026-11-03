@@ -470,6 +470,7 @@ class AppV4(commands.Cog):
         return await self.review_application(guild, application_id, reviewer_id, accepted, reason)
 
     async def review(self, interaction: discord.Interaction, application_id: int, accepted: bool, reason: Optional[str] = None):
+        await interaction.response.defer(ephemeral=True)
         if not await self.review_application(
             interaction.guild,
             application_id,
@@ -478,8 +479,11 @@ class AppV4(commands.Cog):
             reason,
             source_message=interaction.message,
         ):
-            return await self.send_error(interaction, "❌ تمت مراجعة هذا التقديم مسبقاً أو أنه غير موجود في هذا السيرفر.")
-        await interaction.response.send_message("✅ تمت مراجعة التقديم بنجاح.", ephemeral=True)
+            return await interaction.followup.send(
+                "❌ تمت مراجعة هذا التقديم مسبقاً أو أنه غير موجود في هذا السيرفر.",
+                ephemeral=True,
+            )
+        await interaction.followup.send("✅ تمت مراجعة التقديم بنجاح.", ephemeral=True)
 
 
 class PanelPicker(discord.ui.View):
