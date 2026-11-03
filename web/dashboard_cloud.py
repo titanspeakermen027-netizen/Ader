@@ -958,6 +958,15 @@ def create_app(bot):
         if channel_id and guild and guild.get_channel(int(channel_id)) is None:
             settings["logs"]["channel"] = None
         await cog.save(guild_id, settings)
+        audit_cog = bot.get_cog("AuditLogs")
+        if audit_cog is not None and isinstance(data.get("logs"), dict) and "channel" in data["logs"]:
+            try:
+                await audit_cog.save_settings(
+                    guild_id,
+                    channel_id=int(data["logs"].get("channel") or 0),
+                )
+            except Exception:
+                pass
         return {"ok": True, "settings": settings}
 
     return app
