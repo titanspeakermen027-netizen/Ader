@@ -290,12 +290,239 @@ def create_app(bot):
     @app.get("/api/guilds/{guild_id}/logs")
     async def cloud_logs(request: Request, guild_id: int):
         await _require_guild(bot, request, guild_id)
-        cases=await bot.db.fetchall("SELECT action AS type, user_id, moderator_id, reason, created_at FROM ader_mod_cases WHERE guild_id=? ORDER BY id DESC LIMIT 50",(guild_id,))
-        tickets=await bot.db.fetchall("SELECT id,user_id,status,created_at,closed_at FROM tickets WHERE guild_id=? ORDER BY id DESC LIMIT 50",(guild_id,))
-        logs=[{"type":"moderation:"+str(x["type"]),"timestamp":float(x["created_at"] or 0),"data":{"user_id":x["user_id"],"moderator_id":x["moderator_id"],"reason":x["reason"]}} for x in cases]
-        logs += [{"type":"ticket","timestamp":float(x["created_at"] or 0),"data":{"ticket_id":x["id"],"user_id":x["user_id"],"status":x["status"]}} for x in tickets]
-        logs.sort(key=lambda x:x["timestamp"],reverse=True)
-        return {"logs":logs[:100]}
+        logs = []
+        try:
+            events = await bot.db.get_analytics(guild_id, limit=1000)
+        except Exception:
+            events = []
+        for event in events:
+            event_type = str(event.get("type") or "")
+            if event_type.startswith(("audit.", "ticket.", "application.")):
+                logs.append({
+                    "type": event_type,
+                    "timestamp": float(event.get("timestamp") or 0),
+                    "data": event.get("data") if isinstance(event.get("data"), dict) else {},
+                })
+
+        cases = await bot.db.fetchall(
+            "SELECT action AS type, user_id, moderator_id, reason, created_at "
+            "FROM ader_mod_cases WHERE guild_id=? ORDER BY id DESC LIMIT 50",
+            (guild_id,),
+        )
+        logs.extend(
+            {
+                "type": "moderation:" + str(item["type"]),
+                "timestamp": float(item["created_at"] or 0),
+                "data": {
+                    "user_id": item["user_id"],
+                    "moderator_id": item["moderator_id"],
+                    "reason": item["reason"],
+                },
+            }
+            for item in cases
+        )
+
+        tickets = await bot.db.fetchall(
+            "SELECT id,user_id,status,created_at,closed_at FROM tickets "
+            "WHERE guild_id=? ORDER BY id DESC LIMIT 50",
+            (guild_id,),
+        )
+        seen_ticket_events = {
+            int((item.get("data") or {}).get("ticket_id") or 0)
+            for item in logs
+            if str(item.get("type") or "").startswith("ticket.")
+        }
+        logs.extend(
+            {
+                "type": "ticket.snapshot",
+                "timestamp": float(item["closed_at"] or item["created_at"] or 0),
+                "data": {
+                    "ticket_id": int(item["id"]),
+                    "user_id": item["user_id"],
+                    "status": item["status"],
+                },
+            }
+            for item in tickets
+            if int(item["id"]) not in seen_ticket_events
+        )
+        logs.sort(key=lambda item: item["timestamp"], reverse=True)
+        return {"logs": logs[:150]}
+
+    @app.get("/api/guilds/{guild_id}/logs/settings")
+    async def cloud_logs_settings_get(request: Request, guild_id: int):
+        await _require_guild(bot, request, guild_id)
+        cog = bot.get_cog("AuditLogs")
+        if cog is None or not hasattr(cog, "get_settings"):
+            raise HTTPException(status_code=503, detail="نظام سجلات الأحداث غير متاح حالياً.")
+        return {"settings": await cog.get_settings(guild_id)}
+
+    @app.put("/api/guilds/{guild_id}/logs/settings")
+    async def cloud_logs_settings_put(request: Request, guild_id: int):
+        guild = await _require_guild(bot, request, guild_id)
+        cog = bot.get_cog("AuditLogs")
+        if cog is None or not hasattr(cog, "save_settings"):
+            raise HTTPException(status_code=503, detail="نظام سجلات الأحداث غير متاح حالياً.")
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="إعدادات غير صالحة.")
+        channel_id = None
+        if "channel_id" in data:
+            raw_channel = data.get("channel_id")
+            channel_id = int(raw_channel or 0)
+            if channel_id:
+                channel = guild.get_channel(channel_id)
+                if not isinstance(channel, discord.TextChannel):
+                    raise HTTPException(status_code=400, detail="قناة السجلات غير صالحة.")
+        categories = data.get("categories")
+        if categories is not None:
+            if not isinstance(categories, dict):
+                raise HTTPException(status_code=400, detail="تصنيفات السجلات غير صالحة.")
+            allowed = {"messages", "members", "moderation", "channels", "roles"}
+            if any(key not in allowed or not isinstance(value, bool) for key, value in categories.items()):
+                raise HTTPException(status_code=400, detail="تأكد من إعدادات تصنيفات السجلات.")
+        saved = await cog.save_settings(
+            guild_id,
+            channel_id=channel_id,
+            categories=categories,
+        )
+        return {"ok": True, "settings": saved}
+
+    @app.get("/api/guilds/{guild_id}/applications")
+    async def cloud_applications_get(request: Request, guild_id: int):
+        guild = await _require_guild(bot, request, guild_id)
+        cog = bot.get_cog("AppV4")
+        if cog is None or not hasattr(cog, "get_panel"):
+            raise HTTPException(status_code=503, detail="نظام تقديم الإدارة غير متاح حالياً.")
+        panels = [await cog.get_panel(guild.id, number) for number in range(1, 4)]
+        rows = await bot.db.fetchall(
+            "SELECT id,user_id,panel,status,answers,created_at,reviewer_id,reason "
+            "FROM applications WHERE guild_id=? ORDER BY id DESC LIMIT 100",
+            (guild_id,),
+        )
+        applications = []
+        for row in rows:
+            item = dict(row)
+            try:
+                item["answers"] = json.loads(item.get("answers") or "[]")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                item["answers"] = []
+            applications.append(item)
+        return {"panels": panels, "applications": applications}
+
+    @app.put("/api/guilds/{guild_id}/applications/panels/{number}")
+    async def cloud_application_panel_update(request: Request, guild_id: int, number: int):
+        guild = await _require_guild(bot, request, guild_id)
+        if number not in {1, 2, 3}:
+            raise HTTPException(status_code=404, detail="لوحة التقديم غير موجودة.")
+        cog = bot.get_cog("AppV4")
+        if cog is None or not hasattr(cog, "save_panel"):
+            raise HTTPException(status_code=503, detail="نظام تقديم الإدارة غير متاح حالياً.")
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="بيانات اللوحة غير صالحة.")
+        panel = await cog.get_panel(guild_id, number)
+        panel["title"] = str(data.get("title", panel.get("title") or "" )).strip()[:256]
+        panel["description"] = str(data.get("description", panel.get("description") or "")).strip()[:4000]
+        panel["button_label"] = str(data.get("button_label", panel.get("button_label") or "ابدأ التقديم")).strip()[:80]
+        panel["button_emoji"] = str(data.get("button_emoji", panel.get("button_emoji") or "📝")).strip()[:64] or None
+        style = str(data.get("button_style", panel.get("button_style") or "primary"))
+        panel["button_style"] = style if style in {"primary", "secondary", "success", "danger"} else "primary"
+        image = str(data.get("image", panel.get("image") or "")).strip()
+        if image and not image.startswith("https://"):
+            raise HTTPException(status_code=400, detail="رابط الصورة يجب أن يبدأ بـ https://")
+        panel["image"] = image or None
+
+        if "results_channel_id" in data:
+            raw_id = data.get("results_channel_id")
+            channel_id = int(raw_id or 0)
+            if channel_id:
+                channel = guild.get_channel(channel_id)
+                if not isinstance(channel, discord.TextChannel):
+                    raise HTTPException(status_code=400, detail="قناة استقبال التقديمات غير صالحة.")
+            panel["results"] = channel_id or None
+
+        for field, key in (("accept_role_id", "accept_role"), ("reject_role_id", "reject_role")):
+            if field in data:
+                raw_role = data.get(field)
+                role_id = int(raw_role or 0)
+                if role_id and guild.get_role(role_id) is None:
+                    raise HTTPException(status_code=400, detail="إحدى رتب التقديم غير صالحة.")
+                panel[key] = role_id or None
+
+        if "questions" in data:
+            questions = data.get("questions")
+            if not isinstance(questions, list) or not 1 <= len(questions) <= 25:
+                raise HTTPException(status_code=400, detail="يجب إضافة سؤال واحد على الأقل، وبحد أقصى 25 سؤالاً.")
+            clean_questions = []
+            for question in questions:
+                if not isinstance(question, dict):
+                    raise HTTPException(status_code=400, detail="صيغة أحد الأسئلة غير صالحة.")
+                label = str(question.get("label") or "").strip()[:45]
+                if not label:
+                    raise HTTPException(status_code=400, detail="لا يمكن حفظ سؤال بلا عنوان.")
+                clean_questions.append({
+                    "label": label,
+                    "required": bool(question.get("required", True)),
+                    "paragraph": bool(question.get("paragraph", False)),
+                })
+            panel["questions"] = clean_questions
+
+        await cog.save_panel(guild_id, number, panel)
+        return {"ok": True, "panel": panel}
+
+    @app.post("/api/guilds/{guild_id}/applications/panels/{number}/publish")
+    async def cloud_application_panel_publish(request: Request, guild_id: int, number: int):
+        guild = await _require_guild(bot, request, guild_id)
+        if number not in {1, 2, 3}:
+            raise HTTPException(status_code=404, detail="لوحة التقديم غير موجودة.")
+        cog = bot.get_cog("AppV4")
+        if cog is None or not hasattr(cog, "publish_panel"):
+            raise HTTPException(status_code=503, detail="نظام تقديم الإدارة غير متاح حالياً.")
+        data = await request.json()
+        channel_id = int((data or {}).get("channel_id") or 0)
+        channel = guild.get_channel(channel_id)
+        if not isinstance(channel, discord.TextChannel):
+            raise HTTPException(status_code=400, detail="اختر قناة نصية صالحة لنشر لوحة التقديم.")
+        try:
+            message = await cog.publish_panel(guild, number, channel)
+        except (ValueError, discord.Forbidden, discord.HTTPException) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)[:300])
+        return {
+            "ok": True,
+            "channel_id": channel.id,
+            "message_id": message.id,
+            "message_url": message.jump_url,
+        }
+
+    @app.post("/api/guilds/{guild_id}/applications/{application_id}/review")
+    async def cloud_application_review(request: Request, guild_id: int, application_id: int):
+        guild = await _require_guild(bot, request, guild_id)
+        cog = bot.get_cog("AppV4")
+        if cog is None or not hasattr(cog, "review_from_dashboard"):
+            raise HTTPException(status_code=503, detail="نظام تقديم الإدارة غير متاح حالياً.")
+        data = await request.json()
+        if not isinstance(data, dict) or data.get("status") not in {"accepted", "rejected"}:
+            raise HTTPException(status_code=400, detail="اختر قرار القبول أو الرفض.")
+        reason = str(data.get("reason") or "").strip()[:1000] or None
+        session = await base._session_for(request, bot)
+        discord_user = (session or {}).get("discord_user") or {}
+        try:
+            reviewer_id = int(discord_user.get("id") or 0)
+        except (TypeError, ValueError):
+            reviewer_id = 0
+        if not reviewer_id:
+            raise HTTPException(status_code=401, detail="انتهت جلسة تسجيل الدخول.")
+        accepted = data["status"] == "accepted"
+        reviewed = await cog.review_from_dashboard(
+            guild,
+            application_id,
+            reviewer_id,
+            accepted,
+            reason,
+        )
+        if not reviewed:
+            raise HTTPException(status_code=404, detail="الطلب غير موجود أو تمت مراجعته مسبقاً.")
+        return {"ok": True, "status": data["status"]}
 
     @app.get("/api/guilds/{guild_id}/moderation")
     async def cloud_moderation_get(request: Request, guild_id: int):
