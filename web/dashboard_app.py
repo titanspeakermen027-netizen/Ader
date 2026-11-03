@@ -22,6 +22,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
+from web.dashboard_guild_access import get_cached_guild, wait_for_bot_ready
 
 MANAGE_GUILD = 0x20
 ADMINISTRATOR = 0x8
@@ -215,13 +216,20 @@ def create_app(bot) -> FastAPI:
 
     async def require_guild(request: Request, guild_id: int):
         session = await require_session(request)
+        # Wait for Discord's guild cache before filtering OAuth servers.
+        await wait_for_bot_ready(bot)
         managed = session.get("managed_guilds", {}) or {}
         oauth_guilds = session.get("oauth_guilds", {}) or {}
         key = str(guild_id)
 
-        guild = bot.get_guild(guild_id)
+        # Do not report a missing guild while the Discord gateway is reconnecting.
+        await wait_for_bot_ready(bot)
+        guild = get_cached_guild(bot, guild_id)
         if guild is None:
-            raise HTTPException(status_code=404, detail="البوت غير متصل بهذا الخادم حالياً")
+            raise HTTPException(
+                status_code=404,
+                detail="البوت غير موجود في هذا الخادم. تأكد من إضافته إلى السيرفر بنفس حساب البوت.",
+            )
 
         current = managed.get(key)
         oauth_data = oauth_guilds.get(key)
@@ -463,7 +471,7 @@ def create_app(bot) -> FastAPI:
             user_id = 0
 
         async def add_if_manageable(guild_id: int, item: dict[str, Any]):
-            guild = bot.get_guild(guild_id)
+            guild = get_cached_guild(bot, guild_id)
             if guild is None:
                 # The bot must be in the guild before it can be managed here.
                 # Keep absent-bot guilds out of the active dashboard selector.
