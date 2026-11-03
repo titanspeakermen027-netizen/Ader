@@ -10,15 +10,16 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-SET2 = "<:set2:1521929996787257556>"
-GGG = "<:ggg:1519567521857015928>"
+SET2 = "📝"
+GGG = "📋"
 
 DEFAULT_QUESTIONS = [
-    {"label": "ما اسمك", "required": True, "paragraph": False},
-    {"label": "كم عمرك", "required": True, "paragraph": False},
-    {"label": "كم ساعة ناشط باليوم", "required": True, "paragraph": False},
-    {"label": "كيف ستفيد السيرفر", "required": True, "paragraph": False},
-    {"label": "اكتب خبراتك في الديسكورد", "required": True, "paragraph": True},
+    {"label": "ما الاسم الذي تفضّل استخدامه؟", "required": True, "paragraph": False},
+    {"label": "ما خبرتك السابقة في إدارة السيرفرات؟", "required": True, "paragraph": True},
+    {"label": "ما الوقت الذي يمكنك تخصيصه أسبوعياً؟", "required": True, "paragraph": False},
+    {"label": "كيف ستتعامل مع خلاف بين عضوين؟", "required": True, "paragraph": True},
+    {"label": "لماذا ترغب في الانضمام إلى فريق الإدارة؟", "required": True, "paragraph": True},
+    {"label": "ما الإضافة التي يمكنك تقديمها للفريق؟", "required": False, "paragraph": True},
 ]
 
 STYLE_MAP = {
@@ -31,15 +32,18 @@ STYLE_MAP = {
 
 def panel_default(number: int) -> dict:
     return {
-        "title": f"تقديم {number}",
+        "title": f"التقديم للانضمام إلى الإدارة",
+        "description": "نبحث عن أعضاء مسؤولين ومتعاونين للمساهمة في تنظيم المجتمع ومساعدة أعضائه.",
         "questions": [dict(q) for q in DEFAULT_QUESTIONS],
-        "button_label": f"تقديم {number}",
-        "button_emoji": None,
+        "button_label": "ابدأ التقديم",
+        "button_emoji": "📝",
         "button_style": "primary",
         "image": None,
         "results": None,
         "accept_role": None,
         "reject_role": None,
+        "published_channel_id": None,
+        "published_message_id": None,
     }
 
 
@@ -62,29 +66,136 @@ class AppV4(commands.Cog):
                 reason TEXT
             )"""
         )
+        await self.bot.db.execute(
+            """CREATE TABLE IF NOT EXISTS application_panels (
+                guild_id INTEGER NOT NULL,
+                number INTEGER NOT NULL,
+                value TEXT NOT NULL,
+                PRIMARY KEY (guild_id, number)
+            )"""
+        )
+        columns = {row["name"] for row in await self.bot.db.fetchall("PRAGMA table_info(applications)")}
+        for name, definition in (
+            ("results_channel_id", "INTEGER"),
+            ("results_message_id", "INTEGER"),
+        ):
+            if name not in columns:
+                await self.bot.db.execute(f"ALTER TABLE applications ADD COLUMN {name} {definition}")
+
+        # Migrate saved panels from the legacy settings table without replacing
+        # the unrelated guild settings stored there.
+        legacy = await self.bot.db.fetchall(
+            "SELECT guild_id, key, value FROM settings WHERE key LIKE 'app_panel_%'"
+        )
+        for row in legacy:
+            try:
+                number = int(str(row["key"]).rsplit("_", 1)[-1])
+            except (TypeError, ValueError):
+                continue
+            if 1 <= number <= 3:
+                await self.bot.db.execute(
+                    "INSERT OR IGNORE INTO application_panels(guild_id, number, value) VALUES(?,?,?)",
+                    (int(row["guild_id"]), number, str(row["value"] or "{}")),
+                )
+
+        panels = await self.bot.db.fetchall(
+            "SELECT guild_id, number, value FROM application_panels"
+        )
+        for row in panels:
+            try:
+                panel = panel_default(int(row["number"]))
+                panel.update(json.loads(row["value"] or "{}"))
+                message_id = int(panel.get("published_message_id") or 0)
+                guild_id = int(row["guild_id"])
+                number = int(row["number"])
+                if message_id:
+                    self.bot.add_view(
+                        PublishedApplication(self, guild_id, number, panel),
+                        message_id=message_id,
+                    )
+            except Exception:
+                continue
+
+        pending = await self.bot.db.fetchall(
+            "SELECT id, results_message_id FROM applications "
+            "WHERE status='pending' AND results_message_id IS NOT NULL"
+        )
+        for row in pending:
+            try:
+                self.bot.add_view(ReviewView(self, int(row["id"])), message_id=int(row["results_message_id"]))
+            except Exception:
+                continue
 
     async def get_panel(self, guild_id: int, number: int) -> dict:
         row = await self.bot.db.fetchone(
-            "SELECT value FROM settings WHERE guild_id=? AND key=?",
-            (guild_id, f"app_panel_{number}"),
+            "SELECT value FROM application_panels WHERE guild_id=? AND number=?",
+            (guild_id, number),
         )
+        if row is None:
+            row = await self.bot.db.fetchone(
+                "SELECT value FROM settings WHERE guild_id=? AND key=?",
+                (guild_id, f"app_panel_{number}"),
+            )
         panel = panel_default(number)
         if row:
             try:
                 saved = json.loads(row["value"])
                 if isinstance(saved, dict):
                     panel.update(saved)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, json.JSONDecodeError):
                 pass
         if not isinstance(panel.get("questions"), list) or not panel["questions"]:
             panel["questions"] = [dict(q) for q in DEFAULT_QUESTIONS]
+        panel["questions"] = panel["questions"][:25]
         return panel
 
     async def save_panel(self, guild_id: int, number: int, panel: dict):
         await self.bot.db.execute(
-            "INSERT OR REPLACE INTO settings(guild_id,key,value) VALUES(?,?,?)",
-            (guild_id, f"app_panel_{number}", json.dumps(panel, ensure_ascii=False)),
+            """INSERT INTO application_panels(guild_id, number, value) VALUES(?,?,?)
+               ON CONFLICT(guild_id, number) DO UPDATE SET value=excluded.value""",
+            (guild_id, number, json.dumps(panel, ensure_ascii=False)),
         )
+
+    async def publish_panel(self, guild: discord.Guild, number: int, channel: discord.TextChannel):
+        if not isinstance(channel, discord.TextChannel):
+            raise ValueError("اختر قناة نصية صالحة لنشر لوحة التقديم.")
+        panel = await self.get_panel(guild.id, number)
+        if not panel.get("results"):
+            raise ValueError("حدد قناة استقبال طلبات التقديم أولاً من إعدادات اللوحة.")
+        color_value = str(panel.get("color") or "#7657F6").strip().lstrip("#")
+        try:
+            color = int(color_value, 16)
+        except ValueError:
+            color = 0x7657F6
+        embed = discord.Embed(
+            title=str(panel.get("title") or "التقديم للانضمام إلى الإدارة")[:256],
+            description=str(panel.get("description") or "اضغط على الزر أدناه لبدء التقديم.")[:4000],
+            color=color,
+        )
+        embed.add_field(name="📋 خطوات التقديم", value="1. اضغط على زر التقديم.\n2. أجب عن الأسئلة بوضوح.\n3. سيقوم فريق الإدارة بمراجعة طلبك.", inline=False)
+        embed.set_footer(text="ANO BOT • نظام تقديم الإدارة")
+        image = str(panel.get("image") or "").strip()
+        if image.startswith("https://"):
+            embed.set_image(url=image)
+
+        view = PublishedApplication(self, guild.id, number, panel)
+        message = None
+        old_channel_id = int(panel.get("published_channel_id") or 0)
+        old_message_id = int(panel.get("published_message_id") or 0)
+        if old_channel_id == channel.id and old_message_id:
+            try:
+                old_message = await channel.fetch_message(old_message_id)
+                await old_message.edit(embed=embed, view=view)
+                message = old_message
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                message = None
+        if message is None:
+            message = await channel.send(embed=embed, view=view)
+
+        panel["published_channel_id"] = channel.id
+        panel["published_message_id"] = message.id
+        await self.save_panel(guild.id, number, panel)
+        return message
 
     async def send_error(self, interaction: discord.Interaction, text: str):
         if interaction.response.is_done():
@@ -160,17 +271,23 @@ class AppV4(commands.Cog):
             channel = interaction.channel
             if not isinstance(channel, discord.TextChannel):
                 return await self.send_error(interaction, "❌ خاص إرسال التقديم من روم نصي.")
-            embed = discord.Embed(title=panel["title"], description="اضغط الزر لبدء التقديم.")
-            if panel.get("image"):
-                embed.set_image(url=panel["image"])
-            await channel.send(embed=embed, view=PublishedApplication(self, number, panel))
-            await interaction.response.send_message("✅ تم إرسال التقديم في هذا الروم بنجاح.", ephemeral=True)
+            try:
+                message = await self.publish_panel(interaction.guild, number, channel)
+            except (ValueError, discord.Forbidden, discord.HTTPException) as exc:
+                return await self.send_error(interaction, f"تعذر نشر لوحة التقديم: {str(exc)[:250]}")
+            await interaction.response.send_message(f"✅ تم نشر لوحة التقديم في {message.channel.mention}.", ephemeral=True)
 
     async def save_question(self, interaction: discord.Interaction, number: int, index: int, label: str, required: bool, paragraph: bool):
         panel = await self.get_panel(interaction.guild.id, number)
+        if not 0 <= index < 25:
+            return await self.send_error(interaction, "الحد الأقصى للأسئلة هو 25 سؤالاً.")
+        clean_label = label.strip()[:45]
+        if not clean_label:
+            return await self.send_error(interaction, "اكتب نص السؤال قبل الحفظ.")
         while len(panel["questions"]) <= index:
-            panel["questions"].append({"label": "سؤال جديد", "required": True, "paragraph": False})
-        panel["questions"][index] = {"label": label.strip() or f"سؤال {index + 1}", "required": required, "paragraph": paragraph}
+            panel["questions"].append({"label": f"سؤال {len(panel['questions']) + 1}", "required": True, "paragraph": False})
+        panel["questions"][index] = {"label": clean_label, "required": bool(required), "paragraph": bool(paragraph)}
+        panel["questions"] = panel["questions"][:25]
         await self.save_panel(interaction.guild.id, number, panel)
         await interaction.response.send_message("✅ تم حفظ السؤال.", ephemeral=True)
 
@@ -187,6 +304,15 @@ class AppV4(commands.Cog):
         await interaction.response.send_message("✅ تم حفظ إعداد الرتبة.", ephemeral=True)
 
     async def start_application(self, interaction: discord.Interaction, number: int):
+        pending = await self.bot.db.fetchone(
+            "SELECT id FROM applications WHERE guild_id=? AND user_id=? AND panel=? AND status='pending' LIMIT 1",
+            (interaction.guild.id, interaction.user.id, number),
+        )
+        if pending:
+            return await interaction.response.send_message(
+                "📨 لديك طلب تقديم قيد المراجعة بالفعل. انتظر قرار الإدارة قبل إرسال طلب آخر.",
+                ephemeral=True,
+            )
         panel = await self.get_panel(interaction.guild.id, number)
         questions = panel["questions"]
         self.answers[(interaction.guild.id, interaction.user.id, number)] = []
@@ -199,6 +325,15 @@ class AppV4(commands.Cog):
         if len(values) < len(questions):
             return await interaction.response.send_modal(ApplicationModal(self, number, len(values), questions))
         self.answers.pop(key, None)
+        pending = await self.bot.db.fetchone(
+            "SELECT id FROM applications WHERE guild_id=? AND user_id=? AND panel=? AND status='pending' LIMIT 1",
+            (interaction.guild.id, interaction.user.id, number),
+        )
+        if pending:
+            return await interaction.response.send_message(
+                "📨 لديك طلب تقديم قيد المراجعة بالفعل.",
+                ephemeral=True,
+            )
         panel = await self.get_panel(interaction.guild.id, number)
         cursor = await self.bot.db.execute(
             "INSERT INTO applications(guild_id,user_id,panel,status,answers,created_at) VALUES(?,?,?,?,?,?)",
@@ -207,38 +342,143 @@ class AppV4(commands.Cog):
         application_id = cursor.lastrowid
         results = interaction.guild.get_channel(panel.get("results") or 0)
         if results and isinstance(results, discord.TextChannel):
-            embed = discord.Embed(title=f"تقديم {number}", description=f"المتقدم: {interaction.user.mention}\nالحالة: **قيد المراجعة**")
-            for question, answer in zip(questions, values):
-                embed.add_field(name=question["label"][:256], value=answer[:1024] or "—", inline=False)
-            await results.send(embed=embed, view=ReviewView(self, application_id))
-        await interaction.response.send_message("✅ تم إرسال التقديم بنجاح.", ephemeral=True)
+            embed = discord.Embed(
+                title=f"📨 طلب تقديم جديد • اللوحة {number}",
+                description=f"👤 **المتقدم:** {interaction.user.mention}\n⏳ **الحالة:** قيد المراجعة\n🆔 **رقم الطلب:** #{application_id}",
+                color=0x8B5CF6,
+                timestamp=discord.utils.utcnow(),
+            )
+            for index, (question, answer) in enumerate(zip(questions, values), start=1):
+                embed.add_field(
+                    name=f"❔ {index}. {question['label']}"[:256],
+                    value=(answer[:1024] or "—"),
+                    inline=False,
+                )
+            embed.set_footer(text="ANO BOT • مراجعة طلبات الإدارة")
+            result_message = await results.send(embed=embed, view=ReviewView(self, application_id))
+            await self.bot.db.execute(
+                "UPDATE applications SET results_channel_id=?, results_message_id=? WHERE id=?",
+                (results.id, result_message.id, application_id),
+            )
+        await self.bot.db.record_analytics(
+            interaction.guild.id,
+            "application.submitted",
+            {"application_id": application_id, "user_id": interaction.user.id, "panel": number},
+        )
+        await interaction.response.send_message("✅ تم إرسال التقديم بنجاح. سيصلك القرار عبر رسالة خاصة إن كانت متاحة.", ephemeral=True)
 
-    async def review(self, interaction: discord.Interaction, application_id: int, accepted: bool, reason: Optional[str] = None):
-        row = await self.bot.db.fetchone("SELECT * FROM applications WHERE id=?", (application_id,))
+    async def review_application(
+        self,
+        guild: discord.Guild,
+        application_id: int,
+        reviewer_id: int,
+        accepted: bool,
+        reason: Optional[str] = None,
+        source_message: Optional[discord.Message] = None,
+    ) -> bool:
+        row = await self.bot.db.fetchone(
+            "SELECT * FROM applications WHERE id=? AND guild_id=?",
+            (application_id, guild.id),
+        )
         if not row or row["status"] != "pending":
-            return await self.send_error(interaction, "❌ تمت مراجعة هذا التقديم مسبقاً.")
-        panel = await self.get_panel(interaction.guild.id, row["panel"])
+            return False
+
+        panel = await self.get_panel(guild.id, int(row["panel"]))
         status = "accepted" if accepted else "rejected"
         await self.bot.db.execute(
-            "UPDATE applications SET status=?, reviewer_id=?, reason=? WHERE id=?",
-            (status, interaction.user.id, reason, application_id),
+            "UPDATE applications SET status=?, reviewer_id=?, reason=? WHERE id=? AND guild_id=? AND status='pending'",
+            (status, reviewer_id, reason, application_id, guild.id),
         )
+
         role_id = panel.get("accept_role") if accepted else panel.get("reject_role")
-        member = interaction.guild.get_member(row["user_id"])
+        member = guild.get_member(int(row["user_id"]))
+        if member is None and role_id:
+            try:
+                member = await guild.fetch_member(int(row["user_id"]))
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                member = None
         if member and role_id:
-            role = interaction.guild.get_role(role_id)
+            role = guild.get_role(int(role_id))
             if role:
                 try:
                     await member.add_roles(role, reason="مراجعة تقديم الإدارة")
-                except discord.HTTPException:
+                except (discord.Forbidden, discord.HTTPException):
                     pass
-        if interaction.message:
+
+        message = source_message
+        if message is None:
+            channel_id = int(row["results_channel_id"] or 0)
+            message_id = int(row["results_message_id"] or 0)
+            channel = guild.get_channel(channel_id) if channel_id else None
+            if isinstance(channel, discord.TextChannel) and message_id:
+                try:
+                    message = await channel.fetch_message(message_id)
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    message = None
+        if message:
             try:
-                embed = interaction.message.embeds[0] if interaction.message.embeds else discord.Embed(title=f"تقديم {row['panel']}")
-                embed.description = f"المتقدم: <@{row['user_id']}>\nالحالة: **{'مقبول' if accepted else 'مرفوض'}**\nالمراجع: {interaction.user.mention}" + (f"\nالسبب: {reason}" if reason else "")
-                await interaction.message.edit(embed=embed, view=None)
+                embed = message.embeds[0] if message.embeds else discord.Embed(title=f"تقديم {row['panel']}")
+                state = "✅ مقبول" if accepted else "❌ مرفوض"
+                embed.description = (
+                    f"👤 **المتقدم:** <@{row['user_id']}>\n"
+                    f"📌 **الحالة:** {state}\n"
+                    f"🛡️ **المراجع:** <@{reviewer_id}>"
+                    + (f"\n📝 **السبب:** {reason}" if reason else "")
+                )
+                embed.color = discord.Color.green() if accepted else discord.Color.red()
+                await message.edit(embed=embed, view=None)
             except discord.HTTPException:
                 pass
+
+        try:
+            await self.bot.db.record_analytics(
+                guild.id,
+                "application.reviewed",
+                {
+                    "application_id": application_id,
+                    "user_id": int(row["user_id"]),
+                    "reviewer_id": reviewer_id,
+                    "status": status,
+                    "reason": reason or "",
+                },
+            )
+        except Exception:
+            pass
+
+        if member:
+            try:
+                await member.send(
+                    embed=discord.Embed(
+                        title="تحديث طلب التقديم",
+                        description=f"{'✅ تم قبول' if accepted else '❌ تم رفض'} طلبك للانضمام إلى فريق الإدارة في **{guild.name}**."
+                        + (f"\n**السبب:** {reason}" if reason else ""),
+                        color=discord.Color.green() if accepted else discord.Color.red(),
+                    )
+                )
+            except (discord.Forbidden, discord.HTTPException):
+                pass
+        return True
+
+    async def review_from_dashboard(
+        self,
+        guild: discord.Guild,
+        application_id: int,
+        reviewer_id: int,
+        accepted: bool,
+        reason: Optional[str] = None,
+    ) -> bool:
+        return await self.review_application(guild, application_id, reviewer_id, accepted, reason)
+
+    async def review(self, interaction: discord.Interaction, application_id: int, accepted: bool, reason: Optional[str] = None):
+        if not await self.review_application(
+            interaction.guild,
+            application_id,
+            interaction.user.id,
+            accepted,
+            reason,
+            source_message=interaction.message,
+        ):
+            return await self.send_error(interaction, "❌ تمت مراجعة هذا التقديم مسبقاً أو أنه غير موجود في هذا السيرفر.")
         await interaction.response.send_message("✅ تمت مراجعة التقديم بنجاح.", ephemeral=True)
 
 
@@ -324,7 +564,7 @@ class QuestionSettings(discord.ui.View):
     def __init__(self, cog, number):
         super().__init__(timeout=300)
         self.cog, self.number = cog, number
-        for index in range(10):
+        for index in range(25):
             self.add_item(QuestionButton(cog, number, index))
 
 
@@ -344,7 +584,7 @@ class QuestionModal(discord.ui.Modal):
     def __init__(self, cog, number, index, current):
         super().__init__(title=f"تعديل السؤال {index + 1}")
         self.cog, self.number, self.index = cog, number, index
-        self.text = discord.ui.TextInput(label="نص السؤال", default=current.get("label", ""), max_length=256)
+        self.text = discord.ui.TextInput(label="نص السؤال (حتى 45 حرفاً)", default=current.get("label", ""), max_length=45)
         self.required = discord.ui.TextInput(label="مطلوب؟ اكتب نعم أو لا", default="نعم" if current.get("required", True) else "لا", max_length=3)
         self.paragraph = discord.ui.TextInput(label="فقرة؟ اكتب نعم أو لا", default="نعم" if current.get("paragraph", False) else "لا", max_length=3)
         self.add_item(self.text); self.add_item(self.required); self.add_item(self.paragraph)
@@ -395,15 +635,28 @@ class RemoveRoleButton(discord.ui.Button):
 
 
 class PublishedApplication(discord.ui.View):
-    def __init__(self, cog, number, panel):
+    def __init__(self, cog, guild_id, number, panel):
         super().__init__(timeout=None)
-        emoji = panel.get("button_emoji")
-        self.add_item(StartButton(cog, number, panel.get("button_label") or f"تقديم {number}", panel.get("button_style", "primary"), emoji))
+        emoji = panel.get("button_emoji") or "📝"
+        self.add_item(
+            StartButton(
+                cog,
+                guild_id,
+                number,
+                panel.get("button_label") or "ابدأ التقديم",
+                panel.get("button_style", "primary"),
+                emoji,
+            )
+        )
 
 
 class StartButton(discord.ui.Button):
-    def __init__(self, cog, number, label, style, emoji):
-        kwargs = {"label": label[:80], "style": STYLE_MAP.get(style, discord.ButtonStyle.primary)}
+    def __init__(self, cog, guild_id, number, label, style, emoji):
+        kwargs = {
+            "label": label[:80],
+            "style": STYLE_MAP.get(style, discord.ButtonStyle.primary),
+            "custom_id": f"ader:application:start:{guild_id}:{number}",
+        }
         if emoji:
             kwargs["emoji"] = emoji
         try:
@@ -411,8 +664,10 @@ class StartButton(discord.ui.Button):
         except (ValueError, TypeError):
             kwargs.pop("emoji", None)
             super().__init__(**kwargs)
-        self.cog, self.number = cog, number
+        self.cog, self.guild_id, self.number = cog, guild_id, number
     async def callback(self, interaction):
+        if interaction.guild_id != self.guild_id:
+            return await interaction.response.send_message("هذه اللوحة مرتبطة بسيرفر آخر.", ephemeral=True)
         await self.cog.start_application(interaction, self.number)
 
 
@@ -436,7 +691,13 @@ class ReviewView(discord.ui.View):
 
 class ReviewButton(discord.ui.Button):
     def __init__(self, cog, application_id, accepted):
-        super().__init__(label="قبول" if accepted else "رفض", style=discord.ButtonStyle.success if accepted else discord.ButtonStyle.danger)
+        action = "accept" if accepted else "reject"
+        super().__init__(
+            label="قبول" if accepted else "رفض",
+            style=discord.ButtonStyle.success if accepted else discord.ButtonStyle.danger,
+            emoji="✅" if accepted else "❌",
+            custom_id=f"ader:application:review:{application_id}:{action}",
+        )
         self.cog, self.application_id, self.accepted = cog, application_id, accepted
     async def callback(self, interaction):
         if not (interaction.user.guild_permissions.manage_guild or interaction.user.guild_permissions.administrator):
