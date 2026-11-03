@@ -113,16 +113,17 @@ async function refreshGuildState(){
 }
 async function loadGuild(){
   if(!s.guild?.id)return false;
-  if(s.guild.bot_in_guild===false){
-    renderGuildUnavailable();
-    return false;
-  }
   const guildId=String(s.guild.id);
   const healthTask=api("/healthz").then(data=>{
     s.health=data||{};
   }).catch(error=>{
     s.health={backend_ok:false,bot_ready:false,database:false,error:error.message};
   });
+  if(s.guild.bot_in_guild===false){
+    await healthTask;
+    renderGuildUnavailable();
+    return false;
+  }
   let failure=null;
   try{
     [s.overview,s.resources]=await Promise.all([
