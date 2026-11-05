@@ -264,7 +264,7 @@ function ticketForm(panel){
           '<label>العنوان<input id="tp-title" value="'+esc(p.title||'الدعم الفني')+'"></label>'+
           '<label>اللون<input id="tp-color" type="color" value="'+esc(ts.color||'#5865F2')+'"></label>'+
           '<label>قناة النشر<select id="tp-channel">'+resourceOptions(s.resources.channels.filter(a=>a.type==='text'||a.type==='news'),p.channel_id,'اختر القناة')+'</select></label>'+
-          '<label>فئة التذاكر الافتراضية<select id="tp-category">'+resourceOptions(s.resources.channels.filter(a=>a.type==='category'),p.category_id,'اختر الفئة')+'</select></label>'+
+          '<label>فئة التذاكر الافتراضية<select id="tp-category">'+resourceOptions(s.resources.channels.filter(a=>a.type==='category'),p.category_id,'اختياري: عيّن فئة لكل نوع')+'</select></label>'+
         '</div>'+
         '<label>الوصف<textarea id="tp-description" rows="4">'+esc(p.description||'اختر نوع الطلب لفتح تذكرة.')+'</textarea></label>'+
         '<div class="form-grid">'+

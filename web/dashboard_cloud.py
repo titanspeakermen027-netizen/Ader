@@ -817,10 +817,15 @@ def create_app(bot):
         cog = bot.get_cog("TicketManager")
         try:
             if data.get("publish"):
-                panel = await cog.publish_panel(panel_id) if cog else panel
-        except Exception:
+                if cog is None or not hasattr(cog, "publish_panel"):
+                    raise HTTPException(status_code=503, detail="نظام التذاكر غير جاهز للنشر حالياً.")
+                panel = await cog.publish_panel(panel_id)
+        except HTTPException:
             await bot.db.delete_ticket_panel(panel_id)
             raise
+        except Exception as exc:
+            await bot.db.delete_ticket_panel(panel_id)
+            raise HTTPException(status_code=400, detail=f"تعذر نشر لوحة التذاكر: {str(exc)[:250]}") from exc
         return {"ok": True, "panel": panel}
 
     @app.put("/api/guilds/{guild_id}/tickets/panels/{panel_id}")
@@ -836,11 +841,13 @@ def create_app(bot):
         if not await bot.db.update_ticket_panel(panel_id, payload):
             raise HTTPException(status_code=500, detail="تعذر حفظ لوحة التذاكر.")
         cog = bot.get_cog("TicketManager")
-        if cog and data.get("publish"):
+        if data.get("publish"):
+            if cog is None or not hasattr(cog, "publish_panel"):
+                raise HTTPException(status_code=503, detail="نظام التذاكر غير جاهز للنشر حالياً.")
             try:
                 await cog.publish_panel(panel_id)
             except Exception as exc:
-                raise HTTPException(status_code=400, detail=str(exc))
+                raise HTTPException(status_code=400, detail=f"تم حفظ الإعدادات، لكن تعذر نشر اللوحة: {str(exc)[:250]}") from exc
         return {"ok": True, "panel": await bot.db.get_ticket_panel(panel_id)}
 
     @app.delete("/api/guilds/{guild_id}/tickets/panels/{panel_id}")
@@ -1023,7 +1030,8 @@ def normalise_panel_payload(guild, data: dict[str, Any]) -> dict[str, Any]:
     category = guild.get_channel(category_id or 0)
     role = guild.get_role(role_id) if role_id else None
     if not isinstance(channel, discord.TextChannel): raise HTTPException(status_code=400, detail="قناة نشر اللوحة غير صالحة.")
-    if not isinstance(category, discord.CategoryChannel): raise HTTPException(status_code=400, detail="فئة التذاكر غير صالحة.")
+    if category_id and not isinstance(category, discord.CategoryChannel):
+        raise HTTPException(status_code=400, detail="فئة التذاكر الافتراضية غير صالحة.")
     if role_id and role is None: raise HTTPException(status_code=400, detail="رتبة الدعم غير صالحة.")
     image_url = safe_panel_url(data.get("image_url"))
     raw_options = data.get("options") or []
@@ -1054,6 +1062,14 @@ def normalise_panel_payload(guild, data: dict[str, Any]) -> dict[str, Any]:
         options.append(option)
     if not options:
         options = [{"name":"الدعم العام","emoji":"🎫","description":"فتح تذكرة دعم","ticket_name":"ticket-{number}-{user}","category_id":category_id,"support_role_id":role_id,"color":"#5865F2","image_url":None,"footer":"Ader Support","priority":"normal","max_open":1,"button_style":"primary","enabled":True}]
+    enabled_options = [option for option in options if option.get("enabled", True)]
+    if not enabled_options:
+        raise HTTPException(status_code=400, detail="فعّل نوعاً واحداً على الأقل من أنواع التذاكر.")
+    if any(not option.get("category_id") for option in enabled_options):
+        raise HTTPException(
+            status_code=400,
+            detail="حدد فئة افتراضية للوحة أو فئة مستقلة لكل نوع مفعّل من التذاكر.",
+        )
     settings = data.get("settings") if isinstance(data.get("settings"), dict) else {}
     settings = {
         "color": safe_color(settings.get("color"), "#5865F2"),
