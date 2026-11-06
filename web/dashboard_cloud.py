@@ -648,7 +648,10 @@ def create_app(bot):
                 continue
 
             permissions = base._guild_permissions(item)
-            allowed = bool(permissions & (base.ADMINISTRATOR | base.MANAGE_GUILD))
+            is_oauth_owner = bool(item.get("owner"))
+            allowed = bool(is_oauth_owner or permissions & (base.ADMINISTRATOR | base.MANAGE_GUILD))
+            if is_oauth_owner:
+                permissions = base.ADMINISTRATOR | base.MANAGE_GUILD
             guild = get_cached_guild(bot, guild_id)
             if guild is not None:
                 if guild.owner_id == user_id:
@@ -676,7 +679,7 @@ def create_app(bot):
                 "name": guild.name if guild is not None else str(item.get("name") or "Discord Server"),
                 "icon": item.get("icon") or (str(guild.icon.url) if guild and guild.icon else None),
                 "administrator": bool(permissions & base.ADMINISTRATOR),
-                "manage_guild": bool(permissions & (base.ADMINISTRATOR | base.MANAGE_GUILD)),
+                "manage_guild": bool(is_oauth_owner or permissions & (base.ADMINISTRATOR | base.MANAGE_GUILD)),
                 "primary_bot_in_guild": guild is not None,
             })
 
