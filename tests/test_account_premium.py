@@ -119,3 +119,22 @@ def test_linked_bot_account_allowlist_and_profile(tmp_path: Path):
             await db.disconnect()
 
     run(scenario())
+
+def test_primary_event_handoff_requires_linked_bot_to_be_in_guild():
+    from utils.linked_bot import LinkedBotManager
+
+    class FakeBot:
+        linked_guild_ids = {10, 20}
+
+        def __init__(self, joined):
+            self.joined = set(joined)
+
+        def get_guild(self, guild_id):
+            return object() if guild_id in self.joined else None
+
+    manager = LinkedBotManager(primary_bot=object())
+    manager.instances[1001] = FakeBot({10})
+
+    assert manager.is_handoff_guild(10)
+    assert not manager.is_handoff_guild(20)
+    assert not manager.is_handoff_guild(30)
