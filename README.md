@@ -38,7 +38,9 @@ python main.py
 
 ### ⭐ Ader Premium 2.0
 
-Premium servers get a dedicated Premium Center in the dashboard, expanded feature entitlements, and support for linking a custom Discord bot.
+Ader supports both server Premium entitlements and account-based Premium grants. Bot owners can grant account Premium with `add-pre @user/id 1mo` and revoke it with `remove-pre @user/id`. Supported durations include `1y`, `1mo`, `7d`, `12h`, and `30m`.
+
+A user with active account Premium can configure one Linked Bot from the dashboard and choose the Discord servers where they have **Manage Server** or **Administrator**. The linked bot is restricted to that allowlist: it leaves unapproved servers automatically, including servers it was already in when it restarts.
 
 Linked bots use the **same SQLite database file** as the main Ader process. Guild settings, tickets, economy, levels, logs, analytics and other persisted data therefore remain shared instead of being copied into a second database.
 
