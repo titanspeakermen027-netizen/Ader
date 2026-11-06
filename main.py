@@ -421,11 +421,8 @@ class Ader(commands.Bot):
                     )
                     await self.db.update_linked_bot_account_status(owner_id, "error", safe_error)
 
-            if self._ready_sync_done:
-                return
-
-            # Enforce the allowlist for guilds the bot was already in before
-            # reconnecting, not only for future guild_join events.
+            # Enforce the allowlist on every READY event. A reconnect must
+            # not leave a previously joined, unapproved guild accessible.
             for guild in list(self.guilds):
                 if guild.id not in self.linked_guild_ids:
                     try:
@@ -440,6 +437,9 @@ class Ader(commands.Bot):
                             "Could not leave unapproved guild %s",
                             guild.id,
                         )
+
+            if self._ready_sync_done:
+                return
 
             synced = 0
             for guild in list(self.guilds):
