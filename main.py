@@ -248,7 +248,7 @@ class Ader(commands.Bot):
             pass
 
     async def on_interaction(self, interaction: discord.Interaction):
-        if self.linked_mode and self.linked_guild_id is not None and interaction.guild_id != self.linked_guild_id:
+        if self.linked_mode and interaction.guild_id not in self.linked_guild_ids:
             return
         if interaction.guild is not None and interaction.type is discord.InteractionType.application_command:
             command = getattr(interaction, "command", None)
