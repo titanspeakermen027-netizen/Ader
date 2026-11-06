@@ -73,6 +73,7 @@ class LinkedBotManager:
         guild_id = int(guild_id)
         return any(
             guild_id in set(getattr(bot, "linked_guild_ids", set()))
+            and bot.get_guild(guild_id) is not None
             for bot in self.instances.values()
         )
 
