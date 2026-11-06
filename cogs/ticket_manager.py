@@ -658,7 +658,22 @@ class TicketManager(commands.Cog):
                                 for action_row in message.components
                                 for component in getattr(action_row, "children", ())
                             ]
-                            if any(str(custom_id or "").startswith("ader:ticket:") for custom_id in custom_ids):
+                            legacy_action_prefixes = (
+                                "ader:ticket:claim:",
+                                "ader:ticket:close:",
+                                "ader:ticket:lock:",
+                                "ader:ticket:add:",
+                                "ader:ticket:remove:",
+                                "ader:ticket:rename:",
+                                "ader:ticket:transcript:",
+                                "ader:ticket:reopen:",
+                                "ader:ticket:delete:",
+                                "ader:ticket:actions:",
+                            )
+                            if any(
+                                str(custom_id or "").startswith(legacy_action_prefixes)
+                                for custom_id in custom_ids
+                            ):
                                 await message.edit(view=view)
                                 break
                     except (discord.Forbidden, discord.HTTPException):
