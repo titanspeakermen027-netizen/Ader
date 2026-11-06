@@ -800,6 +800,13 @@ def create_app(bot):
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc))
         fingerprint = cipher.fingerprint(token)
+        try:
+            from main import _get_discord_token
+            primary_fingerprint = cipher.fingerprint(_get_discord_token(bot.config))
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="تعذر التحقق من هوية بوت Ader الرئيسي.") from exc
+        if fingerprint == primary_fingerprint:
+            raise HTTPException(status_code=400, detail="لا يمكن ربط توكن ANO BOT الرئيسي كـ Linked Bot.")
         duplicate = await bot.db.get_linked_bot_account_by_fingerprint(fingerprint)
         if duplicate:
             raise HTTPException(status_code=409, detail="هذا البوت مرتبط بحساب Premium آخر في Ader.")
