@@ -171,7 +171,7 @@ class TicketAdminSelect(discord.ui.Select):
         if action == "create":
             return await interaction.response.send_message(
                 "اختر قناة النشر وفئة التذاكر ورتبة الدعم، ثم اضغط زر إدخال التفاصيل.",
-                view=TicketPanelBuilderView(parent.cog, parent.owner_id),
+                view=TicketPanelBuilderView(parent.cog, parent.owner_id, guild_id=interaction.guild.id),
                 ephemeral=True,
             )
         if action == "panels":
@@ -417,7 +417,7 @@ class TicketPanelActionSelect(discord.ui.Select):
                 return await interaction.response.send_message("لم تعد اللوحة موجودة.", ephemeral=True)
             return await interaction.response.send_message(
                 "عدّل الاختيارات ثم افتح نموذج التفاصيل لحفظ التغييرات.",
-                view=TicketPanelBuilderView(parent.cog, parent.owner_id, panel=panel),
+                view=TicketPanelBuilderView(parent.cog, parent.owner_id, panel=panel, guild_id=interaction.guild.id),
                 ephemeral=True,
             )
         if action == "delete":
@@ -470,11 +470,12 @@ class TicketPanelDeleteConfirmView(discord.ui.View):
 
 
 class TicketPanelBuilderView(discord.ui.View):
-    def __init__(self, cog, owner_id: int, panel: dict[str, Any] | None = None):
+    def __init__(self, cog, owner_id: int, panel: dict[str, Any] | None = None, guild_id: int | None = None):
         super().__init__(timeout=900)
         self.cog = cog
         self.owner_id = owner_id
         self.panel = dict(panel or {})
+        self.guild_id = int(guild_id or self.panel.get("guild_id") or 0)
         self.channel_id = _as_id(self.panel.get("channel_id"))
         self.category_id = _as_id(self.panel.get("category_id"))
         self.support_role_id = _as_id(self.panel.get("support_role_id"))
@@ -486,7 +487,7 @@ class TicketPanelBuilderView(discord.ui.View):
         self.add_item(TicketBuilderDetailsButton(self))
 
     def summary(self) -> str:
-        guild = self.cog.bot.get_guild(int(self.panel.get("guild_id") or 0))
+        guild = self.cog.bot.get_guild(self.guild_id)
         if guild is None:
             # New panels use the active interaction guild; IDs are still shown clearly.
             return "تم حفظ الاختيارات. اضغط إدخال التفاصيل للمتابعة."
