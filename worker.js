@@ -30,7 +30,7 @@ export default {
 
     // Temporary diagnostic mode: serve the backend's built-in dashboard
     // instead of Workers Static Assets. Disable with BACKEND_DASHBOARD_PRIMARY=false.
-    if (env.BACKEND_DASHBOARD_PRIMARY === "true") {
+    if (env.BACKEND_DASHBOARD_PRIMARY !== "false") {
       return proxyBackend(request, env, backend, url, {
         backendDashboardPrimary: true
       });
