@@ -260,6 +260,38 @@ class DatabaseManager:
             updated_at REAL NOT NULL
         )""")
         await self.connection.execute("CREATE INDEX IF NOT EXISTS idx_linked_bots_status ON linked_bots(status)")
+
+        # Account-based Premium and one linked bot per Discord user.
+        await self.connection.executescript("""
+        CREATE TABLE IF NOT EXISTS user_premium (
+            user_id INTEGER PRIMARY KEY,
+            started_at REAL NOT NULL,
+            expires_at REAL NOT NULL,
+            granted_by INTEGER NOT NULL,
+            updated_at REAL NOT NULL,
+            plan_id TEXT NOT NULL DEFAULT 'premium'
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_premium_expiry ON user_premium(expires_at);
+
+        CREATE TABLE IF NOT EXISTS linked_bot_accounts (
+            owner_id INTEGER PRIMARY KEY,
+            bot_user_id INTEGER,
+            encrypted_token TEXT NOT NULL,
+            token_fingerprint TEXT NOT NULL UNIQUE,
+            allowed_guild_ids TEXT NOT NULL DEFAULT '[]',
+            bot_name TEXT,
+            avatar_url TEXT,
+            banner_url TEXT,
+            bio TEXT NOT NULL DEFAULT '',
+            activity_text TEXT NOT NULL DEFAULT 'Managing your community',
+            activity_type TEXT NOT NULL DEFAULT 'watching',
+            status TEXT NOT NULL DEFAULT 'stopped',
+            last_error TEXT,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_linked_bot_accounts_status ON linked_bot_accounts(status);
+        """)
         await self.connection.commit()
         logger.info("SQLite migration completed successfully")
 
@@ -462,6 +494,164 @@ class DatabaseManager:
                expires_at=excluded.expires_at,updated_at=excluded.updated_at""",
             (int(guild_id), str(feature), 1 if enabled else 0, limit_value, expires_at, time.time()),
         )
+
+    async def get_user_premium(self, user_id: int):
+        row = await self.fetchone("SELECT * FROM user_premium WHERE user_id=?", (int(user_id),))
+        if not row:
+            return None
+        data = dict(row)
+        if float(data["expires_at"]) <= time.time():
+            await self.remove_user_premium(user_id)
+            return None
+        return data
+
+    async def is_user_premium(self, user_id: int) -> bool:
+        return await self.get_user_premium(user_id) is not None
+
+    async def set_user_premium(self, user_id: int, started_at: float, expires_at: float, granted_by: int, plan_id: str = "premium"):
+        await self.execute(
+            """INSERT INTO user_premium(user_id,started_at,expires_at,granted_by,updated_at,plan_id)
+               VALUES(?,?,?,?,?,?)
+               ON CONFLICT(user_id) DO UPDATE SET
+                 started_at=excluded.started_at,
+                 expires_at=excluded.expires_at,
+                 granted_by=excluded.granted_by,
+                 updated_at=excluded.updated_at,
+                 plan_id=excluded.plan_id""",
+            (int(user_id), float(started_at), float(expires_at), int(granted_by), time.time(), str(plan_id or "premium")),
+        )
+        return await self.get_user_premium(user_id)
+
+    async def remove_user_premium(self, user_id: int):
+        await self.execute("DELETE FROM user_premium WHERE user_id=?", (int(user_id),))
+
+    async def get_linked_bot_account(self, owner_id: int):
+        row = await self.fetchone("SELECT * FROM linked_bot_accounts WHERE owner_id=?", (int(owner_id),))
+        if not row:
+            return None
+        data = dict(row)
+        try:
+            guild_ids = json.loads(data.get("allowed_guild_ids") or "[]")
+            data["allowed_guild_ids"] = sorted({int(value) for value in guild_ids if int(value) > 0}) if isinstance(guild_ids, list) else []
+        except (TypeError, ValueError, json.JSONDecodeError):
+            data["allowed_guild_ids"] = []
+        return data
+
+    async def list_linked_bot_accounts(self):
+        rows = await self.fetchall("SELECT owner_id FROM linked_bot_accounts ORDER BY owner_id")
+        result = []
+        for row in rows:
+            record = await self.get_linked_bot_account(int(row["owner_id"]))
+            if record:
+                result.append(record)
+        return result
+
+    async def get_linked_bot_account_by_fingerprint(self, fingerprint: str, exclude_owner_id: int | None = None):
+        if exclude_owner_id is None:
+            row = await self.fetchone("SELECT * FROM linked_bot_accounts WHERE token_fingerprint=?", (str(fingerprint),))
+        else:
+            row = await self.fetchone(
+                "SELECT * FROM linked_bot_accounts WHERE token_fingerprint=? AND owner_id<>?",
+                (str(fingerprint), int(exclude_owner_id)),
+            )
+        if not row:
+            return None
+        return await self.get_linked_bot_account(int(row["owner_id"]))
+
+    async def save_linked_bot_account(
+        self,
+        owner_id: int,
+        encrypted_token: str,
+        token_fingerprint: str,
+        allowed_guild_ids: list[int],
+        profile: Dict[str, Any] | None = None,
+    ):
+        profile = profile or {}
+        now = time.time()
+        clean_ids = sorted({int(value) for value in allowed_guild_ids if int(value) > 0})
+        await self.execute(
+            """INSERT INTO linked_bot_accounts(
+                owner_id,encrypted_token,token_fingerprint,allowed_guild_ids,
+                bot_name,avatar_url,banner_url,bio,activity_text,activity_type,
+                status,last_error,created_at,updated_at
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,'stopped',NULL,?,?)
+            ON CONFLICT(owner_id) DO UPDATE SET
+                encrypted_token=excluded.encrypted_token,
+                token_fingerprint=excluded.token_fingerprint,
+                allowed_guild_ids=excluded.allowed_guild_ids,
+                bot_name=excluded.bot_name,
+                avatar_url=excluded.avatar_url,
+                banner_url=excluded.banner_url,
+                bio=excluded.bio,
+                activity_text=excluded.activity_text,
+                activity_type=excluded.activity_type,
+                updated_at=excluded.updated_at""",
+            (
+                int(owner_id), str(encrypted_token), str(token_fingerprint),
+                json.dumps(clean_ids), str(profile.get("bot_name") or "")[:32] or None,
+                str(profile.get("avatar_url") or "")[:1000] or None,
+                str(profile.get("banner_url") or "")[:1000] or None,
+                str(profile.get("bio") or "")[:1900],
+                str(profile.get("activity_text") or "Managing your community")[:128],
+                str(profile.get("activity_type") or "watching").lower()[:20],
+                now, now,
+            ),
+        )
+        return await self.get_linked_bot_account(owner_id)
+
+    async def update_linked_bot_account_guilds(self, owner_id: int, guild_ids: list[int]):
+        clean_ids = sorted({int(value) for value in guild_ids if int(value) > 0})
+        await self.execute(
+            "UPDATE linked_bot_accounts SET allowed_guild_ids=?,updated_at=? WHERE owner_id=?",
+            (json.dumps(clean_ids), time.time(), int(owner_id)),
+        )
+        return await self.get_linked_bot_account(owner_id)
+
+    async def update_linked_bot_account_status(self, owner_id: int, status: str, last_error: str | None = None):
+        await self.execute(
+            "UPDATE linked_bot_accounts SET status=?,last_error=?,updated_at=? WHERE owner_id=?",
+            (str(status)[:32], str(last_error)[:500] if last_error else None, time.time(), int(owner_id)),
+        )
+
+    async def update_linked_bot_account_runtime(self, owner_id: int, bot_user_id: int | None):
+        await self.execute(
+            "UPDATE linked_bot_accounts SET bot_user_id=?,updated_at=? WHERE owner_id=?",
+            (int(bot_user_id) if bot_user_id else None, time.time(), int(owner_id)),
+        )
+
+    async def update_linked_bot_account_profile(self, owner_id: int, profile: Dict[str, Any]):
+        allowed = {
+            "bot_name": "bot_name", "avatar_url": "avatar_url", "banner_url": "banner_url",
+            "bio": "bio", "activity_text": "activity_text", "activity_type": "activity_type",
+        }
+        sets, vals = [], []
+        for key, column in allowed.items():
+            if key not in profile:
+                continue
+            value = profile[key]
+            if key == "bot_name":
+                value = str(value or "")[:32] or None
+            elif key in {"avatar_url", "banner_url"}:
+                value = str(value or "")[:1000] or None
+            elif key == "bio":
+                value = str(value or "")[:1900]
+            elif key == "activity_text":
+                value = str(value or "Managing your community")[:128]
+            elif key == "activity_type":
+                value = str(value or "watching").lower()[:20]
+            sets.append(f"{column}=?")
+            vals.append(value)
+        if not sets:
+            return await self.get_linked_bot_account(owner_id)
+        vals.extend([time.time(), int(owner_id)])
+        await self.execute(
+            f"UPDATE linked_bot_accounts SET {', '.join(sets)},updated_at=? WHERE owner_id=?",
+            tuple(vals),
+        )
+        return await self.get_linked_bot_account(owner_id)
+
+    async def delete_linked_bot_account(self, owner_id: int):
+        await self.execute("DELETE FROM linked_bot_accounts WHERE owner_id=?", (int(owner_id),))
 
     async def get_linked_bot(self, guild_id: int):
         row = await self.fetchone("SELECT * FROM linked_bots WHERE guild_id=?", (int(guild_id),))
