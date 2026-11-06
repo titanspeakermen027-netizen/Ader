@@ -20,7 +20,7 @@ def parse_duration(value: str) -> int:
     amount, unit = int(match.group(1)), match.group(2).lower()
     if amount <= 0:
         raise ValueError("invalid")
-    return {
+    seconds = {
         "y": amount * 365 * 86400,
         "mo": amount * 30 * 86400,
         "w": amount * 7 * 86400,
@@ -29,6 +29,9 @@ def parse_duration(value: str) -> int:
         "m": amount * 60,
         "s": amount,
     }[unit]
+    if seconds > 10 * 365 * 86400:
+        raise ValueError("الحد الأقصى لمدة Premium هو 10 سنوات.")
+    return seconds
 
 
 def fmt(timestamp: float) -> str:
@@ -116,11 +119,15 @@ class ServerPremium(commands.Cog):
         except ValueError as exc:
             return await self._reply(message, "بيانات غير صحيحة", str(exc))
         previous = await self.db.get_user_premium(user_id)
-        if not previous:
-            return await self._reply(message, "لا يوجد اشتراك", f"المستخدم {user_id} لا يملك اشتراك Premium فعالاً.")
         manager = getattr(self.bot, "linked_bot_manager", None)
         if manager is not None:
             await manager.stop_for_user(user_id)
+        if not previous:
+            return await self._reply(
+                message,
+                "لا يوجد اشتراك فعال",
+                f"المستخدم {user_id} لا يملك اشتراك Premium فعالاً. تم التأكد من إيقاف أي Linked Bot متبقٍ.",
+            )
         await self.db.remove_user_premium(user_id)
         return await self._reply(
             message,
