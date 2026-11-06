@@ -412,9 +412,10 @@ def create_app(bot) -> FastAPI:
                 "id": guild_id,
                 "name": str(item.get("name") or "Unknown Server"),
                 "icon": item.get("icon"),
+                "owner": bool(item.get("owner")),
                 "permissions": permissions,
                 "administrator": bool(permissions & ADMINISTRATOR),
-                "manage_guild": bool(permissions & MANAGE_GUILD),
+                "manage_guild": bool(item.get("owner") or permissions & ADMINISTRATOR or permissions & MANAGE_GUILD),
             }
             # Keep every OAuth-visible guild so the dashboard can re-check
             # permissions live when the user's roles changed after login.
