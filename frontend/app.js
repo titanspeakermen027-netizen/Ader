@@ -559,52 +559,76 @@ async function logs(){
   };
 }
 async function premium(){
-  const d=await api("/api/guilds/"+s.guild.id+"/premium");
-  const active=Boolean(d.active);
-  const b=d.linked_bot||{};
-  const limit=v=>v===null||v===undefined?"غير محدود":Number(v).toLocaleString();
-  const featureHtml=(d.features||[]).map(f=>'<div class="premium-feature"><span><b>'+esc(f.name)+'</b><small>'+esc(f.description||"")+'</small></span><strong>'+((f.enabled&&active)?"✓":"—")+'</strong></div>').join("");
-  let linkedHtml="";
-  if(!active){
-    linkedHtml=card("Premium مطلوب",'<div class="empty small">ربط البوت وتخصيص هويته يحتاجان سيرفر Premium فعال.</div>');
-  }else if(!b.configured){
-    linkedHtml=card("ربط بوتك الخاص",
-      '<p class="muted">دخل توكن بوت Discord ديالك. Ader ما كيخزنوش كنص عادي: كيتخزن مشفراً في الداتا على السيرفر، وما كنرجعوش للواجهة من بعد الحفظ.</p>'+
-      '<label>توكن البوت<input id="lb-token" type="password" autocomplete="new-password" placeholder="توكن Discord Bot"></label>'+
-      '<div class="form-grid">'+
-      '<label>اسم البوت<input id="lb-name" maxlength="32" placeholder="اسم البوت"></label>'+
-      '<label>Watching<input id="lb-activity" maxlength="128" value="Managing your community"></label>'+
-      '<label>نوع الحالة<select id="lb-type"><option value="watching">Watching</option><option value="playing">Playing</option><option value="listening">Listening</option><option value="streaming">Streaming</option></select></label>'+
-      '</div>'+
-      '<label>رابط الصورة<input id="lb-avatar" type="url" placeholder="https://..."></label>'+
-      '<label>رابط البنر<input id="lb-banner" type="url" placeholder="https://..."></label>'+
-      '<label>Bio — محفوظ داخل Ader فقط، ما كيبدلش البايو العام<input id="lb-bio" maxlength="1900" placeholder="نبذة البوت"></label>'+
-      '<button class="primary smallbtn" id="lb-link">ربط وتشغيل البوت</button>'
-    );
-  }else{
-    const invite=b.bot_user_id?"https://discord.com/oauth2/authorize?client_id="+encodeURIComponent(b.bot_user_id)+"&scope=bot%20applications.commands":"";
-    linkedHtml=card("Linked Bot",
-      '<div class="kv"><span>Bot ID</span><b>'+esc(b.bot_user_id||"—")+'</b></div>'+
-      '<div class="kv"><span>الحالة</span><b class="'+(b.running?"on":"off")+'">'+(b.running?"Online":"Stopped")+'</b></div>'+
-      (b.last_error?'<div class="warning">'+esc(b.last_error)+'</div>':'')+
-      (invite?'<a class="action" href="'+invite+'" target="_blank" rel="noopener">دعوة البوت للسيرفر</a>':'')+
-      '<div class="form-grid">'+
-      '<label>اسم البوت<input id="lb-name" maxlength="32" value="'+esc(b.bot_name||"")+'"></label>'+
+  const [d,account]=await Promise.all([
+    api("/api/guilds/"+s.guild.id+"/premium"),
+    api("/api/me/linked-bot")
+  ]);
+  const serverActive=Boolean(d.active);
+  const accountActive=Boolean(account.premium&&account.premium.active);
+  const b=account.linked_bot||{};
+  const manageable=account.manageable_guilds||[];
+  const selectedIds=new Set((b.allowed_guild_ids||[]).map(String));
+  const selectedGuilds=new Map((b.selected_guilds||[]).map(g=>[String(g.id),g]));
+  const featureHtml=(d.features||[]).map(f=>'<div class="premium-feature"><span><b>'+esc(f.name)+'</b><small>'+esc(f.description||"")+'</small></span><strong>'+((f.enabled&&serverActive)?"✓":"—")+'</strong></div>').join("");
+  const guildPicker=()=>{
+    if(!manageable.length)return '<div class="empty small">ما لقيناش سيرفرات بصلاحية Manage Server أو Administrator في حساب Discord. حدّث صلاحيات Discord من زر إعادة تسجيل الدخول.</div><a class="action" href="/login?force=1">تحديث صلاحيات Discord</a>';
+    return '<div class="linked-guild-list">'+manageable.map(g=>{
+      const id=String(g.id);
+      const chosen=selectedIds.has(id);
+      const current=selectedGuilds.get(id);
+      const state=chosen?(current&&current.linked_bot_in_guild?"البوت داخل السيرفر":"السيرفر مسموح، أضف البوت إليه"):"غير محدد";
+      return '<label class="linked-guild-option"><input class="lb-guild-check" type="checkbox" value="'+esc(id)+'" '+(chosen?"checked":"")+'><span><b>'+esc(g.name)+'</b><small>ID: '+esc(id)+' · '+(g.administrator?"Administrator":"Manage Server")+' · '+state+'</small></span></label>';
+    }).join("")+'</div>';
+  };
+  const inviteLinks=()=>{
+    if(!b.bot_user_id)return "";
+    const chosen=(b.selected_guilds||[]);
+    if(!chosen.length)return '<p class="muted">حدد السيرفرات التي سيعمل فيها البوت.</p>';
+    return '<div class="linked-invites">'+chosen.map(g=>{
+      const url="https://discord.com/oauth2/authorize?client_id="+encodeURIComponent(b.bot_user_id)+"&scope=bot%20applications.commands&permissions=0&guild_id="+encodeURIComponent(g.id)+"&disable_guild_select=true";
+      return '<div class="kv"><span>'+esc(g.name)+'</span><b>'+(g.linked_bot_in_guild?'<i class="on">البوت داخل السيرفر</i>':'<a class="action" href="'+url+'" target="_blank" rel="noopener">دعوة البوت إلى هذا السيرفر</a>')+'</b></div>';
+    }).join("")+'</div>';
+  };
+  const profileFields=()=>{
+    return '<div class="form-grid">'+
+      '<label>اسم البوت<input id="lb-name" maxlength="32" value="'+esc(b.bot_name||"")+'" placeholder="اسم البوت"></label>'+
       '<label>Watching<input id="lb-activity" maxlength="128" value="'+esc(b.activity_text||"Managing your community")+'"></label>'+
       '<label>نوع الحالة<select id="lb-type"><option value="watching" '+(b.activity_type==="watching"?"selected":"")+'>Watching</option><option value="playing" '+(b.activity_type==="playing"?"selected":"")+'>Playing</option><option value="listening" '+(b.activity_type==="listening"?"selected":"")+'>Listening</option><option value="streaming" '+(b.activity_type==="streaming"?"selected":"")+'>Streaming</option></select></label>'+
       '</div>'+
       '<label>رابط الصورة<input id="lb-avatar" type="url" value="'+esc(b.avatar_url||"")+'" placeholder="https://..."></label>'+
       '<label>رابط البنر<input id="lb-banner" type="url" value="'+esc(b.banner_url||"")+'" placeholder="https://..."></label>'+
-      '<label>Bio — محفوظ داخل Ader فقط، ما كيبدلش البايو العام<input id="lb-bio" maxlength="1900" value="'+esc(b.bio||"")+'"></label>'+
-      '<p class="muted">التوكن مخفي ومخزن مشفراً؛ ما تحتاجش تعاود تدخلو لتعديل البروفايل.</p>'+
-      '<div class="quick"><button class="primary smallbtn" id="lb-profile">حفظ البروفايل</button><button class="action" id="lb-'+(b.running?"stop":"start")+'">'+(b.running?"إيقاف البوت":"تشغيل البوت")+'</button><button class="action danger" id="lb-delete">فك الربط</button></div>'
+      '<label>Bio — محفوظ داخل Ader فقط<input id="lb-bio" maxlength="1900" value="'+esc(b.bio||"")+'" placeholder="نبذة البوت"></label>';
+  };
+  let linkedHtml="";
+  if(!accountActive){
+    linkedHtml=card("Linked Bot · Premium مطلوب",'<div class="empty small">ربط بوت خاص يحتاج اشتراك Ader Premium على حساب Discord الشخصي، وليس على كل سيرفر بشكل منفصل.</div>');
+  }else if(!b.configured){
+    linkedHtml=card("إنشاء Linked Bot لحسابك",
+      '<p class="muted">أدخل توكن البوت، ثم اختر السيرفرات التي تملك فيها Manage Server أو Administrator. يتم تخزين التوكن مشفراً ولا يظهر مجدداً في الداشبورد.</p>'+
+      '<label>توكن Discord Bot<input id="lb-token" type="password" autocomplete="new-password" placeholder="توكن البوت"></label>'+
+      profileFields()+
+      '<h3>السيرفرات المسموح بها</h3><p class="muted">البوت سيعمل فقط داخل السيرفرات المحددة. أي سيرفر آخر ينضم إليه سيغادره تلقائياً.</p>'+
+      guildPicker()+
+      '<button class="primary smallbtn" id="lb-link">ربط وتشغيل البوت</button>'
+    );
+  }else{
+    linkedHtml=card("Linked Bot",
+      '<div class="kv"><span>Bot ID</span><b>'+esc(b.bot_user_id||"—")+'</b></div>'+
+      '<div class="kv"><span>الحالة</span><b class="'+(b.running?"on":"off")+'">'+(b.running?"Online":esc(b.status||"Stopped"))+'</b></div>'+
+      (b.last_error?'<div class="warning">'+esc(b.last_error)+'</div>':'')+
+      inviteLinks()+
+      '<h3>السيرفرات المسموح بها</h3>'+guildPicker()+
+      profileFields()+
+      '<p class="muted">التوكن محفوظ مشفراً. لا تشاركه مع أي شخص ولا ترسله في المحادثات.</p>'+
+      '<div class="quick"><button class="primary smallbtn" id="lb-profile">حفظ الإعدادات والسيرفرات</button><button class="action" id="lb-'+(b.running?"stop":"start")+'">'+(b.running?"إيقاف البوت":"تشغيل البوت")+'</button><button class="action danger" id="lb-delete">فك الربط</button></div>'
     );
   }
+  const expiry=account.premium&&account.premium.expires_at?new Date(account.premium.expires_at*1000).toLocaleDateString():"—";
   $("#root").innerHTML=head("Ader Premium",desc.premium)+
-    '<div class="stats">'+stat("الخطة",active?(d.plan||"premium").toUpperCase():"FREE","⭐")+stat("الحالة",active?"ACTIVE":"FREE",active?"✓":"—")+stat("تنتهي",d.expires_at?new Date(d.expires_at*1000).toLocaleDateString():"—","⌛")+stat("Linked Bot",b.configured?(b.running?"ONLINE":"STOPPED"):"NONE","🤖")+'</div>'+
-    '<div class="cards">'+card("Premium Features",'<div class="premium-features">'+featureHtml+'</div>')+linkedHtml+'</div>'+
-    (active?card("ملاحظة مهمة",'<div class="empty small">Ader والـLinked Bot كيستعملو نفس قاعدة البيانات ونفس إعدادات السيرفر والاقتصاد والتذاكر والإحصائيات. تغيير الإعدادات من أي جهة كيبان بنفس الشكل للجهة الأخرى.</div>'):card("Ader Premium",'<div class="empty small">السيرفر حالياً خارج Premium. فعّل الاشتراك باش تفتح Linked Bot والتخصيصات المتقدمة.</div>'));
-  if(!active)return;
+    '<div class="stats">'+stat("Premium السيرفر",serverActive?"ACTIVE":"FREE",serverActive?"✓":"—")+stat("Premium الحساب",accountActive?"ACTIVE":"FREE",accountActive?"✓":"—")+stat("انتهاء اشتراك الحساب",expiry,"⌛")+stat("Linked Bot",b.configured?(b.running?"ONLINE":"STOPPED"):"NONE","🤖")+'</div>'+
+    '<div class="cards">'+card("ميزات Premium الخاصة بالسيرفر",'<div class="premium-features">'+featureHtml+'</div>')+linkedHtml+'</div>'+
+    (serverActive?card("Premium السيرفر",'<div class="empty small">هذه الخطة مرتبطة بالسيرفر المحدد. أما Linked Bot فيرتبط بحسابك الشخصي ويمكن تشغيله في عدة سيرفرات تختارها.</div>'):card("Premium السيرفر",'<div class="empty small">السيرفر المحدد لا يملك Premium خاصاً به. هذا لا يمنع استخدام Linked Bot عندما يكون حسابك الشخصي Premium.</div>'));
+  if(!accountActive)return;
   const collectProfile=()=>({
     bot_name:$("#lb-name")?.value||"",
     avatar_url:$("#lb-avatar")?.value||"",
@@ -613,31 +637,39 @@ async function premium(){
     activity_text:$("#lb-activity")?.value||"Managing your community",
     activity_type:$("#lb-type")?.value||"watching"
   });
+  const collectGuildIds=()=>Array.from(document.querySelectorAll(".lb-guild-check:checked")).map(input=>input.value);
   document.getElementById("lb-link")?.addEventListener("click",async()=>{
     const token=$("#lb-token")?.value||"";
-    if(!token)return warn("دخل توكن البوت أولاً.");
-    try{await api("/api/guilds/"+s.guild.id+"/premium/linked-bot",{method:"POST",body:JSON.stringify({...collectProfile(),token})});await premium()}
-    catch(e){warn(e.message)}
+    const allowed_guild_ids=collectGuildIds();
+    if(!token)return warn("أدخل توكن البوت أولاً.");
+    if(!allowed_guild_ids.length)return warn("حدد سيرفراً واحداً على الأقل.");
+    try{
+      await api("/api/me/linked-bot",{method:"POST",body:JSON.stringify({...collectProfile(),token,allowed_guild_ids})});
+      await premium();
+    }catch(e){warn(e.message)}
   });
   document.getElementById("lb-profile")?.addEventListener("click",async()=>{
-    try{await api("/api/guilds/"+s.guild.id+"/premium/linked-bot",{method:"PUT",body:JSON.stringify(collectProfile())});await premium()}
-    catch(e){warn(e.message)}
+    const allowed_guild_ids=collectGuildIds();
+    if(!allowed_guild_ids.length)return warn("حدد سيرفراً واحداً على الأقل.");
+    try{
+      await api("/api/me/linked-bot",{method:"PUT",body:JSON.stringify({...collectProfile(),allowed_guild_ids})});
+      await premium();
+    }catch(e){warn(e.message)}
   });
   document.getElementById("lb-start")?.addEventListener("click",async()=>{
-    try{await api("/api/guilds/"+s.guild.id+"/premium/linked-bot/start",{method:"POST"});await premium()}
+    try{await api("/api/me/linked-bot/start",{method:"POST"});await premium()}
     catch(e){warn(e.message)}
   });
   document.getElementById("lb-stop")?.addEventListener("click",async()=>{
-    try{await api("/api/guilds/"+s.guild.id+"/premium/linked-bot/stop",{method:"POST"});await premium()}
+    try{await api("/api/me/linked-bot/stop",{method:"POST"});await premium()}
     catch(e){warn(e.message)}
   });
   document.getElementById("lb-delete")?.addEventListener("click",async()=>{
-    if(!confirm("واش متأكد بغيتي تفك ربط البوت؟"))return;
-    try{await api("/api/guilds/"+s.guild.id+"/premium/linked-bot",{method:"DELETE"});await premium()}
+    if(!confirm("هل تريد فك ربط البوت وحذف إعداداته؟"))return;
+    try{await api("/api/me/linked-bot",{method:"DELETE"});await premium()}
     catch(e){warn(e.message)}
   });
 }
-
 function security(){$("#root").innerHTML=head("Security",desc.security)+'<div class="cards">'+card("Session",'<div class="kv"><span>User</span><b>'+esc(s.user?.username||"Discord User")+'</b></div><div class="kv"><span>Managed Servers</span><b>'+s.guilds.length+'</b></div>')+card("OAuth",'<div class="empty small">تسجيل الدخول يمر عبر نفس Cloudflare origin، مع state validation وSession Cookie آمن.</div><a class="btn primary" href="/login?force=1">إعادة تسجيل الدخول بواسطة Discord</a>')+'</div>'}
 async function settings(){
   const [d,core]=await Promise.all([
