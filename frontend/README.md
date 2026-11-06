@@ -2,7 +2,16 @@
 
 The Ader dashboard uses Cloudflare Workers Static Assets for the frontend and a separate FastAPI service for the Discord bot/API.
 
-The Cloudflare Worker lives at the repository root (worker.js). The frontend/ directory contains only browser assets.
+## Single source of truth
+
+**Deploy this Worker from the repository root.** The only Wrangler deployment configuration is:
+
+- `./wrangler.jsonc` — repository root
+- `./worker.js` — Worker entry point
+- `./frontend/` — static browser assets
+- Binding name — exactly `ASSETS`
+
+Do not use a Wrangler configuration from inside `frontend/`, and do not paste `worker.js` alone into the Cloudflare dashboard editor and deploy it as a standalone script. A standalone script deployment does not upload the `frontend/` directory or create the `ASSETS` binding, so the Worker returns the "missing the ASSETS binding" error.
 
 ## Architecture
 
@@ -10,53 +19,53 @@ Browser → Cloudflare Worker → FastAPI backend
 
 The same Worker origin serves:
 
-- static frontend files
-- /login, /callback, /logout
-- /api/*
-- /healthz
+- static frontend files through `env.ASSETS.fetch()`
+- `/login`, `/callback`, `/logout`
+- `/api/*`
+- `/healthz`
 
 This keeps the dashboard and OAuth session on one public origin and avoids cross-origin cookie problems.
 
 ## Cloudflare deployment
 
-This repository includes wrangler.jsonc with the required Workers Static Assets configuration:
-
-- Worker entry point: ./worker.js
-- Static assets directory: ./frontend
-- Assets binding: ASSETS
-- SPA fallback: single-page-application
-- Backend routes run through the Worker first
-- Backend URL: http://nova.hatenna.com:25979
-
 ### Deploy with Wrangler
 
-From the repository root:
+Run from the repository root (the folder that contains `worker.js` and `wrangler.jsonc`):
 
 ~~~bash
-npx wrangler deploy
+npx wrangler deploy --config ./wrangler.jsonc
 ~~~
 
-Use the repository wrangler.jsonc when deploying. Do not paste the old frontend/worker.js into a standalone Worker without the Static Assets configuration.
+Wrangler reads the root configuration, uploads the Worker and the contents of `./frontend`, and creates the `ASSETS` binding used by `worker.js`.
 
-### Cloudflare Dashboard
+### Deploy through Cloudflare Workers Builds
 
-When configuring the Worker from the Cloudflare dashboard, make sure the Worker is deployed with a Static Assets collection pointing to:
+When connecting this repository to Cloudflare Workers Builds, configure the project so that:
 
-~~~text
-frontend
+- Root directory is the repository root (`.`), not `frontend/`.
+- Deploy command is `npx wrangler deploy --config ./wrangler.jsonc`.
+- The deployment uses the root `wrangler.jsonc`.
+
+Do not deploy only the Worker source from the dashboard editor. The Static Assets collection must be included in the same deployment as the Worker script.
+
+## Frontend and routing configuration
+
+The root `wrangler.jsonc` configures:
+
+- Worker entry point: `./worker.js`
+- Static assets directory: `./frontend`
+- Assets binding: `ASSETS`
+- SPA fallback: `single-page-application`
+- Worker-first routes: `/healthz`, `/login`, `/callback`, `/logout`, and `/api/*`
+- Backend URL: `http://nova.hatenna.com:25979`
+
+The frontend configuration in `frontend/config.js` intentionally keeps:
+
+~~~js
+API_BASE: ""
 ~~~
 
-and that the binding name is exactly:
-
-~~~text
-ASSETS
-~~~
-
-Without that binding, browser requests that reach the static frontend can fail with:
-
-~~~text
-TypeError: Cannot read properties of undefined (reading 'fetch')
-~~~
+A relative API base keeps the dashboard API and OAuth session on the same public origin.
 
 ## Backend environment
 
@@ -76,7 +85,7 @@ https://ader3.titanspeakermen027.workers.dev
 
 The callback URL must exactly match the OAuth2 Redirect URI configured in the Discord Developer Portal.
 
-The FastAPI backend already reads the public origin from X-Forwarded-Host / X-Forwarded-Proto, which the Worker supplies for OAuth requests.
+The FastAPI backend reads the public origin from `X-Forwarded-Host` and `X-Forwarded-Proto`, which the Worker supplies for OAuth requests.
 
 ## Worker backend variable
 
@@ -86,28 +95,18 @@ The Worker uses:
 BACKEND_URL=http://nova.hatenna.com:25979
 ~~~
 
-This value is stored in wrangler.jsonc and can also be managed as a Cloudflare Worker environment variable.
+This value is stored in the root `wrangler.jsonc` and can also be managed as a Cloudflare Worker environment variable. Keep the Wrangler configuration as the source of truth for deployment.
 
 ## Login flow
 
 1. The browser opens the dashboard on the Worker domain.
-2. /login is proxied to FastAPI.
+2. `/login` is proxied to FastAPI.
 3. FastAPI creates OAuth state and redirects to Discord.
-4. Discord returns to /callback on the same Worker domain.
-5. The Worker forwards the callback to FastAPI and preserves Set-Cookie.
+4. Discord returns to `/callback` on the same Worker domain.
+5. The Worker forwards the callback to FastAPI and preserves `Set-Cookie`.
 6. FastAPI creates the dashboard session.
-7. The browser is redirected to /.
-8. The frontend reads /api/me using the same origin.
-
-## Frontend configuration
-
-frontend/config.js intentionally keeps:
-
-~~~js
-API_BASE: ""
-~~~
-
-A relative API base keeps the dashboard API and OAuth session on the same public origin.
+7. The browser is redirected to `/`.
+8. The frontend reads `/api/me` using the same origin.
 
 ## Features
 
