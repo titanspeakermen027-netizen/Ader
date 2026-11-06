@@ -105,6 +105,8 @@ class Ader(commands.Bot):
         for item in args[:3]:
             if item is None:
                 continue
+            if isinstance(item, discord.Guild):
+                return int(item.id)
             try:
                 guild_id = getattr(item, "guild_id", None)
                 if guild_id is not None:
@@ -133,7 +135,7 @@ class Ader(commands.Bot):
                     # Always deliver guild_join so the linked manager can
                     # immediately leave an unapproved server. All other guild
                     # events are isolated to the user's selected allowlist.
-                    if event == "on_guild_join":
+                    if event in {"guild_join", "on_guild_join"}:
                         return super().dispatch(event, *args, **kwargs)
                     if guild_id not in self.linked_guild_ids:
                         return
