@@ -56,7 +56,16 @@ class Ader(commands.Bot):
             return True
         return await super().is_owner(user)
 
-    def __init__(self, config: dict, *, linked_mode: bool = False, linked_guild_id: int | None = None, db_path: str | None = None):
+    def __init__(
+        self,
+        config: dict,
+        *,
+        linked_mode: bool = False,
+        linked_guild_id: int | None = None,
+        linked_guild_ids: set[int] | list[int] | tuple[int, ...] | None = None,
+        linked_owner_id: int | None = None,
+        db_path: str | None = None,
+    ):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.members = True
@@ -72,7 +81,10 @@ class Ader(commands.Bot):
         super().__init__(command_prefix=prefixes, intents=intents, help_command=None)
         self.config = config
         self.linked_mode = bool(linked_mode)
-        self.linked_guild_id = int(linked_guild_id) if linked_guild_id else None
+        self.linked_owner_id = int(linked_owner_id) if linked_owner_id else None
+        supplied_guilds = linked_guild_ids or ({int(linked_guild_id)} if linked_guild_id else set())
+        self.linked_guild_ids = {int(value) for value in supplied_guilds if int(value) > 0}
+        self.linked_guild_id = next(iter(self.linked_guild_ids), None)
         self.linked_manager = None
         self.linked_bot_manager = None
         self.start_time = discord.utils.utcnow()
@@ -118,7 +130,12 @@ class Ader(commands.Bot):
             guild_id = self._event_guild_id(args)
             if guild_id is not None:
                 if self.linked_mode:
-                    if self.linked_guild_id is not None and guild_id != self.linked_guild_id:
+                    # Always deliver guild_join so the linked manager can
+                    # immediately leave an unapproved server. All other guild
+                    # events are isolated to the user's selected allowlist.
+                    if event == "on_guild_join":
+                        return super().dispatch(event, *args, **kwargs)
+                    if guild_id not in self.linked_guild_ids:
                         return
                 elif manager.is_handoff_guild(guild_id):
                     return
@@ -377,30 +394,73 @@ class Ader(commands.Bot):
         else:
             await interaction.response.send_message(text, ephemeral=True)
 
+    async def on_guild_join(self, guild: discord.Guild):
+        if not self.linked_mode:
+            return
+        manager = self.linked_manager
+        if manager is not None:
+            await manager.handle_guild_join(self, guild)
+
     async def on_ready(self):
         if self.linked_mode:
-            record = await self.db.get_linked_bot(self.linked_guild_id) if self.linked_guild_id else None
+            owner_id = self.linked_owner_id
+            record = await self.db.get_linked_bot_account(owner_id) if owner_id else None
             if record and self.user and not getattr(self, "_linked_profile_applied", False):
                 try:
                     await apply_linked_profile(self, record)
-                    await self.db.update_linked_bot_status(self.linked_guild_id, "online", None)
+                    await self.db.update_linked_bot_account_status(owner_id, "online", None)
                     self._linked_profile_applied = True
                 except Exception as exc:
-                    self.logger.error("Failed to apply linked bot profile for guild %s: %s", self.linked_guild_id, str(exc)[:400])
-                    await self.db.update_linked_bot_status(self.linked_guild_id, "error", str(exc)[:500])
+                    safe_error = str(exc)[:500]
+                    self.logger.error(
+                        "Failed to apply linked bot profile for owner %s: %s",
+                        owner_id,
+                        safe_error[:400],
+                    )
+                    await self.db.update_linked_bot_account_status(owner_id, "error", safe_error)
+
             if self._ready_sync_done:
                 return
-            try:
-                target_guild = self.get_guild(self.linked_guild_id) if self.linked_guild_id else None
-                if target_guild is None:
-                    raise RuntimeError("البوت المرتبط ليس داخل السيرفر المحدد.")
-                target = discord.Object(id=target_guild.id)
-                self.tree.copy_global_to(guild=target)
-                guild_synced = await self.tree.sync(guild=target)
-                self._ready_sync_done = True
-                self.logger.info("Linked bot ready as %s in guild %s; synced %d commands", self.user, target_guild.id, len(guild_synced))
-            except Exception:
-                self.logger.error("Linked bot command synchronization failed", exc_info=True)
+
+            # Enforce the allowlist for guilds the bot was already in before
+            # reconnecting, not only for future guild_join events.
+            for guild in list(self.guilds):
+                if guild.id not in self.linked_guild_ids:
+                    try:
+                        await guild.leave()
+                        self.logger.warning(
+                            "Linked bot for owner %s left unapproved guild %s",
+                            owner_id,
+                            guild.id,
+                        )
+                    except (discord.Forbidden, discord.HTTPException):
+                        self.logger.exception(
+                            "Could not leave unapproved guild %s",
+                            guild.id,
+                        )
+
+            synced = 0
+            for guild in list(self.guilds):
+                if guild.id not in self.linked_guild_ids:
+                    continue
+                try:
+                    target = discord.Object(id=guild.id)
+                    self.tree.copy_global_to(guild=target)
+                    await self.tree.sync(guild=target)
+                    synced += 1
+                except Exception:
+                    self.logger.error(
+                        "Linked bot command synchronization failed for guild %s",
+                        guild.id,
+                        exc_info=True,
+                    )
+            self._ready_sync_done = True
+            self.logger.info(
+                "Linked bot ready as %s for account %s; synced commands in %d allowed guilds",
+                self.user,
+                owner_id,
+                synced,
+            )
             return
 
         types = {"playing": discord.ActivityType.playing, "watching": discord.ActivityType.watching, "listening": discord.ActivityType.listening, "streaming": discord.ActivityType.streaming}
