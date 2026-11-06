@@ -28,6 +28,14 @@ export default {
       );
     }
 
+    // Temporary diagnostic mode: serve the backend's built-in dashboard
+    // instead of Workers Static Assets. Disable with BACKEND_DASHBOARD_PRIMARY=false.
+    if (env.BACKEND_DASHBOARD_PRIMARY === "true") {
+      return proxyBackend(request, env, backend, url, {
+        backendDashboardPrimary: true
+      });
+    }
+
     const isBackendRoute =
       url.pathname === "/login" ||
       url.pathname === "/callback" ||
@@ -67,6 +75,10 @@ async function proxyBackend(request, env, backend, publicUrl, options = {}) {
   // Worker origin instead of the private/backend origin.
   headers.set("X-Forwarded-Host", publicUrl.host);
   headers.set("X-Forwarded-Proto", publicUrl.protocol.replace(":", ""));
+
+  if (options.backendDashboardPrimary) {
+    headers.set("X-Ader-Backend-Dashboard-Primary", "1");
+  }
 
   try {
     const response = await fetch(target, {
