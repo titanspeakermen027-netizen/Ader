@@ -30,14 +30,10 @@ class CloudflareSessionBridge(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         frontend = os.getenv("DASHBOARD_FRONTEND_URL", "").strip().rstrip("/")
-        backend_dashboard_primary = (
-            request.headers.get("x-ader-backend-dashboard-primary", "").strip() == "1"
-        )
         if (
             frontend
             and request.url.path == "/"
             and request.method == "GET"
-            and not backend_dashboard_primary
         ):
             return RedirectResponse(frontend + "/", status_code=302)
         response = await call_next(request)
