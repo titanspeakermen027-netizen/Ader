@@ -1,6 +1,6 @@
 # Ader Dashboard — Cloudflare Workers
 
-The Ader dashboard uses Cloudflare Workers Static Assets for the frontend and a separate FastAPI service for the Discord bot/API.
+The Ader dashboard has one canonical browser UI in `frontend/`. Cloudflare Workers Static Assets serves those files, while the FastAPI service is the single backend for Discord OAuth, sessions, and dashboard APIs. The separate HTML dashboard embedded in FastAPI is not the production UI.
 
 ## Single source of truth
 
@@ -19,10 +19,10 @@ Browser → Cloudflare Worker → FastAPI backend
 
 The same Worker origin serves:
 
-- static frontend files through `env.ASSETS.fetch()`
-- `/login`, `/callback`, `/logout`
-- `/api/*`
-- `/healthz`
+- the canonical dashboard UI from `frontend/index.html` and its CSS/JS assets through `env.ASSETS.fetch()`
+- `/login`, `/callback`, `/logout` through FastAPI
+- `/api/*` through FastAPI
+- `/healthz` through FastAPI
 
 This keeps the dashboard and OAuth session on one public origin and avoids cross-origin cookie problems.
 
@@ -58,6 +58,8 @@ The root `wrangler.jsonc` configures:
 - SPA fallback: `single-page-application`
 - Worker-first routes: `/healthz`, `/login`, `/callback`, `/logout`, and `/api/*`
 - Backend URL: `http://nova.hatenna.com:25979`
+
+The production browser UI is exclusively `frontend/`. Do not switch the Worker to the embedded FastAPI HTML dashboard; FastAPI remains the OAuth/API backend only.
 
 The frontend configuration in `frontend/config.js` intentionally keeps:
 
