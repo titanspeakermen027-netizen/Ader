@@ -659,10 +659,13 @@ def create_app(bot):
                     permissions = base.ADMINISTRATOR | base.MANAGE_GUILD
                 else:
                     member = guild.get_member(user_id)
+                    member_missing = False
                     if member is None:
                         try:
                             member = await guild.fetch_member(user_id)
-                        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                        except discord.NotFound:
+                            member_missing = True
+                        except (discord.Forbidden, discord.HTTPException):
                             member = None
                     if member is not None:
                         live = member.guild_permissions
@@ -671,6 +674,11 @@ def create_app(bot):
                             (base.ADMINISTRATOR if live.administrator else 0)
                             | (base.MANAGE_GUILD if live.administrator or live.manage_guild else 0)
                         )
+                    elif member_missing:
+                        # The primary bot can verify this guild, and Discord
+                        # confirmed the dashboard user is no longer a member.
+                        allowed = False
+                        permissions = 0
             if not allowed:
                 continue
 
