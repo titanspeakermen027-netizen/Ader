@@ -281,36 +281,32 @@ class TicketPanelView(discord.ui.View):
 
 
 class TicketActionView(discord.ui.View):
-    def __init__(self, cog: "TicketManager", channel_id: int, closed: bool = False):
+    def __init__(self, cog: "TicketManager", channel_id: int, closed: bool = False, claimed: bool = False):
         super().__init__(timeout=None)
         self.cog = cog
         self.channel_id = channel_id
         self.closed = closed
         if closed:
-            self.add_item(TicketReopenButton(cog, channel_id))
-            self.add_item(TicketTranscriptButton(cog, channel_id))
-            self.add_item(TicketDeleteButton(cog, channel_id))
+            self.add_item(TicketActionSelect(cog, channel_id, closed=True))
             return
-        self.add_item(TicketClaimButton(cog, channel_id))
-        self.add_item(TicketCloseButton(cog, channel_id))
-        self.add_item(TicketLockButton(cog, channel_id))
-        self.add_item(TicketMemberButton(cog, channel_id, "add"))
-        self.add_item(TicketMemberButton(cog, channel_id, "remove"))
-        self.add_item(TicketRenameButton(cog, channel_id))
-        self.add_item(TicketTranscriptButton(cog, channel_id))
-        purchase = cog.bot.get_cog("TicketPurchase")
-        if purchase is not None:
-            self.add_item(TicketPurchaseButton(cog, channel_id))
+        claim_button = TicketClaimButton(cog, channel_id)
+        claim_button.disabled = claimed
+        self.add_item(claim_button)
+        unclaim_button = TicketUnclaimButton(cog, channel_id)
+        unclaim_button.disabled = not claimed
+        self.add_item(unclaim_button)
+        self.add_item(TicketSupportRequestButton(cog, channel_id))
+        self.add_item(TicketActionSelect(cog, channel_id, closed=False))
 
 
 class BaseTicketButton(discord.ui.Button):
     def __init__(self, *, label: str, emoji: str, style: discord.ButtonStyle, custom_id: str):
-        super().__init__(label=label, emoji=emoji, style=style, custom_id=custom_id)
+        super().__init__(label=label, emoji=emoji, style=style, custom_id=custom_id, row=0)
 
 
 class TicketClaimButton(BaseTicketButton):
     def __init__(self, cog: "TicketManager", channel_id: int):
-        super().__init__(label="تولّي التذكرة", emoji="🙋", style=discord.ButtonStyle.success, custom_id=f"ader:ticket:claim:{channel_id}")
+        super().__init__(label="استلام", emoji="🙋", style=discord.ButtonStyle.success, custom_id=f"ader:ticket:claim:{channel_id}")
         self.cog, self.channel_id = cog, channel_id
 
     async def callback(self, interaction: discord.Interaction):
@@ -326,14 +322,17 @@ class TicketClaimButton(BaseTicketButton):
             return await interaction.response.send_message("لا يمكن لصاحب التذكرة تولّي تذكرته.", ephemeral=True)
         claimed = as_int(ticket.get("claimed_by"))
         if claimed:
-            if claimed == interaction.user.id:
-                await self.cog.write_ticket_data(ticket, {"claimed_by": None})
-                await self.cog.db.update_ticket(ticket["id"], {"claimed_by": None})
-                return await interaction.response.send_message("تم إلغاء تولّيك للتذكرة.", ephemeral=True)
-            return await interaction.response.send_message("هذه التذكرة متولّاة بالفعل من عضو آخر في فريق الدعم.", ephemeral=True)
+            return await interaction.response.send_message(
+                "هذه التذكرة متولّاة بالفعل. استخدم زر إلغاء الاستلام إذا كنت أنت المستلم.",
+                ephemeral=True,
+            )
         await self.cog.db.update_ticket(ticket["id"], {"claimed_by": interaction.user.id})
         await self.cog.write_ticket_data(ticket, {"claimed_by": interaction.user.id})
-        await interaction.response.send_message(f"تم تولّي التذكرة بواسطة {interaction.user.mention}.")
+        await interaction.response.send_message(f"تم استلام التذكرة بواسطة {interaction.user.mention}.")
+        try:
+            await interaction.message.edit(view=TicketActionView(self.cog, self.channel_id, claimed=True))
+        except (discord.HTTPException, AttributeError):
+            pass
         await self.cog.log_event(ticket, "claim", {"staff_id": interaction.user.id})
 
 
@@ -476,6 +475,123 @@ class TicketPurchaseButton(BaseTicketButton):
         await purchase.open_purchase(interaction, self.channel_id)
 
 
+class TicketUnclaimButton(BaseTicketButton):
+    def __init__(self, cog: "TicketManager", channel_id: int):
+        super().__init__(label="إلغاء الاستلام", emoji="↩️", style=discord.ButtonStyle.secondary, custom_id=f"ader:ticket:unclaim:{channel_id}")
+        self.cog, self.channel_id = cog, channel_id
+
+    async def callback(self, interaction: discord.Interaction):
+        ticket = await self.cog.get_ticket_by_channel(self.channel_id)
+        if not ticket:
+            return await interaction.response.send_message("هذه التذكرة غير موجودة.", ephemeral=True)
+        if not await self.cog.is_staff(interaction, ticket):
+            return await interaction.response.send_message("هذه العملية متاحة لفريق الدعم فقط.", ephemeral=True)
+        if as_int(ticket.get("claimed_by")) != interaction.user.id:
+            return await interaction.response.send_message("لا يمكنك إلغاء استلام تذكرة لم تستلمها أنت.", ephemeral=True)
+        await self.cog.db.update_ticket(ticket["id"], {"claimed_by": None})
+        await self.cog.write_ticket_data(ticket, {"claimed_by": None})
+        await interaction.response.send_message("تم إلغاء استلامك للتذكرة.", ephemeral=True)
+        try:
+            await interaction.message.edit(view=TicketActionView(self.cog, self.channel_id, claimed=False))
+        except (discord.HTTPException, AttributeError):
+            pass
+        await self.cog.log_event(ticket, "unclaim", {"staff_id": interaction.user.id})
+
+
+class TicketSupportRequestButton(BaseTicketButton):
+    def __init__(self, cog: "TicketManager", channel_id: int):
+        super().__init__(label="طلب الدعم", emoji="🆘", style=discord.ButtonStyle.primary, custom_id=f"ader:ticket:support:{channel_id}")
+        self.cog, self.channel_id = cog, channel_id
+
+    async def callback(self, interaction: discord.Interaction):
+        ticket = await self.cog.get_ticket_by_channel(self.channel_id)
+        if not ticket or ticket["status"] not in {"open", "locked"}:
+            return await interaction.response.send_message("لا يمكن طلب الدعم من تذكرة مغلقة أو غير موجودة.", ephemeral=True)
+        if int(ticket.get("user_id") or 0) != interaction.user.id:
+            return await interaction.response.send_message("زر طلب الدعم مخصص لصاحب التذكرة.", ephemeral=True)
+
+        data = self.cog.ticket_data(ticket)
+        now = time.time()
+        last_request = float(data.get("support_requested_at") or 0)
+        wait_seconds = 300 - int(now - last_request)
+        if wait_seconds > 0:
+            return await interaction.response.send_message(
+                f"لقد أرسلت طلب دعم مؤخراً. حاول بعد {wait_seconds} ثانية.",
+                ephemeral=True,
+            )
+
+        settings = await self.cog.settings_for_ticket(ticket)
+        role_id = as_int(data.get("support_role_id")) or as_int(settings.get("default_support_role_id"))
+        role = interaction.guild.get_role(role_id) if role_id else None
+        await self.cog.write_ticket_data(ticket, {"support_requested_at": now})
+        embed = discord.Embed(
+            title="طلب دعم جديد",
+            description=f"صاحب التذكرة {interaction.user.mention} يطلب حضور فريق الدعم.",
+            color=EmbedColor.PRIMARY,
+            timestamp=discord.utils.utcnow(),
+        )
+        content = role.mention if role else "فريق الدعم، يوجد طلب مساعدة جديد."
+        await interaction.channel.send(
+            content=content,
+            embed=embed,
+            allowed_mentions=discord.AllowedMentions(roles=bool(role), users=False, everyone=False),
+        )
+        await interaction.response.send_message("تم إرسال طلب الدعم إلى الفريق.", ephemeral=True)
+        await self.cog.log_event(ticket, "support_requested", {"requested_by": interaction.user.id, "support_role_id": role_id})
+
+
+class TicketActionSelect(discord.ui.Select):
+    def __init__(self, cog: "TicketManager", channel_id: int, closed: bool = False):
+        self.cog = cog
+        self.channel_id = channel_id
+        self.closed = closed
+        if closed:
+            options = [
+                discord.SelectOption(label="إعادة فتح التذكرة", value="reopen", emoji="🔓"),
+                discord.SelectOption(label="إنشاء السجل", value="transcript", emoji="📄"),
+                discord.SelectOption(label="حذف التذكرة نهائياً", value="delete", emoji="🗑️"),
+            ]
+            placeholder = "إجراءات التذكرة المغلقة"
+        else:
+            options = [
+                discord.SelectOption(label="إغلاق التذكرة", value="close", emoji="🔒"),
+                discord.SelectOption(label="قفل أو فتح التذكرة", value="lock", emoji="🔐"),
+                discord.SelectOption(label="إضافة عضو", value="add_member", emoji="➕"),
+                discord.SelectOption(label="إزالة عضو", value="remove_member", emoji="➖"),
+                discord.SelectOption(label="إعادة تسمية التذكرة", value="rename", emoji="✏️"),
+                discord.SelectOption(label="إنشاء سجل التذكرة", value="transcript", emoji="📄"),
+            ]
+            if cog.bot.get_cog("TicketPurchase") is not None:
+                options.append(discord.SelectOption(label="الشراء داخل التذكرة", value="purchase", emoji="🛒"))
+            placeholder = "اختر إجراءً من إجراءات التذكرة"
+        super().__init__(
+            placeholder=placeholder,
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id=f"ader:ticket:actions:{channel_id}:{'closed' if closed else 'open'}",
+            row=0 if closed else 1,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        action = self.values[0]
+        handlers = {
+            "close": TicketCloseButton(self.cog, self.channel_id),
+            "lock": TicketLockButton(self.cog, self.channel_id),
+            "add_member": TicketMemberButton(self.cog, self.channel_id, "add"),
+            "remove_member": TicketMemberButton(self.cog, self.channel_id, "remove"),
+            "rename": TicketRenameButton(self.cog, self.channel_id),
+            "transcript": TicketTranscriptButton(self.cog, self.channel_id),
+            "purchase": TicketPurchaseButton(self.cog, self.channel_id),
+            "reopen": TicketReopenButton(self.cog, self.channel_id),
+            "delete": TicketDeleteButton(self.cog, self.channel_id),
+        }
+        handler = handlers.get(action)
+        if handler is None:
+            return await interaction.response.send_message("هذا الإجراء غير متاح.", ephemeral=True)
+        await handler.callback(interaction)
+
+
 class TicketManager(commands.Cog):
     def __init__(self, bot: commands.Bot, db, config: dict):
         self.bot = bot
@@ -491,14 +607,79 @@ class TicketManager(commands.Cog):
                     self.bot.add_view(TicketPanelView(self, panel), message_id=int(panel["message_id"]))
                 except Exception:
                     pass
+        asyncio.create_task(self._restore_ticket_views())
+
+    async def _restore_ticket_views(self):
+        await self.bot.wait_until_ready()
         rows = await self.db.fetchall(
-            "SELECT channel_id,status FROM tickets WHERE channel_id IS NOT NULL AND status IN ('open','locked','closed')"
+            "SELECT channel_id,status,user_id,claimed_by FROM tickets "
+            "WHERE channel_id IS NOT NULL AND status IN ('open','locked','closed')"
         )
         for row in rows:
+            channel_id = int(row["channel_id"])
             try:
-                self.bot.add_view(TicketActionView(self, int(row["channel_id"]), str(row["status"]) == "closed"), message_id=None)
-            except Exception:
-                pass
+                channel = self.bot.get_channel(channel_id)
+                if channel is None:
+                    channel = await self.bot.fetch_channel(channel_id)
+                if not isinstance(channel, discord.TextChannel):
+                    continue
+                closed = str(row["status"]) == "closed"
+                if closed and row["user_id"]:
+                    owner_id = int(row["user_id"])
+                    owner_target = channel.guild.get_member(owner_id) or discord.Object(id=owner_id)
+                    try:
+                        await channel.set_permissions(
+                            owner_target,
+                            view_channel=False,
+                            send_messages=False,
+                            read_message_history=False,
+                            reason="تطبيق خصوصية التذكرة المغلقة",
+                        )
+                    except discord.HTTPException:
+                        pass
+
+                view = TicketActionView(
+                    self,
+                    channel_id,
+                    closed=closed,
+                    claimed=bool(row["claimed_by"]),
+                )
+                self.bot.add_view(view)
+
+                # Replace old ticket action buttons with the new menu layout.
+                bot_user_id = self.bot.user.id if self.bot.user else 0
+                if bot_user_id:
+                    try:
+                        async for message in channel.history(limit=30, oldest_first=False):
+                            if message.author.id != bot_user_id or not message.components:
+                                continue
+                            custom_ids = [
+                                getattr(component, "custom_id", None)
+                                for action_row in message.components
+                                for component in getattr(action_row, "children", ())
+                            ]
+                            legacy_action_prefixes = (
+                                "ader:ticket:claim:",
+                                "ader:ticket:close:",
+                                "ader:ticket:lock:",
+                                "ader:ticket:add:",
+                                "ader:ticket:remove:",
+                                "ader:ticket:rename:",
+                                "ader:ticket:transcript:",
+                                "ader:ticket:reopen:",
+                                "ader:ticket:delete:",
+                                "ader:ticket:actions:",
+                            )
+                            if any(
+                                str(custom_id or "").startswith(legacy_action_prefixes)
+                                for custom_id in custom_ids
+                            ):
+                                await message.edit(view=view)
+                                break
+                    except (discord.Forbidden, discord.HTTPException):
+                        pass
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                continue
 
     def ticket_data(self, ticket: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -716,11 +897,34 @@ class TicketManager(commands.Cog):
             return await interaction.response.send_message("لا يملك صلاحية إغلاق هذه التذكرة.", ephemeral=True)
 
         await interaction.response.defer(ephemeral=True)
-        await self.db.update_ticket(ticket["id"], {"status": "closed", "closed_at": time.time(), "data": json.dumps({**self.ticket_data(ticket), "close_reason": reason[:1000], "closed_by": interaction.user.id, "locked": True}, ensure_ascii=False)})
+        owner_id = int(ticket["user_id"])
+        owner_target = interaction.guild.get_member(owner_id) or discord.Object(id=owner_id)
         try:
-            owner = interaction.guild.get_member(int(ticket["user_id"]))
-            if owner:
-                await interaction.channel.set_permissions(owner, send_messages=False, view_channel=True, read_message_history=True, reason=f"إغلاق التذكرة #{ticket['id']}")
+            # Removing view_channel is the privacy boundary for a closed ticket.
+            await interaction.channel.set_permissions(
+                owner_target,
+                view_channel=False,
+                send_messages=False,
+                read_message_history=False,
+                reason=f"إغلاق التذكرة #{ticket['id']}",
+            )
+        except (discord.Forbidden, discord.HTTPException):
+            return await interaction.followup.send(
+                "تعذر إخفاء التذكرة عن صاحبها، لذلك لم يتم إغلاقها. تحقق من صلاحية Manage Channels لدى البوت.",
+                ephemeral=True,
+            )
+
+        await self.db.update_ticket(ticket["id"], {
+            "status": "closed",
+            "closed_at": time.time(),
+            "data": json.dumps({
+                **self.ticket_data(ticket),
+                "close_reason": reason[:1000],
+                "closed_by": interaction.user.id,
+                "locked": True,
+            }, ensure_ascii=False),
+        })
+        try:
             await interaction.channel.edit(name=clean_name("closed-" + interaction.channel.name, f"closed-ticket-{ticket['id']}"))
         except discord.HTTPException:
             pass
@@ -733,7 +937,7 @@ class TicketManager(commands.Cog):
         try:
             await interaction.message.edit(content="تم إغلاق التذكرة. يمكن لفريق الدعم إعادة فتحها أو حذفها.", embed=interaction.message.embeds[0] if interaction.message.embeds else None, view=TicketActionView(self, channel_id, closed=True))
         except Exception:
-            await interaction.channel.send("تم إغلاق التذكرة. يمكن لفريق الدعم إعادة فتحها أو حذفها.", view=TicketActionView(self, channel_id))
+            await interaction.channel.send("تم إغلاق التذكرة. يمكن لفريق الدعم إعادة فتحها أو حذفها.", view=TicketActionView(self, channel_id, closed=True))
 
         if as_bool(settings.get("rating_enabled"), True):
             try:
@@ -762,9 +966,15 @@ class TicketManager(commands.Cog):
         channel = self.bot.get_channel(int(ticket["channel_id"]))
         if not isinstance(channel, discord.TextChannel):
             return False
-        owner = channel.guild.get_member(int(ticket["user_id"]))
-        if owner:
-            await channel.set_permissions(owner, send_messages=not locked, view_channel=True, read_message_history=True, reason=f"قفل التذكرة #{ticket['id']}" if locked else f"فتح التذكرة #{ticket['id']}")
+        owner_id = int(ticket["user_id"])
+        owner_target = channel.guild.get_member(owner_id) or discord.Object(id=owner_id)
+        await channel.set_permissions(
+            owner_target,
+            send_messages=not locked,
+            view_channel=True,
+            read_message_history=True,
+            reason=f"قفل التذكرة #{ticket['id']}" if locked else f"فتح التذكرة #{ticket['id']}",
+        )
         await self.write_ticket_data(ticket, {"locked": locked})
         await self.db.update_ticket(ticket["id"], {"status": "locked" if locked else "open", "data": json.dumps(self.ticket_data(ticket), ensure_ascii=False)})
         return True
@@ -773,9 +983,16 @@ class TicketManager(commands.Cog):
         channel = self.bot.get_channel(int(ticket["channel_id"]))
         if not isinstance(channel, discord.TextChannel):
             return await interaction.response.send_message("قناة التذكرة غير موجودة.", ephemeral=True)
-        owner = channel.guild.get_member(int(ticket["user_id"]))
-        if owner:
-            await channel.set_permissions(owner, send_messages=True, view_channel=True, read_message_history=True, attach_files=True, reason=f"إعادة فتح التذكرة #{ticket['id']}")
+        owner_id = int(ticket["user_id"])
+        owner_target = channel.guild.get_member(owner_id) or discord.Object(id=owner_id)
+        await channel.set_permissions(
+            owner_target,
+            send_messages=True,
+            view_channel=True,
+            read_message_history=True,
+            attach_files=True,
+            reason=f"إعادة فتح التذكرة #{ticket['id']}",
+        )
         try:
             if channel.name.startswith("closed-"):
                 await channel.edit(name=channel.name[7:], reason=f"إعادة فتح التذكرة #{ticket['id']}")
@@ -785,7 +1002,7 @@ class TicketManager(commands.Cog):
         data.update({"locked": False, "reopened_by": interaction.user.id, "reopened_at": time.time()})
         await self.db.update_ticket(ticket["id"], {"status": "open", "closed_at": None, "data": json.dumps(data, ensure_ascii=False)})
         try:
-            await interaction.message.edit(view=TicketActionView(self, int(channel.id), closed=False))
+            await interaction.message.edit(view=TicketActionView(self, int(channel.id), closed=False, claimed=bool(as_int(ticket.get("claimed_by")))))
         except Exception:
             pass
         await interaction.response.send_message("تمت إعادة فتح التذكرة.", ephemeral=True)
@@ -846,7 +1063,8 @@ class TicketManager(commands.Cog):
 
     EVENT_LABELS = {
         "created": "إنشاء التذكرة", "closed": "إغلاق التذكرة", "reopened": "إعادة فتح التذكرة",
-        "claim": "تولّي التذكرة", "deleted": "حذف التذكرة", "rating": "تقييم التذكرة",
+        "claim": "استلام التذكرة", "unclaim": "إلغاء استلام التذكرة",
+        "support_requested": "طلب دعم", "deleted": "حذف التذكرة", "rating": "تقييم التذكرة",
     }
 
     async def log_event(self, ticket: dict[str, Any], event: str, data: dict[str, Any]):
@@ -947,23 +1165,30 @@ class TicketManager(commands.Cog):
         self.bot.add_view(view, message_id=message.id)
         return await self.db.get_ticket_panel(panel_id)
 
-    def dashboard_url(self) -> str:
-        return (str(__import__("os").getenv("DASHBOARD_FRONTEND_URL", "")).strip().rstrip("/") or
-                str(__import__("os").getenv("DASHBOARD_PUBLIC_URL", "")).strip().rstrip("/"))
-
-    @app_commands.command(name="ticket", description="إدارة نظام التذاكر الاحترافي")
+    @app_commands.command(name="ticket", description="إدارة نظام التذاكر من Discord")
     @is_admin()
     async def ticket_cmd(self, interaction: discord.Interaction):
-        url = self.dashboard_url()
+        if interaction.guild is None:
+            return await interaction.response.send_message("استخدم هذا الأمر داخل السيرفر.", ephemeral=True)
+        if hasattr(self.db, "is_server_premium") and not await self.db.is_server_premium(interaction.guild.id):
+            return await interaction.response.send_message(
+                "إدارة نظام التذاكر الاحترافي متاحة لسيرفرات Ader Premium. ستظل إعدادات Discord والداشبورد مشتركة بعد تفعيل الميزة.",
+                ephemeral=True,
+            )
+        from cogs.ticket_admin_ui import TicketManagementView
         embed = discord.Embed(
-            title="نظام التذاكر الاحترافي",
-            description="يمكنك إنشاء لوحات التذاكر وتخصيص الأنواع والقنوات والصلاحيات والسجلات من لوحة تحكم Ader.",
+            title="مركز إدارة التذاكر",
+            description=(
+                "يمكنك إدارة نظام التذاكر بالكامل من داخل Discord دون الحاجة إلى فتح الداشبورد. "
+                "الإعدادات واللوحات هنا مشتركة مع الداشبورد وتُحفظ في قاعدة البيانات نفسها."
+            ),
             color=EmbedColor.PRIMARY,
         )
-        view = discord.ui.View(timeout=180)
-        if url:
-            view.add_item(discord.ui.Button(label="فتح لوحة التذاكر", style=discord.ButtonStyle.link, url=url))
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        await interaction.response.send_message(
+            embed=embed,
+            view=TicketManagementView(self, interaction.user.id),
+            ephemeral=True,
+        )
 
 
 async def setup(bot: commands.Bot):
