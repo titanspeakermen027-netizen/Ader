@@ -86,8 +86,6 @@ class ServerPremium(commands.Cog):
                 duration = parse_duration(parts[2])
             except ValueError as exc:
                 return await self._reply(message, "بيانات غير صحيحة", str(exc))
-            if user_id == message.author.id:
-                return await self._reply(message, "عملية غير صالحة", "لا يمكن منح Premium لنفس حساب المالك عبر هذا الأمر.")
             try:
                 target = self.bot.get_user(user_id) or await self.bot.fetch_user(user_id)
             except (discord.NotFound, discord.HTTPException):
