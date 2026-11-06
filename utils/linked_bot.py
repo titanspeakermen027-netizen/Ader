@@ -1,4 +1,4 @@
-"""Manager for Discord bots linked to Ader Premium servers."""
+"""Manager for user-owned Discord bots with server allowlists."""
 from __future__ import annotations
 
 import asyncio
@@ -13,143 +13,230 @@ from utils.secrets_store import TokenCipher
 
 
 class LinkedBotManager:
-    """Starts and stops per-server custom bot instances.
-
-    Every linked instance points at the exact same SQLite file used by the
-    primary Ader process, so guild/user/ticket/economy settings are shared.
-    """
+    """Run one linked bot per Premium account, restricted to selected guilds."""
 
     def __init__(self, primary_bot):
         self.primary = primary_bot
         self.log = logging.getLogger("Ader.linked_bots")
         self.instances: dict[int, commands.Bot] = {}
         self.tasks: dict[int, asyncio.Task] = {}
-        self.cipher = None
         self.monitor_task: asyncio.Task | None = None
+        self._locks: dict[int, asyncio.Lock] = {}
 
     async def start_monitor(self):
         if self.monitor_task is None or self.monitor_task.done():
-            self.monitor_task = asyncio.create_task(self._monitor(), name="ader-linked-bot-monitor")
+            self.monitor_task = asyncio.create_task(
+                self._monitor(),
+                name="ader-linked-bot-account-monitor",
+            )
 
     async def _monitor(self):
-        while True:
-            try:
+        try:
+            await self.primary.wait_until_ready()
+            # Restore accounts that were online before a process restart.
+            records = await self.primary.db.list_linked_bot_accounts()
+            for record in records:
+                if str(record.get("status") or "") not in {"online", "starting"}:
+                    continue
+                owner_id = int(record["owner_id"])
+                if not await self.primary.db.is_user_premium(owner_id):
+                    await self.primary.db.update_linked_bot_account_status(
+                        owner_id, "stopped", "انتهى اشتراك Premium للمستخدم.",
+                    )
+                    continue
+                try:
+                    await self.start_for_user(owner_id)
+                except Exception as exc:
+                    self.log.error(
+                        "Could not restore linked bot for owner %s: %s",
+                        owner_id,
+                        str(exc)[:400],
+                    )
+
+            while True:
                 await asyncio.sleep(30)
-                for guild_id in list(self.instances):
+                for owner_id in list(self.instances):
                     try:
-                        if not await self.primary.db.is_server_premium(guild_id):
-                            self.log.info("Premium expired; stopping linked bot for guild %s", guild_id)
-                            await self.stop_for_guild(guild_id)
+                        if not await self.primary.db.is_user_premium(owner_id):
+                            self.log.info("User Premium expired; stopping linked bot for %s", owner_id)
+                            await self.stop_for_user(owner_id)
                     except Exception as exc:
-                        self.log.error("Linked bot monitor failed for guild %s: %s", guild_id, str(exc)[:300])
-            except asyncio.CancelledError:
-                return
+                        self.log.error(
+                            "Linked bot Premium monitor failed for %s: %s",
+                            owner_id,
+                            str(exc)[:300],
+                        )
+        except asyncio.CancelledError:
+            return
 
     def is_handoff_guild(self, guild_id: int) -> bool:
-        return int(guild_id) in self.instances
-
-    def linked_bot(self, guild_id: int):
-        return self.instances.get(int(guild_id))
-
-    async def start_for_guild(self, guild_id: int) -> dict[str, Any]:
         guild_id = int(guild_id)
-        existing = self.instances.get(guild_id)
-        if existing and not existing.is_closed():
-            return {"ok": True, "already_running": True, "bot_user_id": existing.user.id if existing.user else None}
-
-        record = await self.primary.db.get_linked_bot(guild_id)
-        if not record:
-            raise RuntimeError("لا يوجد بوت مرتبط بهذا السيرفر.")
-        if not await self.primary.db.is_server_premium(guild_id):
-            raise RuntimeError("البوت المرتبط متاح فقط لسيرفرات Premium.")
-        try:
-            cipher = TokenCipher()
-            token = cipher.decrypt(str(record["encrypted_token"]))
-        except Exception as exc:
-            raise RuntimeError("تعذر فك تشفير توكن البوت. تأكد من إعداد ADER_TOKEN_ENCRYPTION_KEY.") from exc
-
-        from main import Ader
-
-        config = copy.deepcopy(self.primary.config)
-        config.setdefault("web", {})["enabled"] = False
-        bot = Ader(
-            config,
-            linked_mode=True,
-            linked_guild_id=guild_id,
-            db_path=str(self.primary.db.path),
+        return any(
+            guild_id in set(getattr(bot, "linked_guild_ids", set()))
+            for bot in self.instances.values()
         )
-        bot.linked_manager = self
-        bot._linked_owner_bot = self.primary
 
-        async def runner():
+    def linked_bot(self, owner_id: int):
+        return self.instances.get(int(owner_id))
+
+    async def start_for_user(self, owner_id: int) -> dict[str, Any]:
+        owner_id = int(owner_id)
+        lock = self._locks.setdefault(owner_id, asyncio.Lock())
+        async with lock:
+            existing = self.instances.get(owner_id)
+            if existing and not existing.is_closed():
+                return {
+                    "ok": True,
+                    "already_running": True,
+                    "bot_user_id": existing.user.id if existing.user else None,
+                    "joined_guild_ids": [g.id for g in existing.guilds],
+                }
+
+            if not await self.primary.db.is_user_premium(owner_id):
+                raise RuntimeError("Linked Bot متاح فقط لحسابات Ader Premium الفعالة.")
+            record = await self.primary.db.get_linked_bot_account(owner_id)
+            if not record:
+                raise RuntimeError("لم يتم ربط بوت بهذا الحساب بعد.")
+            allowed_ids = {
+                int(guild_id)
+                for guild_id in (record.get("allowed_guild_ids") or [])
+                if int(guild_id) > 0
+            }
+            if not allowed_ids:
+                raise RuntimeError("حدد سيرفراً واحداً على الأقل قبل تشغيل Linked Bot.")
+
             try:
-                await bot.start(token)
-            except asyncio.CancelledError:
-                raise
+                token = TokenCipher().decrypt(str(record["encrypted_token"]))
             except Exception as exc:
-                safe = str(exc).replace(token, "[REDACTED]")[:500]
-                self.log.error("Linked bot failed for guild %s: %s", guild_id, safe)
-                await self.primary.db.update_linked_bot_status(guild_id, "error", safe)
-                raise
-            finally:
-                self.instances.pop(guild_id, None)
-                self.tasks.pop(guild_id, None)
+                raise RuntimeError(
+                    "تعذر فك تشفير توكن البوت. تحقق من ADER_TOKEN_ENCRYPTION_KEY."
+                ) from exc
+
+            from main import Ader
+
+            config = copy.deepcopy(self.primary.config)
+            config.setdefault("web", {})["enabled"] = False
+            bot = Ader(
+                config,
+                linked_mode=True,
+                linked_guild_ids=allowed_ids,
+                linked_owner_id=owner_id,
+                db_path=str(self.primary.db.path),
+            )
+            bot.linked_manager = self
+            bot._linked_owner_bot = self.primary
+
+            await self.primary.db.update_linked_bot_account_status(owner_id, "starting", None)
+
+            async def runner():
+                token_value = token
                 try:
-                    await self.primary.db.update_linked_bot_runtime(guild_id, None)
+                    await bot.start(token_value)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    safe = str(exc).replace(token_value, "[REDACTED]")[:500]
+                    self.log.error("Linked bot failed for owner %s: %s", owner_id, safe)
+                    await self.primary.db.update_linked_bot_account_status(owner_id, "error", safe)
+                    raise
+                finally:
+                    if self.instances.get(owner_id) is bot:
+                        self.instances.pop(owner_id, None)
+                    if self.tasks.get(owner_id) is asyncio.current_task():
+                        self.tasks.pop(owner_id, None)
+                    try:
+                        await self.primary.db.update_linked_bot_account_runtime(owner_id, None)
+                    except Exception:
+                        pass
+
+            task = asyncio.create_task(runner(), name=f"ader-linked-bot-user-{owner_id}")
+            self.instances[owner_id] = bot
+            self.tasks[owner_id] = task
+
+            for _ in range(300):
+                if bot.is_ready():
+                    break
+                if task.done():
+                    try:
+                        exc = task.exception()
+                    except asyncio.CancelledError:
+                        exc = RuntimeError("تم إيقاف تشغيل البوت.")
+                    self.instances.pop(owner_id, None)
+                    self.tasks.pop(owner_id, None)
+                    if exc:
+                        raise RuntimeError(f"فشل تشغيل البوت المرتبط: {str(exc)[:350]}")
+                    break
+                await asyncio.sleep(0.1)
+
+            if not bot.is_ready():
+                await self.stop_for_user(owner_id)
+                raise RuntimeError("انتهت مهلة تشغيل البوت المرتبط. تحقق من التوكن واتصال Discord.")
+
+            await self.primary.db.update_linked_bot_account_runtime(
+                owner_id,
+                bot.user.id if bot.user else None,
+            )
+            await self.primary.db.update_linked_bot_account_status(owner_id, "online", None)
+            return {
+                "ok": True,
+                "already_running": False,
+                "bot_user_id": bot.user.id if bot.user else None,
+                "bot_name": bot.user.name if bot.user else None,
+                "joined_guild_ids": [guild.id for guild in bot.guilds if guild.id in allowed_ids],
+                "allowed_guild_ids": sorted(allowed_ids),
+            }
+
+    async def stop_for_user(self, owner_id: int) -> None:
+        owner_id = int(owner_id)
+        lock = self._locks.setdefault(owner_id, asyncio.Lock())
+        async with lock:
+            bot = self.instances.pop(owner_id, None)
+            task = self.tasks.pop(owner_id, None)
+            if bot is not None:
+                try:
+                    await bot.close()
                 except Exception:
                     pass
-
-        task = asyncio.create_task(runner(), name=f"ader-linked-bot-{guild_id}")
-        self.instances[guild_id] = bot
-        self.tasks[guild_id] = task
-
-        for _ in range(240):
-            if bot.is_ready():
-                break
-            if task.done():
-                exc = task.exception()
-                if exc:
-                    self.instances.pop(guild_id, None)
-                    self.tasks.pop(guild_id, None)
-                    raise RuntimeError(f"فشل تشغيل البوت المرتبط: {str(exc)[:350]}")
-                break
-            await asyncio.sleep(0.1)
-
-        if not bot.is_ready():
-            await self.stop_for_guild(guild_id)
-            raise RuntimeError("انتهت مهلة تشغيل البوت المرتبط. تحقق من التوكن ومن اتصال البوت بالسيرفر.")
-        if bot.get_guild(guild_id) is None:
-            await self.stop_for_guild(guild_id)
-            raise RuntimeError("البوت اشتغل لكن ما لقيتش راسو داخل السيرفر. زيد البوت للسيرفر أولاً ثم عاود الربط.")
-
-        await self.primary.db.update_linked_bot_runtime(guild_id, bot.user.id)
-        await self.primary.db.update_linked_bot_status(guild_id, "online", None)
-        return {"ok": True, "already_running": False, "bot_user_id": bot.user.id, "bot_name": bot.user.name}
-
-    async def stop_for_guild(self, guild_id: int) -> None:
-        guild_id = int(guild_id)
-        bot = self.instances.pop(guild_id, None)
-        task = self.tasks.pop(guild_id, None)
-        if bot is not None:
+            if task is not None and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
             try:
-                await bot.close()
+                await self.primary.db.update_linked_bot_account_status(owner_id, "stopped", None)
+                await self.primary.db.update_linked_bot_account_runtime(owner_id, None)
             except Exception:
                 pass
-        if task is not None and not task.done():
-            task.cancel()
+
+    async def restart_for_user(self, owner_id: int) -> dict[str, Any]:
+        await self.stop_for_user(owner_id)
+        return await self.start_for_user(owner_id)
+
+    async def handle_guild_join(self, bot, guild: discord.Guild) -> None:
+        owner_id = int(getattr(bot, "linked_owner_id", 0) or 0)
+        allowed = set(getattr(bot, "linked_guild_ids", set()))
+        if not owner_id or guild.id not in allowed:
+            self.log.warning(
+                "Linked bot for owner %s joined an unapproved guild %s; leaving immediately",
+                owner_id,
+                guild.id,
+            )
             try:
-                await task
-            except (asyncio.CancelledError, Exception):
-                pass
+                await guild.leave()
+            except (discord.Forbidden, discord.HTTPException):
+                self.log.exception("Unable to leave unapproved guild %s", guild.id)
+            return
         try:
-            await self.primary.db.update_linked_bot_status(guild_id, "stopped", None)
-            await self.primary.db.update_linked_bot_runtime(guild_id, None)
+            target = discord.Object(id=guild.id)
+            bot.tree.copy_global_to(guild=target)
+            await bot.tree.sync(guild=target)
         except Exception:
-            pass
+            self.log.exception("Could not sync linked commands for allowed guild %s", guild.id)
 
     async def stop_all(self) -> None:
-        for guild_id in list(self.instances):
-            await self.stop_for_guild(guild_id)
+        for owner_id in list(self.instances):
+            await self.stop_for_user(owner_id)
         if self.monitor_task is not None and not self.monitor_task.done():
             self.monitor_task.cancel()
             try:
