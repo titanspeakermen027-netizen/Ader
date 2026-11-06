@@ -289,20 +289,24 @@ class TicketActionView(discord.ui.View):
         if closed:
             self.add_item(TicketActionSelect(cog, channel_id, closed=True))
             return
-        self.add_item(TicketClaimButton(cog, channel_id))
-        self.add_item(TicketUnclaimButton(cog, channel_id))
+        claim_button = TicketClaimButton(cog, channel_id)
+        claim_button.disabled = claimed
+        self.add_item(claim_button)
+        unclaim_button = TicketUnclaimButton(cog, channel_id)
+        unclaim_button.disabled = not claimed
+        self.add_item(unclaim_button)
         self.add_item(TicketSupportRequestButton(cog, channel_id))
         self.add_item(TicketActionSelect(cog, channel_id, closed=False))
 
 
 class BaseTicketButton(discord.ui.Button):
     def __init__(self, *, label: str, emoji: str, style: discord.ButtonStyle, custom_id: str):
-        super().__init__(label=label, emoji=emoji, style=style, custom_id=custom_id)
+        super().__init__(label=label, emoji=emoji, style=style, custom_id=custom_id, row=0)
 
 
 class TicketClaimButton(BaseTicketButton):
     def __init__(self, cog: "TicketManager", channel_id: int):
-        super().__init__(label="تولّي التذكرة", emoji="🙋", style=discord.ButtonStyle.success, custom_id=f"ader:ticket:claim:{channel_id}")
+        super().__init__(label="استلام", emoji="🙋", style=discord.ButtonStyle.success, custom_id=f"ader:ticket:claim:{channel_id}")
         self.cog, self.channel_id = cog, channel_id
 
     async def callback(self, interaction: discord.Interaction):
@@ -566,7 +570,7 @@ class TicketActionSelect(discord.ui.Select):
             max_values=1,
             options=options,
             custom_id=f"ader:ticket:actions:{channel_id}:{'closed' if closed else 'open'}",
-            row=0,
+            row=0 if closed else 1,
         )
 
     async def callback(self, interaction: discord.Interaction):
