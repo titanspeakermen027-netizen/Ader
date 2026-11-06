@@ -169,7 +169,23 @@ class LinkedBotManager:
                 await asyncio.sleep(0.1)
 
             if not bot.is_ready():
-                await self.stop_for_user(owner_id)
+                self.instances.pop(owner_id, None)
+                self.tasks.pop(owner_id, None)
+                try:
+                    await bot.close()
+                except Exception:
+                    pass
+                if not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except (asyncio.CancelledError, Exception):
+                        pass
+                await self.primary.db.update_linked_bot_account_status(
+                    owner_id,
+                    "error",
+                    "انتهت مهلة تشغيل البوت المرتبط. تحقق من التوكن واتصال Discord.",
+                )
                 raise RuntimeError("انتهت مهلة تشغيل البوت المرتبط. تحقق من التوكن واتصال Discord.")
 
             await self.primary.db.update_linked_bot_account_runtime(
