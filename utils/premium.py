@@ -20,8 +20,6 @@ FEATURES: tuple[PremiumFeature, ...] = (
     PremiumFeature("dashboard_advanced", "Advanced Dashboard", "لوحة تحكم Premium المتقدمة."),
     PremiumFeature("ticket_panels", "Ticket Panels", "لوحات تذاكر متعددة وقابلة للتخصيص.", free_limit=1, premium_limit=None),
     PremiumFeature("analytics_history", "Analytics History", "احتفاظ أطول ببيانات الإحصائيات.", free_limit=7, premium_limit=365),
-    PremiumFeature("custom_bot_identity", "Custom Bot Identity", "تخصيص اسم وصورة وبنر وحالة البوت المرتبط."),
-    PremiumFeature("linked_bot", "Linked Bot", "ربط بوت Discord خاص بالسيرفر مع نفس قاعدة البيانات."),
     PremiumFeature("advanced_automod", "Advanced AutoMod", "قواعد حماية وفلترة متقدمة.", free_limit=1, premium_limit=None),
     PremiumFeature("automation", "Automation", "أتمتة متقدمة لإجراءات السيرفر."),
     PremiumFeature("branding", "Premium Branding", "تخصيص واجهات ورسائل Ader."),
