@@ -882,10 +882,10 @@ class TicketManager(commands.Cog):
             return await interaction.response.send_message("لا يملك صلاحية إغلاق هذه التذكرة.", ephemeral=True)
 
         await interaction.response.defer(ephemeral=True)
-        await self.db.update_ticket(ticket["id"], {"status": "closed", "closed_at": time.time(), "data": json.dumps({**self.ticket_data(ticket), "close_reason": reason[:1000], "closed_by": interaction.user.id, "locked": True}, ensure_ascii=False)})
+        owner_id = int(ticket["user_id"])
+        owner_target = interaction.guild.get_member(owner_id) or discord.Object(id=owner_id)
         try:
-            owner_id = int(ticket["user_id"])
-            owner_target = interaction.guild.get_member(owner_id) or discord.Object(id=owner_id)
+            # Removing view_channel is the privacy boundary for a closed ticket.
             await interaction.channel.set_permissions(
                 owner_target,
                 view_channel=False,
@@ -893,6 +893,23 @@ class TicketManager(commands.Cog):
                 read_message_history=False,
                 reason=f"إغلاق التذكرة #{ticket['id']}",
             )
+        except (discord.Forbidden, discord.HTTPException):
+            return await interaction.followup.send(
+                "تعذر إخفاء التذكرة عن صاحبها، لذلك لم يتم إغلاقها. تحقق من صلاحية Manage Channels لدى البوت.",
+                ephemeral=True,
+            )
+
+        await self.db.update_ticket(ticket["id"], {
+            "status": "closed",
+            "closed_at": time.time(),
+            "data": json.dumps({
+                **self.ticket_data(ticket),
+                "close_reason": reason[:1000],
+                "closed_by": interaction.user.id,
+                "locked": True,
+            }, ensure_ascii=False),
+        })
+        try:
             await interaction.channel.edit(name=clean_name("closed-" + interaction.channel.name, f"closed-ticket-{ticket['id']}"))
         except discord.HTTPException:
             pass
@@ -934,9 +951,15 @@ class TicketManager(commands.Cog):
         channel = self.bot.get_channel(int(ticket["channel_id"]))
         if not isinstance(channel, discord.TextChannel):
             return False
-        owner = channel.guild.get_member(int(ticket["user_id"]))
-        if owner:
-            await channel.set_permissions(owner, send_messages=not locked, view_channel=True, read_message_history=True, reason=f"قفل التذكرة #{ticket['id']}" if locked else f"فتح التذكرة #{ticket['id']}")
+        owner_id = int(ticket["user_id"])
+        owner_target = channel.guild.get_member(owner_id) or discord.Object(id=owner_id)
+        await channel.set_permissions(
+            owner_target,
+            send_messages=not locked,
+            view_channel=True,
+            read_message_history=True,
+            reason=f"قفل التذكرة #{ticket['id']}" if locked else f"فتح التذكرة #{ticket['id']}",
+        )
         await self.write_ticket_data(ticket, {"locked": locked})
         await self.db.update_ticket(ticket["id"], {"status": "locked" if locked else "open", "data": json.dumps(self.ticket_data(ticket), ensure_ascii=False)})
         return True
