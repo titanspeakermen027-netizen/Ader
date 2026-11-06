@@ -338,3 +338,48 @@ input[type=checkbox]{accent-color:#8b5cf6}
   .application-entry{padding:11px}
   .log-category-grid{grid-template-columns:1fr}
 }
+
+
+/* Personal Premium linked-bot server allowlist */
+.linked-guild-list{
+  display:grid;
+  gap:8px;
+  max-height:300px;
+  overflow:auto;
+  padding:8px;
+  margin:10px 0 16px;
+  border:1px solid rgba(148,163,211,.14);
+  border-radius:13px;
+  background:rgba(8,13,25,.35);
+}
+.linked-guild-option{
+  display:flex!important;
+  align-items:center;
+  gap:10px;
+  margin:0!important;
+  padding:10px 12px;
+  border:1px solid rgba(148,163,211,.12);
+  border-radius:10px;
+  background:rgba(21,29,45,.72);
+  cursor:pointer;
+}
+.linked-guild-option input{
+  width:17px!important;
+  min-height:17px!important;
+  flex:0 0 17px;
+  margin:0;
+  accent-color:#8b5cf6;
+}
+.linked-guild-option span{min-width:0}
+.linked-guild-option b,.linked-guild-option small{
+  display:block;
+  overflow-wrap:anywhere;
+}
+.linked-guild-option small{
+  margin-top:4px;
+  color:var(--muted);
+  font-size:10px;
+  font-weight:500;
+}
+.linked-invites{display:grid;gap:6px;margin:12px 0}
+.linked-invites .kv b{display:flex;justify-content:flex-end}
