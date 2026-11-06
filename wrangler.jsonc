@@ -15,7 +15,6 @@
     ]
   },
   "vars": {
-    "BACKEND_URL": "http://nova.hatenna.com:25979",
-    "BACKEND_DASHBOARD_PRIMARY": "true"
+    "BACKEND_URL": "http://nova.hatenna.com:25979"
   }
 }
