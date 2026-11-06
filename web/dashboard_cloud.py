@@ -617,121 +617,258 @@ def create_app(bot):
         users = await bot.db.get_leaderboard(guild_id, limit=10)
         return {"settings":settings,"users":[{"user_id":int(x.get("user_id") or 0),"xp":int(x.get("xp") or 0),"level":int(x.get("level") or 0)} for x in users]}
 
+    async def _linked_user_context(request: Request):
+        session = await base._session_for(request, bot)
+        if not session:
+            raise HTTPException(status_code=401, detail="تسجيل الدخول مطلوب.")
+        discord_user = session.get("discord_user") or {}
+        try:
+            user_id = int(discord_user.get("id") or 0)
+        except (TypeError, ValueError):
+            user_id = 0
+        if not user_id:
+            raise HTTPException(status_code=401, detail="تعذر تحديد حساب Discord.")
+        return session, user_id
+
+    async def _manageable_guilds_for_user(session: dict[str, Any], user_id: int) -> list[dict[str, Any]]:
+        await wait_for_bot_ready(bot)
+        oauth_guilds = session.get("oauth_guilds", {}) or {}
+        if not oauth_guilds:
+            oauth_guilds = session.get("managed_guilds", {}) or {}
+        result: list[dict[str, Any]] = []
+
+        for item in oauth_guilds.values():
+            if not isinstance(item, dict):
+                continue
+            try:
+                guild_id = int(item.get("id") or 0)
+            except (TypeError, ValueError):
+                continue
+            if not guild_id:
+                continue
+
+            permissions = base._guild_permissions(item)
+            allowed = bool(permissions & (base.ADMINISTRATOR | base.MANAGE_GUILD))
+            guild = get_cached_guild(bot, guild_id)
+            if guild is not None:
+                if guild.owner_id == user_id:
+                    allowed = True
+                    permissions = base.ADMINISTRATOR | base.MANAGE_GUILD
+                else:
+                    member = guild.get_member(user_id)
+                    if member is None:
+                        try:
+                            member = await guild.fetch_member(user_id)
+                        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                            member = None
+                    if member is not None:
+                        live = member.guild_permissions
+                        allowed = bool(live.administrator or live.manage_guild)
+                        permissions = (
+                            (base.ADMINISTRATOR if live.administrator else 0)
+                            | (base.MANAGE_GUILD if live.administrator or live.manage_guild else 0)
+                        )
+            if not allowed:
+                continue
+
+            result.append({
+                "id": guild_id,
+                "name": guild.name if guild is not None else str(item.get("name") or "Discord Server"),
+                "icon": item.get("icon") or (str(guild.icon.url) if guild and guild.icon else None),
+                "administrator": bool(permissions & base.ADMINISTRATOR),
+                "manage_guild": bool(permissions & (base.ADMINISTRATOR | base.MANAGE_GUILD)),
+                "primary_bot_in_guild": guild is not None,
+            })
+
+        result.sort(key=lambda value: value["name"].casefold())
+        return result
+
+    async def _validate_linked_guild_ids(
+        session: dict[str, Any],
+        user_id: int,
+        values: Any,
+    ) -> list[int]:
+        if not isinstance(values, list):
+            raise HTTPException(status_code=400, detail="أرسل قائمة السيرفرات المسموح بها.")
+        clean: list[int] = []
+        for raw in values:
+            try:
+                guild_id = int(raw)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="يوجد Discord ID غير صالح في قائمة السيرفرات.")
+            if guild_id > 0 and guild_id not in clean:
+                clean.append(guild_id)
+        if not clean:
+            raise HTTPException(status_code=400, detail="حدد سيرفراً واحداً على الأقل لتشغيل Linked Bot.")
+        if len(clean) > 100:
+            raise HTTPException(status_code=400, detail="الحد الأقصى هو 100 سيرفر في قائمة Linked Bot.")
+        manageable = await _manageable_guilds_for_user(session, user_id)
+        permitted = {int(item["id"]) for item in manageable}
+        denied = [guild_id for guild_id in clean if guild_id not in permitted]
+        if denied:
+            raise HTTPException(
+                status_code=403,
+                detail="لا تملك Manage Server أو Administrator في كل السيرفرات المحددة. أعد تسجيل الدخول في Discord لتحديث الصلاحيات.",
+            )
+        return clean
+
+    async def _linked_bot_payload(session: dict[str, Any], user_id: int) -> dict[str, Any]:
+        premium = await bot.db.get_user_premium(user_id)
+        record = await bot.db.get_linked_bot_account(user_id)
+        manager = getattr(bot, "linked_bot_manager", None)
+        instance = manager.linked_bot(user_id) if manager else None
+        allowed_ids = set(record.get("allowed_guild_ids") or []) if record else set()
+        manageable = await _manageable_guilds_for_user(session, user_id)
+        selected = []
+        for item in manageable:
+            guild_id = int(item["id"])
+            if guild_id not in allowed_ids:
+                continue
+            linked_guild = instance.get_guild(guild_id) if instance else None
+            selected.append({
+                **item,
+                "selected": True,
+                "linked_bot_in_guild": linked_guild is not None,
+            })
+        return {
+            "premium": {
+                "active": bool(premium),
+                "plan": str(premium.get("plan_id") or "premium") if premium else "free",
+                "started_at": premium.get("started_at") if premium else None,
+                "expires_at": premium.get("expires_at") if premium else None,
+            },
+            "manageable_guilds": manageable,
+            "linked_bot": {
+                "configured": bool(record),
+                "running": bool(instance and not instance.is_closed()),
+                "bot_user_id": record.get("bot_user_id") if record else None,
+                "status": record.get("status") if record else "not_configured",
+                "last_error": record.get("last_error") if record else None,
+                "bot_name": record.get("bot_name") if record else None,
+                "avatar_url": record.get("avatar_url") if record else None,
+                "banner_url": record.get("banner_url") if record else None,
+                "bio": record.get("bio", "") if record else "",
+                "activity_text": record.get("activity_text", "Managing your community") if record else "Managing your community",
+                "activity_type": record.get("activity_type", "watching") if record else "watching",
+                "allowed_guild_ids": sorted(allowed_ids),
+                "selected_guilds": selected,
+            },
+        }
+
     @app.get("/api/guilds/{guild_id}/premium")
     async def cloud_premium(request: Request, guild_id: int):
         await _require_guild(bot, request, guild_id)
         payload = await describe_premium(bot.db, guild_id)
-        linked = await bot.db.get_linked_bot(guild_id) if hasattr(bot.db, "get_linked_bot") else None
-        manager = getattr(bot, "linked_bot_manager", None)
-        running = bool(manager and manager.linked_bot(guild_id))
-        payload.update({
-            "guild_id": guild_id,
-            "linked_bot": {
-                "configured": bool(linked),
-                "running": running,
-                "bot_user_id": linked.get("bot_user_id") if linked else None,
-                "status": linked.get("status") if linked else "not_configured",
-                "last_error": linked.get("last_error") if linked else None,
-                "bot_name": linked.get("bot_name") if linked else None,
-                "avatar_url": linked.get("avatar_url") if linked else None,
-                "banner_url": linked.get("banner_url") if linked else None,
-                "bio": linked.get("bio", "") if linked else "",
-                "activity_text": linked.get("activity_text", "Managing your community") if linked else "Managing your community",
-                "activity_type": linked.get("activity_type", "watching") if linked else "watching",
-            },
-        })
+        payload["guild_id"] = guild_id
         return payload
 
-    @app.post("/api/guilds/{guild_id}/premium/linked-bot")
-    async def linked_bot_create(request: Request, guild_id: int):
-        await _require_guild(bot, request, guild_id)
-        await _require_feature(bot, guild_id, "linked_bot")
+    @app.get("/api/me/linked-bot")
+    async def linked_bot_account_get(request: Request):
+        session, user_id = await _linked_user_context(request)
+        return await _linked_bot_payload(session, user_id)
+
+    @app.post("/api/me/linked-bot")
+    async def linked_bot_account_create(request: Request):
+        session, user_id = await _linked_user_context(request)
+        if not await bot.db.is_user_premium(user_id):
+            raise HTTPException(status_code=402, detail="تحتاج إلى Ader Premium فعال على حساب Discord لربط بوت.")
         manager = getattr(bot, "linked_bot_manager", None)
         if manager is None:
             raise HTTPException(status_code=503, detail="مدير البوتات المرتبطة غير متاح حالياً.")
-        if await bot.db.get_linked_bot(guild_id):
-            raise HTTPException(status_code=409, detail="يوجد بوت مرتبط بهذا السيرفر. استعمل تعديل الملف أو احذف الربط أولاً.")
+        if await bot.db.get_linked_bot_account(user_id):
+            raise HTTPException(status_code=409, detail="يوجد بوت مرتبط بحسابك بالفعل.")
         data = await request.json()
         if not isinstance(data, dict):
             raise HTTPException(status_code=400, detail="بيانات غير صالحة.")
         token = str(data.get("token") or "").strip()
         if not token:
             raise HTTPException(status_code=400, detail="توكن البوت مطلوب.")
+        allowed_ids = await _validate_linked_guild_ids(session, user_id, data.get("allowed_guild_ids"))
         try:
             cipher = TokenCipher()
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc))
         fingerprint = cipher.fingerprint(token)
-        duplicate = await bot.db.get_linked_bot_by_fingerprint(fingerprint)
+        duplicate = await bot.db.get_linked_bot_account_by_fingerprint(fingerprint)
         if duplicate:
-            raise HTTPException(status_code=409, detail="هذا البوت مرتبط أصلاً بسيرفر Premium آخر في Ader.")
+            raise HTTPException(status_code=409, detail="هذا البوت مرتبط بحساب Premium آخر في Ader.")
         profile = _clean_profile(data)
         encrypted = cipher.encrypt(token)
-        await bot.db.save_linked_bot(guild_id, encrypted, fingerprint, profile)
+        await bot.db.save_linked_bot_account(user_id, encrypted, fingerprint, allowed_ids, profile)
         try:
-            result = await manager.start_for_guild(guild_id)
+            result = await manager.start_for_user(user_id)
         except Exception as exc:
-            await bot.db.delete_linked_bot(guild_id)
+            await bot.db.delete_linked_bot_account(user_id)
             raise HTTPException(status_code=400, detail=str(exc)[:500])
         return {"ok": True, **result}
 
-    @app.put("/api/guilds/{guild_id}/premium/linked-bot")
-    async def linked_bot_update(request: Request, guild_id: int):
-        await _require_guild(bot, request, guild_id)
-        await _require_feature(bot, guild_id, "custom_bot_identity")
-        linked = await bot.db.get_linked_bot(guild_id)
-        if not linked:
-            raise HTTPException(status_code=404, detail="لا يوجد بوت مرتبط بهذا السيرفر.")
+    @app.put("/api/me/linked-bot")
+    async def linked_bot_account_update(request: Request):
+        session, user_id = await _linked_user_context(request)
+        if not await bot.db.is_user_premium(user_id):
+            raise HTTPException(status_code=402, detail="تحتاج إلى Ader Premium فعال لتعديل Linked Bot.")
+        record = await bot.db.get_linked_bot_account(user_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="لا يوجد بوت مرتبط بحسابك.")
         data = await request.json()
         if not isinstance(data, dict):
             raise HTTPException(status_code=400, detail="بيانات غير صالحة.")
+        allowed_ids = await _validate_linked_guild_ids(
+            session,
+            user_id,
+            data.get("allowed_guild_ids", record.get("allowed_guild_ids") or []),
+        )
         profile = _clean_profile(data)
-        await bot.db.update_linked_bot_profile(guild_id, profile)
+        await bot.db.update_linked_bot_account_profile(user_id, profile)
+        old_ids = set(record.get("allowed_guild_ids") or [])
+        await bot.db.update_linked_bot_account_guilds(user_id, allowed_ids)
         manager = getattr(bot, "linked_bot_manager", None)
-        instance = manager.linked_bot(guild_id) if manager else None
-        if instance and instance.user:
-            updated = await bot.db.get_linked_bot(guild_id)
+        instance = manager.linked_bot(user_id) if manager else None
+        if instance and old_ids != set(allowed_ids):
+            try:
+                await manager.restart_for_user(user_id)
+            except Exception as exc:
+                await bot.db.update_linked_bot_account_status(user_id, "error", str(exc)[:500])
+                raise HTTPException(status_code=400, detail=f"تم حفظ الإعدادات لكن تعذر إعادة التشغيل: {str(exc)[:300]}")
+        elif instance and instance.user:
+            updated = await bot.db.get_linked_bot_account(user_id)
             from utils.linked_bot import apply_linked_profile
             try:
                 await apply_linked_profile(instance, updated or {})
-                await bot.db.update_linked_bot_status(guild_id, "online", None)
+                await bot.db.update_linked_bot_account_status(user_id, "online", None)
             except Exception:
-                await bot.db.update_linked_bot_status(guild_id, "error", "تعذر تطبيق إعدادات البوت على Discord.")
+                await bot.db.update_linked_bot_account_status(user_id, "error", "تعذر تطبيق إعدادات البوت على Discord.")
                 raise HTTPException(status_code=400, detail="تعذر تطبيق إعدادات البوت على Discord.")
-        # Never serialize the database record here: it contains the encrypted
-        # bot token and its fingerprint. The UI refreshes the safe profile via GET.
         return {"ok": True}
 
-    @app.post("/api/guilds/{guild_id}/premium/linked-bot/start")
-    async def linked_bot_start(request: Request, guild_id: int):
-        await _require_guild(bot, request, guild_id)
-        await _require_feature(bot, guild_id, "linked_bot")
+    @app.post("/api/me/linked-bot/start")
+    async def linked_bot_account_start(request: Request):
+        _session, user_id = await _linked_user_context(request)
+        if not await bot.db.is_user_premium(user_id):
+            raise HTTPException(status_code=402, detail="انتهى اشتراك Ader Premium لهذا الحساب.")
         manager = getattr(bot, "linked_bot_manager", None)
         if manager is None:
             raise HTTPException(status_code=503, detail="مدير البوتات المرتبطة غير متاح.")
         try:
-            return await manager.start_for_guild(guild_id)
+            return await manager.start_for_user(user_id)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)[:500])
 
-    @app.post("/api/guilds/{guild_id}/premium/linked-bot/stop")
-    async def linked_bot_stop(request: Request, guild_id: int):
-        await _require_guild(bot, request, guild_id)
-        await _require_feature(bot, guild_id, "linked_bot")
+    @app.post("/api/me/linked-bot/stop")
+    async def linked_bot_account_stop(request: Request):
+        _session, user_id = await _linked_user_context(request)
         manager = getattr(bot, "linked_bot_manager", None)
-        if manager is None:
-            raise HTTPException(status_code=503, detail="مدير البوتات المرتبطة غير متاح.")
-        await manager.stop_for_guild(guild_id)
+        if manager is not None:
+            await manager.stop_for_user(user_id)
         return {"ok": True}
 
-    @app.delete("/api/guilds/{guild_id}/premium/linked-bot")
-    async def linked_bot_delete(request: Request, guild_id: int):
-        await _require_guild(bot, request, guild_id)
-        await _require_feature(bot, guild_id, "linked_bot")
+    @app.delete("/api/me/linked-bot")
+    async def linked_bot_account_delete(request: Request):
+        _session, user_id = await _linked_user_context(request)
         manager = getattr(bot, "linked_bot_manager", None)
-        if manager:
-            await manager.stop_for_guild(guild_id)
-        await bot.db.delete_linked_bot(guild_id)
+        if manager is not None:
+            await manager.stop_for_user(user_id)
+        await bot.db.delete_linked_bot_account(user_id)
         return {"ok": True}
 
     @app.get("/api/guilds/{guild_id}/tickets")
