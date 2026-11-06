@@ -3,7 +3,7 @@
 The purchase flow lives inside an open Ader ticket:
 1. Click ``شراء``.
 2. Select the role.
-3. Select a configured payment method button.
+3. Select a configured payment method from a menu.
 4. A transfer command is generated from the method template.
 5. A trusted payment bot's configured success message is verified exactly
    enough to identify the pending order, then the role is granted.
@@ -21,7 +21,7 @@ from discord import app_commands
 from discord.ext import commands
 
 
-MAX_METHOD_BUTTONS = 25
+MAX_METHOD_OPTIONS = 25
 ORDER_TIMEOUT = 5 * 60
 ALLOWED_TEMPLATE_VARS = {
     "username",
@@ -137,15 +137,22 @@ class PurchaseRoleView(discord.ui.View):
         self.add_item(PurchaseRoleSelect(cog, user_id, rows))
 
 
-class CopyTransferButton(discord.ui.Button):
+class CopyTransferSelect(discord.ui.Select):
     def __init__(self, transfer_text: str, user_id: int):
-        super().__init__(label="نسخ التحويل", emoji="📋", style=discord.ButtonStyle.secondary)
+        super().__init__(
+            placeholder="إجراءات تعليمات التحويل",
+            min_values=1,
+            max_values=1,
+            options=[
+                discord.SelectOption(label="نسخ تعليمات التحويل", value="copy", emoji="📋"),
+            ],
+        )
         self.transfer_text = transfer_text
         self.user_id = user_id
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
-            return await interaction.response.send_message("❌ هذا الزر ليس لك.", ephemeral=True)
+            return await interaction.response.send_message("❌ هذه القائمة ليست لك.", ephemeral=True)
         await interaction.response.send_message(
             f"📋 انسخ هذا التحويل:\n```{self.transfer_text}```",
             ephemeral=True,
@@ -153,28 +160,43 @@ class CopyTransferButton(discord.ui.Button):
         )
 
 
-class PaymentMethodButton(discord.ui.Button):
-    def __init__(self, cog: "TicketPurchase", method: dict[str, Any], role: discord.Role, user_id: int, channel_id: int):
-        emoji = _parse_emoji(str(method.get("emoji") or "💳"))
-        label = str(method.get("button_label") or method.get("name") or "الدفع")[:80]
-        super().__init__(label=label, emoji=emoji, style=discord.ButtonStyle.primary)
+class PaymentMethodSelect(discord.ui.Select):
+    def __init__(self, cog: "TicketPurchase", methods: list[dict[str, Any]], role: discord.Role, user_id: int, channel_id: int):
+        options = []
+        for method in methods[:MAX_METHOD_OPTIONS]:
+            gross = cog._gross_amount(int(method["price"]), float(method.get("tax_percent") or 0))
+            amount = f"{gross:,} ANORIS"
+            options.append(discord.SelectOption(
+                label=str(method.get("button_label") or method.get("name") or "الدفع")[:100],
+                description=f"المبلغ المطلوب: {amount}"[:100],
+                emoji=_parse_emoji(str(method.get("emoji") or "💳")),
+                value=str(int(method["id"])),
+            ))
+        super().__init__(
+            placeholder="اختر طريقة الدفع",
+            min_values=1,
+            max_values=1,
+            options=options,
+        )
         self.cog = cog
-        self.method_id = int(method["id"])
         self.role_id = role.id
         self.user_id = user_id
         self.channel_id = channel_id
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
-            return await interaction.response.send_message("❌ هذه الأزرار ليست لك.", ephemeral=True)
-        await self.cog.create_order_and_show_transfer(interaction, self.channel_id, self.role_id, self.method_id)
+            return await interaction.response.send_message("❌ هذه القائمة ليست لك.", ephemeral=True)
+        try:
+            method_id = int(self.values[0])
+        except (ValueError, IndexError):
+            return await interaction.response.send_message("❌ طريقة الدفع غير صالحة.", ephemeral=True)
+        await self.cog.create_order_and_show_transfer(interaction, self.channel_id, self.role_id, method_id)
 
 
 class PaymentMethodView(discord.ui.View):
     def __init__(self, cog: "TicketPurchase", methods: list[dict[str, Any]], role: discord.Role, user_id: int, channel_id: int):
         super().__init__(timeout=300)
-        for method in methods[:MAX_METHOD_BUTTONS]:
-            self.add_item(PaymentMethodButton(cog, method, role, user_id, channel_id))
+        self.add_item(PaymentMethodSelect(cog, methods, role, user_id, channel_id))
 
 
 class TicketPurchase(commands.Cog):
@@ -385,7 +407,7 @@ class TicketPurchase(commands.Cog):
             colour=discord.Colour.blurple(),
         )
         view = discord.ui.View(timeout=300)
-        view.add_item(CopyTransferButton(transfer_text, interaction.user.id))
+        view.add_item(CopyTransferSelect(transfer_text, interaction.user.id))
         await interaction.response.edit_message(embed=embed, view=view)
 
     async def _complete_order(self, message: discord.Message, order: dict[str, Any], method: dict[str, Any]) -> bool:
