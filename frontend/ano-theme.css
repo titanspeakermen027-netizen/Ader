@@ -744,3 +744,63 @@ input[type=checkbox]{accent-color:#8b5cf6}
 @media(prefers-reduced-motion:reduce){
   .plugin-card,.plugin-arrow{transition:none}
 }
+
+
+/* Keep the new overview readable when the existing light theme is selected. */
+.light .home-panel{
+  border-color:#e3e7f1;
+  background:linear-gradient(150deg,#fff,#f7f9ff);
+  box-shadow:0 15px 40px rgba(35,45,75,.07);
+}
+.light .home-hero{
+  border-color:rgba(118,83,223,.2);
+  background:
+    radial-gradient(ellipse at 92% 5%,rgba(8,145,178,.12),transparent 34%),
+    radial-gradient(ellipse at 4% 100%,rgba(118,83,223,.14),transparent 43%),
+    linear-gradient(115deg,#f3efff 0%,#f1f5ff 58%,#eaf7fb 100%);
+}
+.light .home-hero-copy h2,.light .home-server-card b{color:#171b2a}
+.light .home-hero-copy p,.light .home-server-card small{color:#64708a}
+.light .home-server-card{
+  border-color:#dfe4f0;
+  background:rgba(255,255,255,.72);
+}
+.light .home-section-head h3{color:#20283b}
+.light .home-section-head p{color:#68748d}
+.light .plugin-card{
+  border-color:#e2e6f0;
+  background:linear-gradient(145deg,#fff,#f5f7fd);
+  color:#20283b;
+}
+.light .plugin-card:hover{
+  border-color:rgba(118,83,223,.35);
+  background:linear-gradient(135deg,#f5f0ff,#effaff);
+  box-shadow:0 12px 26px rgba(35,45,75,.08);
+}
+.light .plugin-copy b{color:#20283b}
+.light .plugin-copy small{color:#6d7890}
+.light .plugin-arrow{color:#77829a}
+.light .plugin-meta{
+  border-color:rgba(5,150,105,.17);
+  background:rgba(5,150,105,.055);
+  color:#047857;
+}
+.light .plugin-meta.is-disabled{
+  border-color:rgba(225,29,72,.16);
+  background:rgba(225,29,72,.05);
+  color:#be123c;
+}
+.light .system-status-list>div,.light .activity-item{border-bottom-color:#edf0f6}
+.light .system-status-list span,.light .activity-copy small,.light .activity-item time{color:#77829a}
+.light .system-status-list b,.light .activity-copy b{color:#273148}
+.light .system-status-list b.on{color:#047857}
+.light .system-status-list b.off{color:#be123c}
+.light .home-panel .empty.small{
+  border-color:#dce2ee;
+  background:#f7f9fd;
+  color:#66738b;
+}
+.light .activity-mark{
+  background:rgba(118,83,223,.09);
+  color:#6542bd;
+}
