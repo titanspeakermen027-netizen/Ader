@@ -841,42 +841,6 @@ class DatabaseManager:
         cur = await self.execute("UPDATE guilds SET config=? WHERE guild_id=?", (json.dumps(cfg), guild_id))
         return cur.rowcount > 0
 
-    async def update_guild_module(
-        self,
-        guild_id: int,
-        module_name: str,
-        data: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        """Merge a per-guild module setting into the canonical nested config.
-
-        Older dashboard versions wrote module settings at the config root.
-        Read those values as a fallback, but always persist the merged result
-        under config["modules"][module_name].
-        """
-        if not isinstance(module_name, str) or not module_name.strip():
-            raise ValueError("module_name must be a non-empty string")
-        if not isinstance(data, dict):
-            raise TypeError("module data must be a dictionary")
-
-        await self.create_guild(guild_id)
-        current = await self.get_guild(guild_id) or {}
-        raw_config = current.get("modules", {})
-        raw_config = dict(raw_config) if isinstance(raw_config, dict) else {}
-
-        module_group = raw_config.get("modules", {})
-        module_group = dict(module_group) if isinstance(module_group, dict) else {}
-
-        legacy = current.get(module_name, {})
-        nested = module_group.get(module_name, {})
-        merged = dict(legacy) if isinstance(legacy, dict) else {}
-        if isinstance(nested, dict):
-            merged.update(nested)
-        merged.update(data)
-
-        module_group[module_name] = merged
-        await self.update_guild(guild_id, {"modules": module_group})
-        return merged
-
     async def get_leaderboard(self, guild_id: int, limit: int = 10) -> List[Dict[str, Any]]:
         rows = await self.fetchall("SELECT * FROM users WHERE guild_id=? ORDER BY xp DESC LIMIT ?", (guild_id, limit))
         return [dict(r) for r in rows]
