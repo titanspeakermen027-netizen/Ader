@@ -242,33 +242,17 @@ def create_app(bot):
         data = await request.json()
         if not isinstance(data, dict):
             raise HTTPException(status_code=400, detail="إعدادات غير صالحة")
-        modules_payload = data.get("modules") if isinstance(data.get("modules"), dict) else {}
+        modules = data.get("modules") if isinstance(data.get("modules"), dict) else {}
         verification = data.get("verification") if isinstance(data.get("verification"), dict) else {}
         patch = dict(verification)
-        current = await bot.db.get_guild(guild_id) or {}
-        guild_modules = current.get("modules", {})
-        guild_modules = dict(guild_modules) if isinstance(guild_modules, dict) else {}
-
-        # Older dashboard releases wrote this module at the config root.
-        # Migrate that value into the canonical nested modules object before
-        # applying a new toggle, so existing server settings are preserved.
-        legacy_verification = current.get("verification")
-        nested_verification = guild_modules.get("verification")
-        verification_config = {}
-        if isinstance(legacy_verification, dict):
-            verification_config.update(legacy_verification)
-        if isinstance(nested_verification, dict):
-            verification_config.update(nested_verification)
-
-        requested_module = modules_payload.get("verification")
-        if isinstance(requested_module, dict) and "enabled" in requested_module:
-            verification_config["enabled"] = bool(requested_module["enabled"])
-            guild_modules["verification"] = verification_config
-            patch["modules"] = guild_modules
-
+        if "enabled" in modules.get("verification", {}):
+            current = await bot.db.get_guild(guild_id) or {}
+            mod = dict((current.get("modules") or {}).get("verification", {}) if current else {})
+            mod["enabled"] = bool(modules["verification"]["enabled"])
+            await bot.db.update_guild(guild_id, {"verification": mod})
         if patch:
             await bot.db.update_guild(guild_id, patch)
-        return {"ok": True}
+        return {"ok":True}
 
     @app.get("/api/guilds/{guild_id}/settings")
     async def cloud_settings_get(request: Request, guild_id: int):
@@ -604,9 +588,6 @@ def create_app(bot):
         guild_cfg = await bot.db.get_guild(guild_id)
         modules = (guild_cfg or {}).get("modules", {}) if guild_cfg else {}
         economy = modules.get("economy", {}) if isinstance(modules, dict) else {}
-        if not isinstance(economy, dict) or not economy:
-            legacy_economy = (guild_cfg or {}).get("economy", {}) if guild_cfg else {}
-            economy = legacy_economy if isinstance(legacy_economy, dict) else {}
         name = str(economy.get("currency_name") or "ANORIS")
         symbol = str(economy.get("currency_symbol") or "🪙")
         leaderboard = await bot.db.fetchall("SELECT user_id, balance FROM global_balances WHERE user_id IN (SELECT user_id FROM users WHERE guild_id=?) ORDER BY balance DESC LIMIT 10", (guild_id,))
@@ -618,27 +599,16 @@ def create_app(bot):
         data = await request.json()
         if not isinstance(data, dict):
             raise HTTPException(status_code=400, detail="إعدادات غير صالحة")
-        guild_cfg = await bot.db.get_guild(guild_id) or {}
-        modules = guild_cfg.get("modules", {})
-        modules = dict(modules) if isinstance(modules, dict) else {}
-        economy = modules.get("economy", {})
-        if not isinstance(economy, dict) or not economy:
-            legacy_economy = guild_cfg.get("economy", {})
-            economy = dict(legacy_economy) if isinstance(legacy_economy, dict) else {}
-        else:
-            economy = dict(economy)
+        guild_cfg = await bot.db.get_guild(guild_id)
+        modules = dict((guild_cfg or {}).get("modules", {}) if guild_cfg else {})
+        economy = dict(modules.get("economy", {}) if isinstance(modules.get("economy", {}), dict) else {})
         if "currency_name" in data:
             name = str(data.get("currency_name") or "").strip()[:32]
-            if not name:
-                raise HTTPException(status_code=400, detail="اسم العملة مطلوب.")
-            economy["currency_name"] = name
+            if name: economy["currency_name"] = name
         if "currency_symbol" in data:
             symbol = str(data.get("currency_symbol") or "").strip()[:12]
-            if not symbol:
-                raise HTTPException(status_code=400, detail="رمز العملة مطلوب.")
-            economy["currency_symbol"] = symbol
-        modules["economy"] = economy
-        await bot.db.update_guild(guild_id, {"modules": modules})
+            if symbol: economy["currency_symbol"] = symbol
+        await bot.db.update_guild(guild_id, {"economy":economy})
         return {"ok":True,"config":{"currency_name":economy.get("currency_name","ANORIS"),"currency_symbol":economy.get("currency_symbol","🪙")}}
 
     @app.get("/api/guilds/{guild_id}/levels")
@@ -1099,22 +1069,12 @@ def create_app(bot):
             raise HTTPException(status_code=400, detail="خاصك ترسل enabled بقيمة true أو false.")
         guild_config = await bot.db.get_guild(guild_id) or {}
         root_config = guild_config.get("modules", {})
-        root_config = dict(root_config) if isinstance(root_config, dict) else {}
-
+        if not isinstance(root_config, dict):
+            root_config = {}
         module_config = root_config.get(module_name, {})
-        if not isinstance(module_config, dict) or not module_config:
-            legacy_config = guild_config.get(module_name, {})
-            module_config = dict(legacy_config) if isinstance(legacy_config, dict) else {}
-        else:
-            module_config = dict(module_config)
-
+        module_config = dict(module_config) if isinstance(module_config, dict) else {}
         module_config["enabled"] = data["enabled"]
-        root_config[module_name] = module_config
-
-        # Module flags live under the guild's "modules" configuration object.
-        # Writing them at the root made the UI appear to save, but a subsequent
-        # read still returned the old value.
-        await bot.db.update_guild(guild_id, {"modules": root_config})
+        await bot.db.update_guild(guild_id, {module_name: module_config})
         return {"ok": True, "module": module_name, "enabled": data["enabled"]}
 
     @app.get("/api/guilds/{guild_id}/core-settings")
