@@ -724,6 +724,7 @@ input[type=checkbox]{accent-color:#8b5cf6}
 }
 @media(max-width:680px){
   .dashboard-home{gap:13px}
+  .home-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
   .home-hero{
     grid-template-columns:1fr;
     gap:17px;
