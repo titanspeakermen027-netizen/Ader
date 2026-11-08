@@ -27,6 +27,7 @@ DEFAULT_TICKET_SETTINGS: dict[str, Any] = {
     "enabled": True,
     "default_category_id": None,
     "default_support_role_id": None,
+    "default_support_role_ids": [],
     "transcript_channel_id": None,
     "log_channel_id": None,
     "claim_enabled": True,
