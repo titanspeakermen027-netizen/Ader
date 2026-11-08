@@ -721,8 +721,15 @@ class TicketOptionManagerView(discord.ui.View):
         self.selected_index = 0
         self.add_item(TicketOptionSelect(self))
         self.edit_option.disabled = not bool(self.options)
-        self.delete_option.disabled = not bool(self.options)
+        self.delete_option.disabled = len(self.options) <= 1
         self.add_option.disabled = len(self.options) >= 25
+
+    def refresh_select(self) -> None:
+        for child in list(self.children):
+            if isinstance(child, TicketOptionSelect):
+                self.remove_item(child)
+        if self.options:
+            self.add_item(TicketOptionSelect(self))
 
     def summary(self) -> str:
         lines = [
@@ -776,14 +783,16 @@ class TicketOptionManagerView(discord.ui.View):
     async def delete_option(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not await self._check(interaction):
             return
-        if not self.options:
+        if len(self.options) <= 1:
             return await interaction.response.send_message(
-                "لا توجد أنواع لحذفها.", ephemeral=True
+                "يجب الاحتفاظ بنوع واحد على الأقل. عدّل النوع الأخير بدلاً من حذفه.",
+                ephemeral=True,
             )
         removed = self.options.pop(self.selected_index)
-        self.selected_index = min(self.selected_index, max(0, len(self.options) - 1))
-        self.edit_option.disabled = not bool(self.options)
-        self.delete_option.disabled = not bool(self.options)
+        self.selected_index = min(self.selected_index, len(self.options) - 1)
+        self.refresh_select()
+        self.edit_option.disabled = False
+        self.delete_option.disabled = len(self.options) <= 1
         self.add_option.disabled = len(self.options) >= 25
         await interaction.response.edit_message(
             content=f"تم حذف نوع **{removed.get('name') or 'التذكرة'}**.\n\n{self.summary()}",
@@ -953,6 +962,7 @@ class TicketOptionSelect(discord.ui.Select):
                 "ليست لديك صلاحية استخدام هذه القائمة.", ephemeral=True
             )
         self.manager.selected_index = int(self.values[0])
+        self.manager.refresh_select()
         await interaction.response.edit_message(
             content=self.manager.summary(),
             view=self.manager,
@@ -1020,9 +1030,12 @@ class TicketOptionModal(discord.ui.Modal, title="إعدادات نوع التذ�
             )
 
         options = self.builder.panel.setdefault("options", [])
-        item = dict(options[self.option_index]) if (
-            self.option_index is not None and self.option_index < len(options)
-        ) else {}
+        if self.option_index is not None and self.option_index >= len(options):
+            return await interaction.response.send_message(
+                "لم يعد نوع التذكرة المحدد موجوداً. افتح قائمة الإدارة من جديد.",
+                ephemeral=True,
+            )
+        item = dict(options[self.option_index]) if self.option_index is not None else {}
         item.update({
             "name": name[:80],
             "emoji": str(self.emoji_input.value or "🎫").strip()[:20] or "🎫",
@@ -1045,12 +1058,9 @@ class TicketOptionModal(discord.ui.Modal, title="إعدادات نوع التذ�
         view = TicketOptionManagerView(self.builder)
         view.selected_index = selected_index
         # Rebuild the select menu so the new label and options are visible immediately.
-        for child in list(view.children):
-            if isinstance(child, TicketOptionSelect):
-                view.remove_item(child)
-        view.add_item(TicketOptionSelect(view))
+        view.refresh_select()
         view.edit_option.disabled = not bool(view.options)
-        view.delete_option.disabled = not bool(view.options)
+        view.delete_option.disabled = len(view.options) <= 1
         view.add_option.disabled = len(view.options) >= 25
         await interaction.response.edit_message(
             content=view.summary(),
