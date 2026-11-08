@@ -41,7 +41,6 @@ TOGGLE_LABELS = {
     "allow_member_add": "السماح بإضافة أعضاء",
     "allow_member_remove": "السماح بإزالة أعضاء",
     "allow_rename": "السماح بإعادة التسمية",
-    "allow_lock": "السماح بقفل التذكرة",
     "keep_closed": "الاحتفاظ بالتذاكر المغلقة",
 }
 
@@ -483,7 +482,10 @@ class TicketPanelBuilderView(discord.ui.View):
         self.category_id = _as_id(self.panel.get("category_id"))
         raw_role_ids = self.panel.get("support_role_ids") or ([self.panel.get("support_role_id")] if self.panel.get("support_role_id") else [])
         self.support_role_ids = list(dict.fromkeys(int(value) for value in raw_role_ids if _as_id(value)))
-        self.support_roles_customized = bool(self.panel.get("support_roles_customized", bool(raw_role_ids)))
+        self.support_roles_customized = bool(
+            self.panel.get("support_roles_customized")
+            or (not self.panel.get("support_role_ids") and self.panel.get("support_role_id"))
+        )
         self.support_role_id = self.support_role_ids[0] if self.support_role_ids else None
         self.mode = str(self.panel.get("mode") or "select")
         self.add_item(TicketBuilderPublishChannelSelect(self))
