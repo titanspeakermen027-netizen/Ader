@@ -784,9 +784,6 @@ class TicketManager(commands.Cog):
         if not interaction.guild:
             return await interaction.response.send_message("لا يمكن فتح التذاكر خارج السيرفر.", ephemeral=True)
         guild = interaction.guild
-        if not await self.db.is_server_premium(guild.id):
-            return await interaction.response.send_message("نظام التذاكر الاحترافي متاح لسيرفرات Ader Premium فقط.", ephemeral=True)
-
         settings = merge_settings(await self.db.get_ticket_settings(guild.id))
         if not as_bool(settings.get("enabled"), True):
             return await interaction.response.send_message("نظام التذاكر معطل حالياً.", ephemeral=True)
@@ -1170,11 +1167,6 @@ class TicketManager(commands.Cog):
     async def ticket_cmd(self, interaction: discord.Interaction):
         if interaction.guild is None:
             return await interaction.response.send_message("استخدم هذا الأمر داخل السيرفر.", ephemeral=True)
-        if hasattr(self.db, "is_server_premium") and not await self.db.is_server_premium(interaction.guild.id):
-            return await interaction.response.send_message(
-                "إدارة نظام التذاكر الاحترافي متاحة لسيرفرات Ader Premium. ستظل إعدادات Discord والداشبورد مشتركة بعد تفعيل الميزة.",
-                ephemeral=True,
-            )
         from cogs.ticket_admin_ui import TicketManagementView
         embed = discord.Embed(
             title="مركز إدارة التذاكر",
