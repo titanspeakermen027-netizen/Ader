@@ -153,10 +153,10 @@ class TicketAdminSelect(discord.ui.Select):
                 discord.SelectOption(label="عرض التذاكر", value="tickets", emoji="🎫"),
             ],
         )
-        self.parent = parent
+        self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
-        parent = self.parent
+        parent = self.parent_view
         if not _can_manage(interaction, parent.owner_id):
             return await interaction.response.send_message("هذه القائمة مخصصة للشخص الذي فتحها ولإدارة السيرفر فقط.", ephemeral=True)
 
@@ -223,19 +223,19 @@ class _TicketChannelSettingSelect(discord.ui.ChannelSelect):
             max_values=1,
             row=row,
         )
-        self.parent = parent
+        self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
-        if not _can_manage(interaction, self.parent.owner_id):
+        if not _can_manage(interaction, self.parent_view.owner_id):
             return await interaction.response.send_message("ليست لديك صلاحية استخدام هذه القائمة.", ephemeral=True)
         selected = self.values[0]
-        config = _settings(await self.parent.cog.db.get_ticket_settings(interaction.guild.id))
+        config = _settings(await self.parent_view.cog.db.get_ticket_settings(interaction.guild.id))
         config[self.setting_key] = selected.id
-        await self.parent.cog.db.save_ticket_settings(interaction.guild.id, config)
+        await self.parent_view.cog.db.save_ticket_settings(interaction.guild.id, config)
         return await interaction.response.edit_message(
             content=f"تم تحديث الإعداد: {selected.mention}",
             embed=_settings_embed(interaction.guild, config),
-            view=self.parent,
+            view=self.parent_view,
         )
 
 
@@ -263,19 +263,19 @@ class TicketLogChannelSelect(_TicketChannelSettingSelect):
 class TicketDefaultRoleSelect(discord.ui.RoleSelect):
     def __init__(self, parent: TicketSettingsView):
         super().__init__(placeholder="اختيار رتبة فريق الدعم", min_values=1, max_values=1, row=1)
-        self.parent = parent
+        self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
-        if not _can_manage(interaction, self.parent.owner_id):
+        if not _can_manage(interaction, self.parent_view.owner_id):
             return await interaction.response.send_message("ليست لديك صلاحية استخدام هذه القائمة.", ephemeral=True)
         role = self.values[0]
-        config = _settings(await self.parent.cog.db.get_ticket_settings(interaction.guild.id))
+        config = _settings(await self.parent_view.cog.db.get_ticket_settings(interaction.guild.id))
         config["default_support_role_id"] = role.id
-        await self.parent.cog.db.save_ticket_settings(interaction.guild.id, config)
+        await self.parent_view.cog.db.save_ticket_settings(interaction.guild.id, config)
         return await interaction.response.edit_message(
             content=f"تم تحديث رتبة الدعم: {role.mention}",
             embed=_settings_embed(interaction.guild, config),
-            view=self.parent,
+            view=self.parent_view,
         )
 
 
@@ -293,10 +293,10 @@ class TicketSettingsActionSelect(discord.ui.Select):
             discord.SelectOption(label="الإعدادات المتقدمة", value="advanced", emoji="🛠️"),
         ])
         super().__init__(placeholder="تعديل خصائص نظام التذاكر", min_values=1, max_values=1, options=options, row=4)
-        self.parent = parent
+        self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
-        parent = self.parent
+        parent = self.parent_view
         if not _can_manage(interaction, parent.owner_id):
             return await interaction.response.send_message("ليست لديك صلاحية استخدام هذه القائمة.", ephemeral=True)
         config = _settings(await parent.cog.db.get_ticket_settings(interaction.guild.id))
@@ -375,16 +375,16 @@ class TicketPanelSelect(discord.ui.Select):
             for panel in parent.panels
         ]
         super().__init__(placeholder="اختر لوحة التذاكر", min_values=1, max_values=1, options=options, row=0)
-        self.parent = parent
+        self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
-        if not _can_manage(interaction, self.parent.owner_id):
+        if not _can_manage(interaction, self.parent_view.owner_id):
             return await interaction.response.send_message("ليست لديك صلاحية استخدام هذه القائمة.", ephemeral=True)
-        self.parent.selected_panel_id = int(self.values[0])
-        panel = await self.parent.cog.db.get_ticket_panel(self.parent.selected_panel_id)
+        self.parent_view.selected_panel_id = int(self.values[0])
+        panel = await self.parent_view.cog.db.get_ticket_panel(self.parent_view.selected_panel_id)
         return await interaction.response.edit_message(
-            content=f"تم اختيار **{panel.get('title') or 'لوحة التذاكر'}** (#{self.parent.selected_panel_id}). اختر الإجراء.",
-            view=self.parent,
+            content=f"تم اختيار **{panel.get('title') or 'لوحة التذاكر'}** (#{self.parent_view.selected_panel_id}). اختر الإجراء.",
+            view=self.parent_view,
         )
 
 
@@ -401,10 +401,10 @@ class TicketPanelActionSelect(discord.ui.Select):
             ],
             row=1,
         )
-        self.parent = parent
+        self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
-        parent = self.parent
+        parent = self.parent_view
         if not _can_manage(interaction, parent.owner_id):
             return await interaction.response.send_message("ليست لديك صلاحية استخدام هذه القائمة.", ephemeral=True)
         panel_id = parent.selected_panel_id
@@ -505,37 +505,37 @@ class TicketPanelBuilderView(discord.ui.View):
 class TicketBuilderPublishChannelSelect(discord.ui.ChannelSelect):
     def __init__(self, parent: TicketPanelBuilderView):
         super().__init__(channel_types=[discord.ChannelType.text], placeholder="قناة نشر لوحة التذاكر", min_values=1, max_values=1, row=0)
-        self.parent = parent
+        self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
-        if not _can_manage(interaction, self.parent.owner_id):
+        if not _can_manage(interaction, self.parent_view.owner_id):
             return await interaction.response.send_message("ليست لديك صلاحية استخدام هذه القائمة.", ephemeral=True)
-        self.parent.channel_id = self.values[0].id
-        return await interaction.response.edit_message(content=self.parent.summary(), view=self.parent)
+        self.parent_view.channel_id = self.values[0].id
+        return await interaction.response.edit_message(content=self.parent_view.summary(), view=self.parent_view)
 
 
 class TicketBuilderCategorySelect(discord.ui.ChannelSelect):
     def __init__(self, parent: TicketPanelBuilderView):
         super().__init__(channel_types=[discord.ChannelType.category], placeholder="فئة قنوات التذاكر", min_values=1, max_values=1, row=1)
-        self.parent = parent
+        self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
-        if not _can_manage(interaction, self.parent.owner_id):
+        if not _can_manage(interaction, self.parent_view.owner_id):
             return await interaction.response.send_message("ليست لديك صلاحية استخدام هذه القائمة.", ephemeral=True)
-        self.parent.category_id = self.values[0].id
-        return await interaction.response.edit_message(content=self.parent.summary(), view=self.parent)
+        self.parent_view.category_id = self.values[0].id
+        return await interaction.response.edit_message(content=self.parent_view.summary(), view=self.parent_view)
 
 
 class TicketBuilderRoleSelect(discord.ui.RoleSelect):
     def __init__(self, parent: TicketPanelBuilderView):
         super().__init__(placeholder="رتبة فريق الدعم لهذه اللوحة", min_values=1, max_values=1, row=2)
-        self.parent = parent
+        self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
-        if not _can_manage(interaction, self.parent.owner_id):
+        if not _can_manage(interaction, self.parent_view.owner_id):
             return await interaction.response.send_message("ليست لديك صلاحية استخدام هذه القائمة.", ephemeral=True)
-        self.parent.support_role_id = self.values[0].id
-        return await interaction.response.edit_message(content=self.parent.summary(), view=self.parent)
+        self.parent_view.support_role_id = self.values[0].id
+        return await interaction.response.edit_message(content=self.parent_view.summary(), view=self.parent_view)
 
 
 class TicketBuilderModeSelect(discord.ui.Select):
@@ -551,24 +551,24 @@ class TicketBuilderModeSelect(discord.ui.Select):
             ],
             row=3,
         )
-        self.parent = parent
+        self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
-        if not _can_manage(interaction, self.parent.owner_id):
+        if not _can_manage(interaction, self.parent_view.owner_id):
             return await interaction.response.send_message("ليست لديك صلاحية استخدام هذه القائمة.", ephemeral=True)
-        self.parent.mode = self.values[0]
-        return await interaction.response.edit_message(content=self.parent.summary(), view=self.parent)
+        self.parent_view.mode = self.values[0]
+        return await interaction.response.edit_message(content=self.parent_view.summary(), view=self.parent_view)
 
 
 class TicketBuilderDetailsButton(discord.ui.Button):
     def __init__(self, parent: TicketPanelBuilderView):
         super().__init__(label="إدخال التفاصيل وحفظ اللوحة", style=discord.ButtonStyle.success, emoji="💾", row=4)
-        self.parent = parent
+        self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
-        if not _can_manage(interaction, self.parent.owner_id):
+        if not _can_manage(interaction, self.parent_view.owner_id):
             return await interaction.response.send_message("ليست لديك صلاحية استخدام هذه القائمة.", ephemeral=True)
-        return await interaction.response.send_modal(TicketPanelDetailsModal(self.parent))
+        return await interaction.response.send_modal(TicketPanelDetailsModal(self.parent_view))
 
 
 class TicketPanelDetailsModal(discord.ui.Modal, title="تفاصيل لوحة التذاكر"):
