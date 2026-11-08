@@ -18,7 +18,7 @@ PLAN_ID = "premium"
 
 FEATURES: tuple[PremiumFeature, ...] = (
     PremiumFeature("dashboard_advanced", "Advanced Dashboard", "لوحة تحكم Premium المتقدمة."),
-    PremiumFeature("ticket_panels", "Ticket Panels", "لوحات تذاكر متعددة وقابلة للتخصيص.", free_limit=1, premium_limit=None),
+    PremiumFeature("ticket_panels", "Ticket Panels", "نظام التذاكر ولوحاته متاح لجميع السيرفرات بلا حد لعدد اللوحات."),
     PremiumFeature("analytics_history", "Analytics History", "احتفاظ أطول ببيانات الإحصائيات.", free_limit=7, premium_limit=365),
     PremiumFeature("advanced_automod", "Advanced AutoMod", "قواعد حماية وفلترة متقدمة.", free_limit=1, premium_limit=None),
     PremiumFeature("automation", "Automation", "أتمتة متقدمة لإجراءات السيرفر."),
@@ -41,6 +41,9 @@ async def is_active(db, guild_id: int) -> bool:
 
 
 async def has_feature(db, guild_id: int, feature: str) -> bool:
+    # Ticket panels are a standard feature for every server, not a Premium entitlement.
+    if feature == "ticket_panels":
+        return True
     record = await active_record(db, guild_id)
     if not record:
         return False
@@ -55,6 +58,9 @@ async def has_feature(db, guild_id: int, feature: str) -> bool:
 
 
 async def limit_for(db, guild_id: int, feature: str) -> int | None:
+    # Ticket panels have no Free-plan cap.
+    if feature == "ticket_panels":
+        return None
     record = await active_record(db, guild_id)
     premium = bool(record)
     item = feature_map().get(feature)
