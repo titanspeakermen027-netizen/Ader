@@ -580,22 +580,24 @@ class TicketPanelDetailsModal(discord.ui.Modal, title="تفاصيل لوحة ا�
         self.description_input = discord.ui.TextInput(label="وصف اللوحة", default=str(panel.get("description") or "اختر القسم المناسب لفتح تذكرة.")[:1000], style=discord.TextStyle.paragraph, max_length=1000)
         self.image_input = discord.ui.TextInput(label="رابط صورة اللوحة (اختياري)", default=str(panel.get("image_url") or "")[:1000], required=False, max_length=1000)
         self.ticket_description_input = discord.ui.TextInput(label="الوصف داخل التذكرة", default=str(panel.get("ticket_description") or "يرجى شرح المشكلة بالتفصيل.")[:1000], style=discord.TextStyle.paragraph, max_length=1000)
-        current_json = {
-            "options": panel.get("options") or [
-                {"name": "الدعم العام", "emoji": "🎫", "description": "فتح تذكرة دعم", "priority": "normal", "max_open": 1}
-            ],
-            "settings": panel.get("settings") or {
-                "color": "#5865F2",
-                "footer": "ANO BOT Support",
-                "select_placeholder": "اختر نوع التذكرة",
-                "ticket_footer": "ANO BOT Support",
-            },
-        }
-        encoded = json.dumps(current_json, ensure_ascii=False, separators=(",", ":"))
-        config_kwargs = {"default": encoded} if len(encoded) <= 4000 else {}
+        existing_options = panel.get("options") or [
+            {"name": "الدعم العام", "emoji": "🎫", "description": "فتح تذكرة دعم"}
+        ]
+        # Human-readable format: one ticket type per line.
+        # Advanced users can still paste the previous JSON format.
+        option_lines = []
+        for option in existing_options[:25]:
+            if isinstance(option, dict):
+                option_lines.append(
+                    f"{str(option.get('name') or 'نوع تذكرة')[:80]} | "
+                    f"{str(option.get('emoji') or '🎫')[:20]} | "
+                    f"{str(option.get('description') or 'فتح تذكرة')[:100]}"
+                )
+        simple_default = "\\n".join(option_lines)
+        config_kwargs = {"default": simple_default} if len(simple_default) <= 4000 else {}
         self.config_input = discord.ui.TextInput(
-            label="أنواع التذاكر والتخصيص بصيغة JSON",
-            placeholder='{"options":[{"name":"الدعم العام","description":"افتح طلباً"}],"settings":{"color":"#5865F2"}}',
+            label="أنواع التذاكر: كل نوع في سطر",
+            placeholder="الدعم العام | 🎫 | مساعدة واستفسارات\\nالشكايات | 📩 | تقديم شكوى\\nالتقديم للإدارة | 🛡️ | طلب الانضمام للفريق",
             style=discord.TextStyle.paragraph,
             required=False,
             max_length=4000,
@@ -628,20 +630,36 @@ class TicketPanelDetailsModal(discord.ui.Modal, title="تفاصيل لوحة ا�
             return await interaction.response.send_message("رتبة الدعم المحددة لم تعد موجودة.", ephemeral=True)
 
         raw_config_text = str(self.config_input.value or "").strip()
-        if raw_config_text:
+        if raw_config_text.startswith("{") or raw_config_text.startswith("["):
             try:
                 raw_config = json.loads(raw_config_text)
             except json.JSONDecodeError as exc:
                 return await interaction.response.send_message(f"صيغة JSON غير صحيحة قرب الحرف {exc.pos}.", ephemeral=True)
+            if isinstance(raw_config, list):
+                raw_options, raw_panel_settings = raw_config, current.get("settings") or {}
+            elif isinstance(raw_config, dict):
+                raw_options = raw_config.get("options", current.get("options") or [])
+                raw_panel_settings = raw_config.get("settings", current.get("settings") or {})
+            else:
+                return await interaction.response.send_message("يجب أن تكون بيانات التخصيص قائمة أو كائناً بصيغة JSON.", ephemeral=True)
+        elif raw_config_text:
+            raw_options = []
+            for line_number, line in enumerate(raw_config_text.splitlines(), start=1):
+                line = line.strip()
+                if not line:
+                    continue
+                parts = [part.strip() for part in line.split("|", 2)]
+                if not parts[0]:
+                    return await interaction.response.send_message(f"اسم نوع التذكرة فارغ في السطر {line_number}.", ephemeral=True)
+                raw_options.append({
+                    "name": parts[0],
+                    "emoji": parts[1] if len(parts) > 1 and parts[1] else "🎫",
+                    "description": parts[2] if len(parts) > 2 and parts[2] else "فتح تذكرة",
+                })
+            raw_panel_settings = current.get("settings") or {}
         else:
-            raw_config = {}
-        if isinstance(raw_config, list):
-            raw_options, raw_panel_settings = raw_config, current.get("settings") or {}
-        elif isinstance(raw_config, dict):
-            raw_options = raw_config.get("options", current.get("options") or [])
-            raw_panel_settings = raw_config.get("settings", current.get("settings") or {})
-        else:
-            return await interaction.response.send_message("يجب أن تكون بيانات التخصيص قائمة أو كائناً بصيغة JSON.", ephemeral=True)
+            raw_options = current.get("options") or []
+            raw_panel_settings = current.get("settings") or {}
         if not isinstance(raw_options, list):
             return await interaction.response.send_message("يجب أن تكون options قائمة.", ephemeral=True)
         if not isinstance(raw_panel_settings, dict):
