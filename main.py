@@ -376,6 +376,13 @@ class Ader(commands.Bot):
     async def on_message(self, message: discord.Message):
         if message.author.bot:
             return
+        ticket_shortcut = (message.content or "").strip().lower()
+        if (
+            ticket_shortcut in {"استلام", "الغاء استلام", "$close", "$delete"}
+            or ticket_shortcut.startswith("$re ")
+        ):
+            # These are handled by TicketManager only inside registered ticket channels.
+            return
         if await self._handle_a_message(message):
             return
         if not await self._claim_message_once(message.id):
