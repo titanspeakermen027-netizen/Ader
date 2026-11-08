@@ -593,11 +593,11 @@ class TicketPanelDetailsModal(discord.ui.Modal, title="تفاصيل لوحة ا�
                     f"{str(option.get('emoji') or '🎫')[:20]} | "
                     f"{str(option.get('description') or 'فتح تذكرة')[:100]}"
                 )
-        simple_default = "\\n".join(option_lines)
+        simple_default = "\n".join(option_lines)
         config_kwargs = {"default": simple_default} if len(simple_default) <= 4000 else {}
         self.config_input = discord.ui.TextInput(
             label="أنواع التذاكر: كل نوع في سطر",
-            placeholder="الدعم العام | 🎫 | مساعدة واستفسارات\\nالشكايات | 📩 | تقديم شكوى\\nالتقديم للإدارة | 🛡️ | طلب الانضمام للفريق",
+            placeholder="الدعم العام | 🎫 | مساعدة واستفسارات\nالشكايات | 📩 | تقديم شكوى\nالتقديم للإدارة | 🛡️ | طلب الانضمام للفريق",
             style=discord.TextStyle.paragraph,
             required=False,
             max_length=4000,
