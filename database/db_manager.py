@@ -72,6 +72,8 @@ class DatabaseManager:
             button_emoji TEXT NOT NULL DEFAULT '🎫',
             category_id INTEGER,
             support_role_id INTEGER,
+            support_role_ids TEXT NOT NULL DEFAULT '[]',
+            support_roles_customized INTEGER NOT NULL DEFAULT 0,
             ticket_description TEXT NOT NULL DEFAULT 'شرح لينا المشكل ديالك بالتفصيل.',
             options TEXT NOT NULL DEFAULT '[]',
             created_at REAL NOT NULL
@@ -176,6 +178,10 @@ class DatabaseManager:
         existing_ticket_panel_columns = {str(row[1]) for row in await self.fetchall("PRAGMA table_info(ticket_panels)")}
         if "settings" not in existing_ticket_panel_columns:
             await self.connection.execute("ALTER TABLE ticket_panels ADD COLUMN settings TEXT NOT NULL DEFAULT '{}'")
+        if "support_role_ids" not in existing_ticket_panel_columns:
+            await self.connection.execute("ALTER TABLE ticket_panels ADD COLUMN support_role_ids TEXT NOT NULL DEFAULT '[]'")
+        if "support_roles_customized" not in existing_ticket_panel_columns:
+            await self.connection.execute("ALTER TABLE ticket_panels ADD COLUMN support_roles_customized INTEGER NOT NULL DEFAULT 0")
 
         await self.connection.executescript("""
         CREATE TABLE IF NOT EXISTS ticket_settings (
@@ -953,10 +959,11 @@ class DatabaseManager:
 
     async def create_ticket_panel(self, data: Dict[str, Any]) -> int:
         options = json.dumps(data.get('options', []), ensure_ascii=False)
+        support_role_ids = json.dumps(data.get('support_role_ids') or [], ensure_ascii=False)
         cur = await self.execute(
-            """INSERT INTO ticket_panels(guild_id,channel_id,message_id,title,description,image_url,mode,button_label,button_emoji,category_id,support_role_id,ticket_description,options,created_at,settings)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (data['guild_id'], data.get('channel_id'), data.get('message_id'), data.get('title', '🎫 الدعم الفني'), data.get('description', 'اختر القسم المناسب لفتح تذكرة.'), data.get('image_url'), data.get('mode', 'buttons'), data.get('button_label', 'فتح تذكرة'), data.get('button_emoji', '🎫'), data.get('category_id'), data.get('support_role_id'), data.get('ticket_description', 'يُرجى شرح المشكلة بالتفصيل.'), options, time.time(), json.dumps(data.get('settings') or {}, ensure_ascii=False))
+            """INSERT INTO ticket_panels(guild_id,channel_id,message_id,title,description,image_url,mode,button_label,button_emoji,category_id,support_role_id,support_role_ids,support_roles_customized,ticket_description,options,created_at,settings)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (data['guild_id'], data.get('channel_id'), data.get('message_id'), data.get('title', '🎫 الدعم الفني'), data.get('description', 'اختر القسم المناسب لفتح تذكرة.'), data.get('image_url'), data.get('mode', 'buttons'), data.get('button_label', 'فتح تذكرة'), data.get('button_emoji', '🎫'), data.get('category_id'), data.get('support_role_id'), support_role_ids, int(bool(data.get('support_roles_customized', False))), data.get('ticket_description', 'يُرجى شرح المشكلة بالتفصيل.'), options, time.time(), json.dumps(data.get('settings') or {}, ensure_ascii=False))
         )
         return int(cur.lastrowid)
 
@@ -966,6 +973,11 @@ class DatabaseManager:
             return None
         data = dict(row)
         data['options'] = json.loads(data.get('options') or '[]')
+        try:
+            data['support_role_ids'] = json.loads(data.get('support_role_ids') or '[]')
+        except (TypeError, ValueError, json.JSONDecodeError):
+            data['support_role_ids'] = []
+        data['support_roles_customized'] = bool(data.get('support_roles_customized', 0))
         try:
             data['settings'] = json.loads(data.get('settings') or '{}')
         except (TypeError, ValueError, json.JSONDecodeError):
@@ -978,6 +990,11 @@ class DatabaseManager:
         for row in rows:
             data = dict(row)
             data['options'] = json.loads(data.get('options') or '[]')
+            try:
+                data['support_role_ids'] = json.loads(data.get('support_role_ids') or '[]')
+            except (TypeError, ValueError, json.JSONDecodeError):
+                data['support_role_ids'] = []
+            data['support_roles_customized'] = bool(data.get('support_roles_customized', 0))
             try:
                 data['settings'] = json.loads(data.get('settings') or '{}')
             except (TypeError, ValueError, json.JSONDecodeError):
@@ -993,6 +1010,11 @@ class DatabaseManager:
             data = dict(row)
             data['options'] = json.loads(data.get('options') or '[]')
             try:
+                data['support_role_ids'] = json.loads(data.get('support_role_ids') or '[]')
+            except (TypeError, ValueError, json.JSONDecodeError):
+                data['support_role_ids'] = []
+            data['support_roles_customized'] = bool(data.get('support_roles_customized', 0))
+            try:
                 data['settings'] = json.loads(data.get('settings') or '{}')
             except (TypeError, ValueError, json.JSONDecodeError):
                 data['settings'] = {}
@@ -1000,13 +1022,15 @@ class DatabaseManager:
         return result
 
     async def update_ticket_panel(self, panel_id: int, data: Dict[str, Any]) -> bool:
-        allowed = {'guild_id', 'channel_id', 'message_id', 'title', 'description', 'image_url', 'mode', 'button_label', 'button_emoji', 'category_id', 'support_role_id', 'ticket_description', 'options', 'settings'}
+        allowed = {'guild_id', 'channel_id', 'message_id', 'title', 'description', 'image_url', 'mode', 'button_label', 'button_emoji', 'category_id', 'support_role_id', 'support_role_ids', 'support_roles_customized', 'ticket_description', 'options', 'settings'}
         sets, vals = [], []
         for key, value in data.items():
             if key not in allowed:
                 continue
-            if key in {'options', 'settings'}:
+            if key in {'options', 'settings', 'support_role_ids'}:
                 value = json.dumps(value, ensure_ascii=False)
+            elif key == 'support_roles_customized':
+                value = int(bool(value))
             sets.append(f"{key}=?")
             vals.append(value)
         if not sets:
