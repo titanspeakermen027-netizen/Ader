@@ -231,6 +231,7 @@ class OpenTicketButton(discord.ui.Button):
             emoji=str(option.get("emoji") or "🎫")[:20],
             style=BUTTON_STYLES.get(style_name, discord.ButtonStyle.primary),
             custom_id=f"ader:ticket:open:{panel_id}:{option_index}",
+            row=min(4, option_index // 5),
         )
         self.cog = cog
         self.panel_id = panel_id
