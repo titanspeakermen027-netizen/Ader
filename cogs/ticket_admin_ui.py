@@ -688,9 +688,10 @@ class TicketPanelDetailsModal(discord.ui.Modal, title="تفاصيل لوحة ا�
                     "enabled": True,
                 }]
 
+            option_view = TicketOptionManagerView(builder)
             await interaction.followup.send(
-                content=TicketOptionManagerView(builder).summary(),
-                view=TicketOptionManagerView(builder),
+                content=option_view.summary(),
+                view=option_view,
                 ephemeral=True,
             )
         except Exception as exc:
@@ -736,10 +737,10 @@ class TicketOptionManagerView(discord.ui.View):
                 f"**{index}.** {option.get('emoji') or '🎫'} "
                 f"**{option.get('name') or 'نوع بلا اسم'}** "
                 f"· {status}{selected}\n"
-                f"<text>{str(option.get('description') or 'بلا وصف')[:100]}</text>"
+                f"الوصف: {str(option.get('description') or 'بلا وصف')[:100]}"
             )
         lines.extend(["", f"عدد الأنواع: **{len(self.options)}/25**", "بعد الانتهاء اضغط **حفظ ونشر اللوحة**."])
-        return "\n".join(lines)
+        return "\n".join(lines)[:1850]
 
     async def _check(self, interaction: discord.Interaction) -> bool:
         if not _can_manage(interaction, self.owner_id):
