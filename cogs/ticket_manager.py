@@ -535,7 +535,7 @@ class TicketSupportRequestButton(BaseTicketButton):
         content = " ".join(role.mention for role in roles) or "فريق الدعم، يوجد طلب مساعدة جديد."
         await interaction.channel.send(content=content, embed=embed, allowed_mentions=discord.AllowedMentions(roles=bool(roles), users=False, everyone=False))
         await interaction.response.send_message("تم إرسال طلب الدعم إلى الفريق.", ephemeral=True)
-        await self.cog.log_event(ticket, "support_requested", {"requested_by": interaction.user.id, "support_role_id": role_id})
+        await self.cog.log_event(ticket, "support_requested", {"requested_by": interaction.user.id, "support_role_ids": [role.id for role in roles]})
 
 
 class TicketActionSelect(discord.ui.Select):
@@ -806,8 +806,9 @@ class TicketManager(commands.Cog):
             support_role_ids = item.get("support_role_ids") or [item.get("support_role_id")]
         elif panel.get("support_roles_customized"):
             support_role_ids = panel.get("support_role_ids") or []
-        elif "support_roles_customized" not in panel and (panel.get("support_role_ids") or panel.get("support_role_id")):
-            support_role_ids = panel.get("support_role_ids") or [panel.get("support_role_id")]
+        elif panel.get("support_role_id") and not panel.get("support_role_ids"):
+            # Keep older panels working when only the original single-role column is populated.
+            support_role_ids = [panel.get("support_role_id")]
         else:
             support_role_ids = settings.get("default_support_role_ids") or ([settings.get("default_support_role_id")] if settings.get("default_support_role_id") else [])
         support_role_ids = list(dict.fromkeys(int(value) for value in support_role_ids if as_int(value) and guild.get_role(int(value))))
