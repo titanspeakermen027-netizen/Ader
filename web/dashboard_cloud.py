@@ -896,7 +896,6 @@ def create_app(bot):
     @app.get("/api/guilds/{guild_id}/tickets")
     async def cloud_ticket_data(request: Request, guild_id: int):
         guild = await _require_guild(bot, request, guild_id)
-        await _require_premium(bot, guild_id)
         panels = await bot.db.list_ticket_panels(guild_id)
         settings = await bot.db.get_ticket_settings(guild_id)
         rows = await bot.db.fetchall(
@@ -944,7 +943,6 @@ def create_app(bot):
     @app.put("/api/guilds/{guild_id}/tickets/settings")
     async def cloud_ticket_settings(request: Request, guild_id: int):
         guild = await _require_guild(bot, request, guild_id)
-        await _require_premium(bot, guild_id)
         data = await request.json()
         current = merge_ticket_settings(data, await bot.db.get_ticket_settings(guild_id))
         for key in ("default_category_id", "transcript_channel_id", "log_channel_id"):
@@ -967,7 +965,6 @@ def create_app(bot):
     @app.post("/api/guilds/{guild_id}/tickets/panels")
     async def cloud_ticket_panel_create(request: Request, guild_id: int):
         guild = await _require_guild(bot, request, guild_id)
-        await _require_premium(bot, guild_id)
         data = await request.json()
         panel = normalise_panel_payload(guild, data)
         panel["guild_id"] = guild_id
@@ -990,7 +987,6 @@ def create_app(bot):
     @app.put("/api/guilds/{guild_id}/tickets/panels/{panel_id}")
     async def cloud_ticket_panel_update(request: Request, guild_id: int, panel_id: int):
         guild = await _require_guild(bot, request, guild_id)
-        await _require_premium(bot, guild_id)
         existing = await bot.db.get_ticket_panel(panel_id)
         if not existing or int(existing["guild_id"]) != guild_id:
             raise HTTPException(status_code=404, detail="لوحة التذاكر غير موجودة.")
@@ -1012,7 +1008,6 @@ def create_app(bot):
     @app.delete("/api/guilds/{guild_id}/tickets/panels/{panel_id}")
     async def cloud_ticket_panel_delete(request: Request, guild_id: int, panel_id: int):
         guild = await _require_guild(bot, request, guild_id)
-        await _require_premium(bot, guild_id)
         panel = await bot.db.get_ticket_panel(panel_id)
         if not panel or int(panel["guild_id"]) != guild_id:
             raise HTTPException(status_code=404, detail="لوحة التذاكر غير موجودة.")
