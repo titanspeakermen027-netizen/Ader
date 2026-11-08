@@ -544,6 +544,13 @@ class TicketBuilderRoleSelect(discord.ui.RoleSelect):
         self.parent_view.support_role_ids = [role.id for role in self.values]
         self.parent_view.support_roles_customized = bool(self.parent_view.support_role_ids)
         self.parent_view.support_role_id = self.parent_view.support_role_ids[0] if self.parent_view.support_role_ids else None
+        self.parent_view.panel["support_roles_customized"] = self.parent_view.support_roles_customized
+        if self.parent_view.support_role_ids:
+            self.parent_view.panel["support_role_ids"] = list(self.parent_view.support_role_ids)
+            self.parent_view.panel["support_role_id"] = self.parent_view.support_role_id
+        else:
+            self.parent_view.panel.pop("support_role_ids", None)
+            self.parent_view.panel.pop("support_role_id", None)
         return await interaction.response.edit_message(content=self.parent_view.summary(), view=self.parent_view)
 
 
@@ -845,8 +852,8 @@ class TicketOptionManagerView(discord.ui.View):
             panel = self.builder.panel
             channel = guild.get_channel(_as_id(panel.get("channel_id")) or 0)
             category = guild.get_channel(_as_id(panel.get("category_id")) or 0)
-            role_id = _as_id(panel.get("support_role_id"))
-            role = guild.get_role(role_id) if role_id else None
+            role_ids = panel.get("support_role_ids") or ([panel.get("support_role_id")] if panel.get("support_role_id") else [])
+            roles = [guild.get_role(int(value)) for value in role_ids if _as_id(value)]
             if not isinstance(channel, discord.TextChannel):
                 return await interaction.followup.send(
                     "قناة نشر اللوحة غير صالحة. أعد اختيارها.", ephemeral=True
@@ -855,20 +862,27 @@ class TicketOptionManagerView(discord.ui.View):
                 return await interaction.followup.send(
                     "فئة قنوات التذاكر غير صالحة. أعد اختيارها.", ephemeral=True
                 )
-            if role_id and role is None:
+            if any(role is None for role in roles):
                 return await interaction.followup.send(
-                    "رتبة الدعم لم تعد موجودة. أعد اختيارها.", ephemeral=True
+                    "إحدى رتب الدعم لم تعد موجودة. أعد اختيارها.", ephemeral=True
                 )
 
             options = []
             for raw in self.options[:25]:
-                option_category_id = _as_id(raw.get("category_id")) or category.id
-                option_category = guild.get_channel(option_category_id)
-                if not isinstance(option_category, discord.CategoryChannel):
-                    option_category_id = category.id
-                option_role_id = _as_id(raw.get("support_role_id")) or (role.id if role else None)
-                if option_role_id and guild.get_role(option_role_id) is None:
-                    option_role_id = role.id if role else None
+                option_category_id = _as_id(raw.get("category_id"))
+                if option_category_id:
+                    option_category = guild.get_channel(option_category_id)
+                    if not isinstance(option_category, discord.CategoryChannel):
+                        option_category_id = None
+                raw_role_ids = raw.get("support_role_ids") or ([raw.get("support_role_id")] if raw.get("support_role_id") else [])
+                option_role_ids = list(dict.fromkeys(int(value) for value in raw_role_ids if _as_id(value)))
+                option_roles = [guild.get_role(role_id) for role_id in option_role_ids]
+                if any(role is None for role in option_roles):
+                    return await interaction.followup.send(
+                        f"إحدى رتب الدعم الخاصة بالنوع {str(raw.get('name') or 'التذكرة')[:60]} لم تعد موجودة.",
+                        ephemeral=True,
+                    )
+                option_role_id = option_role_ids[0] if option_role_ids else None
                 try:
                     max_open = max(1, min(10, int(raw.get("max_open", 1) or 1)))
                 except (TypeError, ValueError):
@@ -880,6 +894,8 @@ class TicketOptionManagerView(discord.ui.View):
                     "ticket_name": str(raw.get("ticket_name") or "ticket-{number}-{user}").strip()[:90],
                     "category_id": option_category_id,
                     "support_role_id": option_role_id,
+                    "support_role_ids": option_role_ids,
+                    "support_roles_customized": bool(raw.get("support_roles_customized", bool(option_role_ids))),
                     "color": _safe_color(raw.get("color"), "#5865F2"),
                     "image_url": _safe_url(raw.get("image_url")),
                     "footer": str(raw.get("footer") or "ANO BOT Support").strip()[:100],
@@ -907,7 +923,9 @@ class TicketOptionManagerView(discord.ui.View):
                 "button_label": "فتح تذكرة",
                 "button_emoji": "🎫",
                 "category_id": category.id,
-                "support_role_id": role.id if role else None,
+                "support_role_id": roles[0].id if roles else None,
+                "support_role_ids": [role.id for role in roles if role],
+                "support_roles_customized": bool(panel.get("support_roles_customized", False)),
                 "ticket_description": str(panel.get("ticket_description") or "يرجى شرح المشكلة بالتفصيل.")[:2000],
                 "options": options,
                 "settings": settings,
