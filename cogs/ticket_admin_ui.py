@@ -562,7 +562,7 @@ class TicketBuilderModeSelect(discord.ui.Select):
 
 class TicketBuilderDetailsButton(discord.ui.Button):
     def __init__(self, parent: TicketPanelBuilderView):
-        super().__init__(label="إدخال التفاصيل وحفظ اللوحة", style=discord.ButtonStyle.success, emoji="💾", row=4)
+        super().__init__(label="إدخال تفاصيل اللوحة", style=discord.ButtonStyle.success, emoji="💾", row=4)
         self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
