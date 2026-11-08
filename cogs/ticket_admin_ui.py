@@ -502,7 +502,11 @@ class TicketPanelBuilderView(discord.ui.View):
         channel = guild.get_channel(self.channel_id or 0)
         category = guild.get_channel(self.category_id or 0)
         roles = [guild.get_role(role_id) for role_id in self.support_role_ids]
-        role_text = "، ".join(role.mention for role in roles if role) or "ترث من إعدادات السيرفر"
+        role_text = (
+            "، ".join(role.mention for role in roles if role)
+            if self.support_roles_customized
+            else "ترث من إعدادات السيرفر"
+        )
         return (
             f"قناة النشر: {channel.mention if channel else 'لم تحدد بعد'}\n"
             f"فئة التذاكر الافتراضية: {category.name if isinstance(category, discord.CategoryChannel) else 'لم تحدد بعد'}\n"
@@ -660,9 +664,7 @@ class TicketPanelDetailsModal(discord.ui.Modal, title="تفاصيل لوحة ا�
             else:
                 role_ids = [
                     int(value) for value in (
-                        current.get("support_role_ids")
-                        or ([current.get("support_role_id")] if current.get("support_role_id") else [])
-                        or settings.get("default_support_role_ids")
+                        settings.get("default_support_role_ids")
                         or ([settings.get("default_support_role_id")] if settings.get("default_support_role_id") else [])
                     ) if _as_id(value)
                 ]
