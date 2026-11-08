@@ -15,6 +15,7 @@ SETTING_DEFAULTS: dict[str, Any] = {
     "enabled": True,
     "default_category_id": None,
     "default_support_role_id": None,
+    "default_support_role_ids": [],
     "transcript_channel_id": None,
     "log_channel_id": None,
     "claim_enabled": True,
@@ -113,9 +114,9 @@ def _settings_embed(guild: discord.Guild, value: Any) -> discord.Embed:
         channel = guild.get_channel(channel_id or 0)
         return channel.mention if channel else "غير محددة"
 
-    role_id = _as_id(config.get("default_support_role_id"))
-    role = guild.get_role(role_id) if role_id else None
-    role_text = role.mention if role else "غير محددة"
+    role_ids = config.get("default_support_role_ids") or ([config.get("default_support_role_id")] if config.get("default_support_role_id") else [])
+    roles = [guild.get_role(int(value)) for value in role_ids if _as_id(value)]
+    role_text = "، ".join(role.mention for role in roles if role) or "غير محددة"
     embed = discord.Embed(
         title="إعدادات نظام التذاكر",
         description=(
@@ -262,18 +263,20 @@ class TicketLogChannelSelect(_TicketChannelSettingSelect):
 
 class TicketDefaultRoleSelect(discord.ui.RoleSelect):
     def __init__(self, parent: TicketSettingsView):
-        super().__init__(placeholder="اختيار رتبة فريق الدعم", min_values=1, max_values=1, row=1)
+        super().__init__(placeholder="اختيار رتب فريق الدعم (يمكن اختيار عدة رتب)", min_values=0, max_values=25, row=1)
         self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
         if not _can_manage(interaction, self.parent_view.owner_id):
             return await interaction.response.send_message("ليست لديك صلاحية استخدام هذه القائمة.", ephemeral=True)
-        role = self.values[0]
+        roles = list(self.values)
         config = _settings(await self.parent_view.cog.db.get_ticket_settings(interaction.guild.id))
-        config["default_support_role_id"] = role.id
+        config["default_support_role_ids"] = [role.id for role in roles]
+        config["default_support_role_id"] = roles[0].id if roles else None
         await self.parent_view.cog.db.save_ticket_settings(interaction.guild.id, config)
+        role_text = "، ".join(role.mention for role in roles) or "غير محددة"
         return await interaction.response.edit_message(
-            content=f"تم تحديث رتبة الدعم: {role.mention}",
+            content=f"تم تحديث رتب الدعم: {role_text}",
             embed=_settings_embed(interaction.guild, config),
             view=self.parent_view,
         )
@@ -478,7 +481,10 @@ class TicketPanelBuilderView(discord.ui.View):
         self.guild_id = int(guild_id or self.panel.get("guild_id") or 0)
         self.channel_id = _as_id(self.panel.get("channel_id"))
         self.category_id = _as_id(self.panel.get("category_id"))
-        self.support_role_id = _as_id(self.panel.get("support_role_id"))
+        raw_role_ids = self.panel.get("support_role_ids") or ([self.panel.get("support_role_id")] if self.panel.get("support_role_id") else [])
+        self.support_role_ids = list(dict.fromkeys(int(value) for value in raw_role_ids if _as_id(value)))
+        self.support_roles_customized = bool(self.panel.get("support_roles_customized", bool(raw_role_ids)))
+        self.support_role_id = self.support_role_ids[0] if self.support_role_ids else None
         self.mode = str(self.panel.get("mode") or "select")
         self.add_item(TicketBuilderPublishChannelSelect(self))
         self.add_item(TicketBuilderCategorySelect(self))
@@ -493,11 +499,12 @@ class TicketPanelBuilderView(discord.ui.View):
             return "تم حفظ الاختيارات. اضغط إدخال التفاصيل للمتابعة."
         channel = guild.get_channel(self.channel_id or 0)
         category = guild.get_channel(self.category_id or 0)
-        role = guild.get_role(self.support_role_id or 0)
+        roles = [guild.get_role(role_id) for role_id in self.support_role_ids]
+        role_text = "، ".join(role.mention for role in roles if role) or "ترث من إعدادات السيرفر"
         return (
             f"قناة النشر: {channel.mention if channel else 'لم تحدد بعد'}\n"
-            f"فئة التذاكر: {category.name if isinstance(category, discord.CategoryChannel) else 'لم تحدد بعد'}\n"
-            f"رتبة الدعم: {role.mention if role else 'لم تحدد بعد'}\n"
+            f"فئة التذاكر الافتراضية: {category.name if isinstance(category, discord.CategoryChannel) else 'لم تحدد بعد'}\n"
+            f"رتب الدعم: {role_text}\n"
             f"نمط اللوحة: {'قائمة اختيار' if self.mode == 'select' else 'أزرار'}"
         )
 
@@ -528,13 +535,15 @@ class TicketBuilderCategorySelect(discord.ui.ChannelSelect):
 
 class TicketBuilderRoleSelect(discord.ui.RoleSelect):
     def __init__(self, parent: TicketPanelBuilderView):
-        super().__init__(placeholder="رتبة فريق الدعم لهذه اللوحة", min_values=1, max_values=1, row=2)
+        super().__init__(placeholder="رتب فريق الدعم لهذه اللوحة (يمكن اختيار عدة رتب)", min_values=0, max_values=25, row=2)
         self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
         if not _can_manage(interaction, self.parent_view.owner_id):
             return await interaction.response.send_message("ليست لديك صلاحية استخدام هذه القائمة.", ephemeral=True)
-        self.parent_view.support_role_id = self.values[0].id
+        self.parent_view.support_role_ids = [role.id for role in self.values]
+        self.parent_view.support_roles_customized = bool(self.parent_view.support_role_ids)
+        self.parent_view.support_role_id = self.parent_view.support_role_ids[0] if self.parent_view.support_role_ids else None
         return await interaction.response.edit_message(content=self.parent_view.summary(), view=self.parent_view)
 
 
@@ -637,14 +646,20 @@ class TicketPanelDetailsModal(discord.ui.Modal, title="تفاصيل لوحة ا�
                 or _as_id(current.get("category_id"))
                 or _as_id(settings.get("default_category_id"))
             )
-            role_id = (
-                builder.support_role_id
-                or _as_id(current.get("support_role_id"))
-                or _as_id(settings.get("default_support_role_id"))
-            )
+            if builder.support_roles_customized:
+                role_ids = builder.support_role_ids
+            else:
+                role_ids = [
+                    int(value) for value in (
+                        current.get("support_role_ids")
+                        or ([current.get("support_role_id")] if current.get("support_role_id") else [])
+                        or settings.get("default_support_role_ids")
+                        or ([settings.get("default_support_role_id")] if settings.get("default_support_role_id") else [])
+                    ) if _as_id(value)
+                ]
             channel = guild.get_channel(channel_id or 0)
             category = guild.get_channel(category_id or 0)
-            role = guild.get_role(role_id) if role_id else None
+            roles = [guild.get_role(role_id) for role_id in role_ids]
 
             if not isinstance(channel, discord.TextChannel):
                 return await interaction.followup.send(
@@ -655,15 +670,17 @@ class TicketPanelDetailsModal(discord.ui.Modal, title="تفاصيل لوحة ا�
                     "اختر فئة صالحة لقنوات التذاكر أو اضبط الفئة الافتراضية من الإعدادات.",
                     ephemeral=True,
                 )
-            if role_id and role is None:
+            if any(role is None for role in roles):
                 return await interaction.followup.send(
-                    "رتبة الدعم المحددة لم تعد موجودة.", ephemeral=True
+                    "إحدى رتب الدعم المحددة لم تعد موجودة. أعد اختيار رتب الدعم.", ephemeral=True
                 )
 
             builder.panel.update({
                 "channel_id": channel.id,
                 "category_id": category.id,
-                "support_role_id": role.id if role else None,
+                "support_role_id": roles[0].id if roles else None,
+                "support_role_ids": [role.id for role in roles if role],
+                "support_roles_customized": bool(builder.support_roles_customized),
                 "title": str(self.title_input.value or "🎫 الدعم الفني").strip()[:256],
                 "description": str(self.description_input.value or "اختر نوع الطلب لفتح تذكرة.").strip()[:4096],
                 "image_url": _safe_url(self.image_input.value),
@@ -799,7 +816,16 @@ class TicketOptionManagerView(discord.ui.View):
             view=self,
         )
 
-    @discord.ui.button(label="حفظ ونشر اللوحة", emoji="💾", style=discord.ButtonStyle.success, row=2)
+    @discord.ui.button(label="الفئة ورتب النوع", emoji="⚙️", style=discord.ButtonStyle.secondary, row=2)
+    async def route_option(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._check(interaction):
+            return
+        if not self.options:
+            return await interaction.response.send_message("لا توجد أنواع لتخصيصها.", ephemeral=True)
+        view = TicketOptionRoutingView(self.builder, self.selected_index)
+        await interaction.response.send_message(view.summary(), view=view, ephemeral=True)
+
+    @discord.ui.button(label="حفظ ونشر اللوحة", emoji="💾", style=discord.ButtonStyle.success, row=3)
     async def save_panel(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not await self._check(interaction):
             return
@@ -967,6 +993,90 @@ class TicketOptionSelect(discord.ui.Select):
             content=self.manager.summary(),
             view=self.manager,
         )
+
+
+class TicketOptionRoutingView(discord.ui.View):
+    """Optional category and multi-role overrides for an individual ticket type."""
+
+    def __init__(self, builder: TicketPanelBuilderView, option_index: int):
+        super().__init__(timeout=900)
+        self.builder = builder
+        self.owner_id = builder.owner_id
+        self.option_index = option_index
+        self.add_item(TicketOptionCategorySelect(self))
+        self.add_item(TicketOptionRolesSelect(self))
+
+    @property
+    def option(self) -> dict[str, Any]:
+        return self.builder.panel["options"][self.option_index]
+
+    def summary(self) -> str:
+        option = self.option
+        guild = self.builder.cog.bot.get_guild(self.builder.guild_id)
+        category_id = _as_id(option.get("category_id"))
+        category = guild.get_channel(category_id) if guild and category_id else None
+        role_ids = option.get("support_role_ids") or ([option.get("support_role_id")] if option.get("support_role_id") else [])
+        roles = [guild.get_role(int(value)) for value in role_ids if guild and _as_id(value)]
+        role_text = "، ".join(role.mention for role in roles if role) or "رتب اللوحة الافتراضية"
+        category_text = category.name if isinstance(category, discord.CategoryChannel) else "فئة اللوحة الافتراضية"
+        return (
+            f"**تخصيص النوع: {option.get('name') or 'التذكرة'}**\n"
+            f"الفئة: **{category_text}**\n"
+            f"رتب الدعم: {role_text}\n\n"
+            "اترك الفئة أو الرتب دون تخصيص لاستعمال إعدادات اللوحة العامة."
+        )
+
+    @discord.ui.button(label="إلغاء تخصيص الفئة والرتب", emoji="↩️", style=discord.ButtonStyle.secondary, row=2)
+    async def reset_overrides(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not _can_manage(interaction, self.owner_id):
+            return await interaction.response.send_message("ليست لديك صلاحية.", ephemeral=True)
+        self.option.pop("category_id", None)
+        self.option.pop("support_role_id", None)
+        self.option.pop("support_role_ids", None)
+        self.option["support_roles_customized"] = False
+        await interaction.response.edit_message(content=self.summary(), view=self)
+
+
+class TicketOptionCategorySelect(discord.ui.ChannelSelect):
+    def __init__(self, parent: TicketOptionRoutingView):
+        super().__init__(
+            channel_types=[discord.ChannelType.category],
+            placeholder="فئة خاصة لهذا النوع (اختياري)",
+            min_values=1,
+            max_values=1,
+            row=0,
+        )
+        self.parent_view = parent
+
+    async def callback(self, interaction: discord.Interaction):
+        if not _can_manage(interaction, self.parent_view.owner_id):
+            return await interaction.response.send_message("ليست لديك صلاحية.", ephemeral=True)
+        self.parent_view.option["category_id"] = self.values[0].id
+        await interaction.response.edit_message(content=self.parent_view.summary(), view=self.parent_view)
+
+
+class TicketOptionRolesSelect(discord.ui.RoleSelect):
+    def __init__(self, parent: TicketOptionRoutingView):
+        super().__init__(
+            placeholder="رتب خاصة لهذا النوع (اختياري، متعدد)",
+            min_values=0,
+            max_values=25,
+            row=1,
+        )
+        self.parent_view = parent
+
+    async def callback(self, interaction: discord.Interaction):
+        if not _can_manage(interaction, self.parent_view.owner_id):
+            return await interaction.response.send_message("ليست لديك صلاحية.", ephemeral=True)
+        selected_ids = [role.id for role in self.values]
+        self.parent_view.option.pop("support_role_id", None)
+        if selected_ids:
+            self.parent_view.option["support_role_ids"] = selected_ids
+            self.parent_view.option["support_roles_customized"] = True
+        else:
+            self.parent_view.option.pop("support_role_ids", None)
+            self.parent_view.option["support_roles_customized"] = False
+        await interaction.response.edit_message(content=self.parent_view.summary(), view=self.parent_view)
 
 
 class TicketOptionModal(discord.ui.Modal, title="إعدادات نوع التذكرة"):
