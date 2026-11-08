@@ -522,8 +522,9 @@ class TicketSupportRequestButton(BaseTicketButton):
             )
 
         settings = await self.cog.settings_for_ticket(ticket)
-        role_id = as_int(data.get("support_role_id")) or as_int(settings.get("default_support_role_id"))
-        role = interaction.guild.get_role(role_id) if role_id else None
+        role_ids = data.get("support_role_ids") or ([data.get("support_role_id")] if data.get("support_role_id") else []) or settings.get("default_support_role_ids") or ([settings.get("default_support_role_id")] if settings.get("default_support_role_id") else [])
+        roles = [interaction.guild.get_role(as_int(value) or 0) for value in role_ids]
+        roles = [role for role in roles if role]
         await self.cog.write_ticket_data(ticket, {"support_requested_at": now})
         embed = discord.Embed(
             title="طلب دعم جديد",
@@ -531,12 +532,8 @@ class TicketSupportRequestButton(BaseTicketButton):
             color=EmbedColor.PRIMARY,
             timestamp=discord.utils.utcnow(),
         )
-        content = role.mention if role else "فريق الدعم، يوجد طلب مساعدة جديد."
-        await interaction.channel.send(
-            content=content,
-            embed=embed,
-            allowed_mentions=discord.AllowedMentions(roles=bool(role), users=False, everyone=False),
-        )
+        content = " ".join(role.mention for role in roles) or "فريق الدعم، يوجد طلب مساعدة جديد."
+        await interaction.channel.send(content=content, embed=embed, allowed_mentions=discord.AllowedMentions(roles=bool(roles), users=False, everyone=False))
         await interaction.response.send_message("تم إرسال طلب الدعم إلى الفريق.", ephemeral=True)
         await self.cog.log_event(ticket, "support_requested", {"requested_by": interaction.user.id, "support_role_id": role_id})
 
@@ -556,7 +553,6 @@ class TicketActionSelect(discord.ui.Select):
         else:
             options = [
                 discord.SelectOption(label="إغلاق التذكرة", value="close", emoji="🔒"),
-                discord.SelectOption(label="قفل أو فتح التذكرة", value="lock", emoji="🔐"),
                 discord.SelectOption(label="إضافة عضو", value="add_member", emoji="➕"),
                 discord.SelectOption(label="إزالة عضو", value="remove_member", emoji="➖"),
                 discord.SelectOption(label="إعادة تسمية التذكرة", value="rename", emoji="✏️"),
@@ -578,7 +574,6 @@ class TicketActionSelect(discord.ui.Select):
         action = self.values[0]
         handlers = {
             "close": TicketCloseButton(self.cog, self.channel_id),
-            "lock": TicketLockButton(self.cog, self.channel_id),
             "add_member": TicketMemberButton(self.cog, self.channel_id, "add"),
             "remove_member": TicketMemberButton(self.cog, self.channel_id, "remove"),
             "rename": TicketRenameButton(self.cog, self.channel_id),
@@ -705,21 +700,25 @@ class TicketManager(commands.Cog):
             settings.update(override)
         return settings
 
-    async def is_staff(self, interaction: discord.Interaction, ticket: dict[str, Any] | None = None) -> bool:
-        member = interaction.user
-        if not isinstance(member, discord.Member):
-            return False
+    async def is_staff_member(self, member: discord.Member, ticket: dict[str, Any] | None = None) -> bool:
         if member.guild_permissions.administrator or member.guild_permissions.manage_channels:
             return True
+        guild = member.guild
         data = self.ticket_data(ticket or {})
-        support_role_id = as_int(data.get("support_role_id"))
-        if support_role_id:
-            role = interaction.guild.get_role(support_role_id)
-            if role and role in member.roles:
-                return True
-        settings = merge_settings(await self.db.get_ticket_settings(member.guild.id))
-        global_role = as_int(settings.get("default_support_role_id"))
-        return bool(global_role and any(r.id == global_role for r in member.roles))
+        if data.get("support_roles_customized"):
+            role_ids = data.get("support_role_ids") or []
+        else:
+            role_ids = data.get("support_role_ids") or ([data.get("support_role_id")] if data.get("support_role_id") else [])
+            if not role_ids:
+                settings = merge_settings(await self.db.get_ticket_settings(guild.id))
+                role_ids = settings.get("default_support_role_ids") or ([settings.get("default_support_role_id")] if settings.get("default_support_role_id") else [])
+        return any(role and role in member.roles for role in (guild.get_role(as_int(value) or 0) for value in role_ids))
+
+    async def is_staff(self, interaction: discord.Interaction, ticket: dict[str, Any] | None = None) -> bool:
+        member = interaction.user
+        if not isinstance(member, discord.Member) or interaction.guild is None:
+            return False
+        return await self.is_staff_member(member, ticket)
 
     async def get_ticket_by_channel(self, channel_id: int):
         row = await self.db.fetchone("SELECT * FROM tickets WHERE channel_id=? AND status IN ('open','locked','closed') LIMIT 1", (channel_id,))
@@ -801,8 +800,20 @@ class TicketManager(commands.Cog):
         if not isinstance(category, discord.CategoryChannel):
             return await interaction.response.send_message("لم يتم ضبط فئة التذاكر بشكل صحيح. اطلب من الإدارة ضبطها من لوحة التحكم.", ephemeral=True)
 
-        support_role_id = as_int(item.get("support_role_id")) or as_int(panel.get("support_role_id")) or as_int(settings.get("default_support_role_id"))
-        support_role = guild.get_role(support_role_id) if support_role_id else None
+        if item.get("support_roles_customized"):
+            support_role_ids = item.get("support_role_ids") or []
+        elif item.get("support_role_ids") or item.get("support_role_id"):
+            support_role_ids = item.get("support_role_ids") or [item.get("support_role_id")]
+        elif panel.get("support_roles_customized"):
+            support_role_ids = panel.get("support_role_ids") or []
+        elif "support_roles_customized" not in panel and (panel.get("support_role_ids") or panel.get("support_role_id")):
+            support_role_ids = panel.get("support_role_ids") or [panel.get("support_role_id")]
+        else:
+            support_role_ids = settings.get("default_support_role_ids") or ([settings.get("default_support_role_id")] if settings.get("default_support_role_id") else [])
+        support_role_ids = list(dict.fromkeys(int(value) for value in support_role_ids if as_int(value) and guild.get_role(int(value))))
+        support_roles = [guild.get_role(role_id) for role_id in support_role_ids]
+        support_roles = [role for role in support_roles if role]
+        support_role_id = support_role_ids[0] if support_role_ids else None
         limit = as_int(item.get("max_open")) or int(settings.get("max_open_per_user", 1))
         limit = max(1, min(MAX_OPEN_PER_USER, limit))
         open_tickets = await self.get_open_tickets_for_user(guild, interaction.user.id)
@@ -834,13 +845,15 @@ class TicketManager(commands.Cog):
                 me = guild.me
                 if me:
                     overwrites[me] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True, manage_messages=True, attach_files=True)
-                if support_role:
+                for support_role in support_roles:
                     overwrites[support_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, attach_files=True)
                 channel = await category.create_text_channel(name=name, overwrites=overwrites, reason=f"دعم Ader • {interaction.user}")
                 ticket_data = {
                     "type": str(item.get("name") or "دعم"),
                     "type_description": str(item.get("description") or panel.get("ticket_description") or "يرجى شرح المشكلة بالتفصيل."),
                     "support_role_id": support_role_id,
+                    "support_role_ids": support_role_ids,
+                    "support_roles_customized": bool(item.get("support_roles_customized") or panel.get("support_roles_customized")),
                     "panel_id": int(panel["id"]),
                     "option_index": option_index,
                     "priority": str(item.get("priority") or "normal"),
@@ -869,10 +882,10 @@ class TicketManager(commands.Cog):
                         embed.set_image(url=image)
                 footer = str(item.get("footer") or panel.get("settings", {}).get("ticket_footer") or "دعم Ader")
                 embed.set_footer(text=footer[:2048])
-                mentions = discord.AllowedMentions(users=True, roles=bool(support_role))
+                mentions = discord.AllowedMentions(users=True, roles=bool(support_roles))
                 content = interaction.user.mention
-                if support_role:
-                    content += f" {support_role.mention}"
+                if support_roles:
+                    content += " " + " ".join(role.mention for role in support_roles)
                 await channel.send(content=content, embed=embed, view=TicketActionView(self, channel.id), allowed_mentions=mentions)
                 self.bot.add_view(TicketActionView(self, channel.id), message_id=None)
                 await self.log_event({"id": ticket_id, "guild_id": guild.id, "user_id": interaction.user.id, "channel_id": channel.id, "data": json.dumps(ticket_data)}, "created", {"type": ticket_data["type"], "staff_role_id": support_role_id})
@@ -1021,6 +1034,154 @@ class TicketManager(commands.Cog):
             await interaction.channel.delete(reason=f"حذف التذكرة #{ticket['id']} بواسطة {interaction.user}")
         except discord.HTTPException:
             pass
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author.bot or message.guild is None or not isinstance(message.author, discord.Member):
+            return
+        raw = (message.content or "").strip()
+        lowered = raw.lower()
+        command = None
+        new_name = ""
+        if lowered == "استلام":
+            command = "claim"
+        elif lowered == "الغاء استلام":
+            command = "unclaim"
+        elif lowered == "$close":
+            command = "close"
+        elif lowered == "$delete":
+            command = "delete"
+        elif lowered.startswith("$re "):
+            command = "rename"
+            new_name = raw[3:].strip()
+        if command is None or (command == "rename" and not new_name):
+            return
+
+        ticket = await self.get_ticket_by_channel(message.channel.id)
+        if not ticket or ticket.get("status") not in {"open", "locked", "closed"}:
+            return
+        if not await self.is_staff_member(message.author, ticket):
+            try:
+                await message.reply("هذه الاختصارات مخصصة لفريق الإدارة والدعم فقط.", delete_after=5, mention_author=False)
+            except discord.HTTPException:
+                pass
+            return
+
+        channel = message.channel
+        if not isinstance(channel, discord.TextChannel):
+            return
+        try:
+            await message.delete()
+        except (discord.Forbidden, discord.NotFound, discord.HTTPException):
+            pass
+
+        if command == "rename":
+            clean = clean_name(new_name, f"ticket-{ticket['id']}")
+            try:
+                await channel.edit(name=clean, reason=f"إعادة تسمية التذكرة #{ticket['id']} بواسطة {message.author}")
+                await self.write_ticket_data(ticket, {"renamed_to": clean, "renamed_by": message.author.id})
+            except discord.HTTPException:
+                await channel.send("تعذر تغيير اسم التذكرة. تحقق من صلاحيات البوت.")
+            return
+
+        if command == "claim":
+            if ticket.get("status") == "closed":
+                return
+            claimed_by = as_int(ticket.get("claimed_by"))
+            if claimed_by:
+                await channel.send(f"التذكرة مستلمة بالفعل بواسطة <@{claimed_by}>.")
+                return
+            await self.db.update_ticket(ticket["id"], {"claimed_by": message.author.id})
+            await self.write_ticket_data(ticket, {"claimed_by": message.author.id})
+            await channel.send(f"تم استلام التذكرة بواسطة {message.author.mention}.")
+            await self.log_event(ticket, "claim", {"staff_id": message.author.id, "source": "text_command"})
+            return
+
+        if command == "unclaim":
+            if ticket.get("status") == "closed":
+                return
+            claimed_by = as_int(ticket.get("claimed_by"))
+            if not claimed_by:
+                await channel.send("لا يوجد إداري مستلم لهذه التذكرة حالياً.")
+                return
+            if claimed_by != message.author.id and not (message.author.guild_permissions.administrator or message.author.guild_permissions.manage_channels):
+                await channel.send("إلغاء الاستلام متاح للمستلم أو لإدارة السيرفر.")
+                return
+            await self.db.update_ticket(ticket["id"], {"claimed_by": None})
+            await self.write_ticket_data(ticket, {"claimed_by": None})
+            await channel.send(f"تم إلغاء استلام التذكرة بواسطة {message.author.mention}.")
+            await self.log_event(ticket, "unclaim", {"staff_id": message.author.id, "source": "text_command"})
+            return
+
+        if command == "close":
+            if ticket.get("status") == "closed":
+                await channel.send("التذكرة مغلقة بالفعل.")
+                return
+            owner_id = int(ticket["user_id"])
+            owner_target = message.guild.get_member(owner_id) or discord.Object(id=owner_id)
+            try:
+                await channel.set_permissions(owner_target, view_channel=False, send_messages=False, read_message_history=False, reason=f"إغلاق التذكرة #{ticket['id']} بواسطة {message.author}")
+            except (discord.Forbidden, discord.HTTPException):
+                await channel.send("تعذر إخفاء التذكرة عن صاحبها، لذلك لم يتم إغلاقها. تحقق من صلاحية Manage Channels.")
+                return
+            closed_at = time.time()
+            data = self.ticket_data(ticket)
+            data.update({"close_reason": "تم الإغلاق بواسطة اختصار $close", "closed_by": message.author.id, "locked": True})
+            await self.db.update_ticket(ticket["id"], {"status": "closed", "closed_at": closed_at, "data": json.dumps(data, ensure_ascii=False)})
+            ticket["status"] = "closed"
+            ticket["closed_at"] = closed_at
+            ticket["data"] = json.dumps(data, ensure_ascii=False)
+            try:
+                if not channel.name.startswith("closed-"):
+                    await channel.edit(name=clean_name("closed-" + channel.name, f"closed-ticket-{ticket['id']}"))
+            except discord.HTTPException:
+                pass
+            settings = await self.settings_for_ticket(ticket)
+            transcript_note = None
+            if as_int(settings.get("transcript_channel_id")):
+                try:
+                    transcript_note = await self.send_transcript_to_log(ticket, channel)
+                except Exception:
+                    pass
+            await self.log_event(ticket, "closed", {"reason": "تم الإغلاق بواسطة اختصار $close", "closed_by": message.author.id, "transcript": transcript_note, "source": "text_command"})
+            await channel.send("تم إغلاق التذكرة. يمكن لفريق الدعم إعادة فتحها أو حذفها.", view=TicketActionView(self, channel.id, closed=True))
+            if as_bool(settings.get("rating_enabled"), True):
+                try:
+                    owner = message.guild.get_member(owner_id)
+                    if owner:
+                        panel_id = int(self.ticket_data(ticket).get("panel_id") or 0)
+                        panel = await self.db.get_ticket_panel(panel_id) if panel_id else None
+                        await owner.send(embed=discord.Embed(
+                            title="تقييم تجربة الدعم",
+                            description=f"أُغلقت تذكرتك رقم #{ticket['id']}. اختر تقييماً من نجمة إلى خمس نجوم.",
+                            color=valid_color((panel or {}).get("settings", {}).get("color"), 0x5865F2),
+                        ), view=RatingView(self, int(ticket["id"])))
+                except Exception:
+                    pass
+            delete_after = as_int(settings.get("delete_after_close_seconds"), 0) or 0
+            if delete_after > 0 and not as_bool(settings.get("keep_closed"), True):
+                async def delayed_delete():
+                    await asyncio.sleep(delete_after)
+                    try:
+                        await channel.delete(reason=f"حذف تلقائي للتذكرة المغلقة #{ticket['id']}")
+                    except discord.HTTPException:
+                        pass
+                asyncio.create_task(delayed_delete())
+            return
+
+        if command == "delete":
+            settings = await self.settings_for_ticket(ticket)
+            if as_int(settings.get("transcript_channel_id")):
+                try:
+                    await self.send_transcript_to_log(ticket, channel)
+                except Exception:
+                    pass
+            await self.db.update_ticket(ticket["id"], {"status": "deleted", "closed_at": ticket.get("closed_at") or time.time()})
+            await self.log_event(ticket, "deleted", {"by": message.author.id, "source": "text_command"})
+            try:
+                await channel.delete(reason=f"حذف التذكرة #{ticket['id']} بواسطة {message.author}")
+            except discord.HTTPException:
+                pass
 
     async def generate_transcript(self, ticket: dict[str, Any], channel: discord.TextChannel) -> str:
         lines = [
