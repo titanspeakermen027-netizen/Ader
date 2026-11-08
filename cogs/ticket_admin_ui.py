@@ -576,198 +576,482 @@ class TicketPanelDetailsModal(discord.ui.Modal, title="تفاصيل لوحة ا�
         super().__init__()
         self.builder = builder
         panel = builder.panel
-        self.title_input = discord.ui.TextInput(label="عنوان اللوحة", default=str(panel.get("title") or "🎫 الدعم الفني")[:256], max_length=256)
-        self.description_input = discord.ui.TextInput(label="وصف اللوحة", default=str(panel.get("description") or "اختر القسم المناسب لفتح تذكرة.")[:1000], style=discord.TextStyle.paragraph, max_length=1000)
-        self.image_input = discord.ui.TextInput(label="رابط صورة اللوحة (اختياري)", default=str(panel.get("image_url") or "")[:1000], required=False, max_length=1000)
-        self.ticket_description_input = discord.ui.TextInput(label="الوصف داخل التذكرة", default=str(panel.get("ticket_description") or "يرجى شرح المشكلة بالتفصيل.")[:1000], style=discord.TextStyle.paragraph, max_length=1000)
-        existing_options = panel.get("options") or [
-            {"name": "الدعم العام", "emoji": "🎫", "description": "فتح تذكرة دعم"}
-        ]
-        # Human-readable format: one ticket type per line.
-        # Advanced users can still paste the previous JSON format.
-        option_lines = []
-        for option in existing_options[:25]:
-            if isinstance(option, dict):
-                option_lines.append(
-                    f"{str(option.get('name') or 'نوع تذكرة')[:80]} | "
-                    f"{str(option.get('emoji') or '🎫')[:20]} | "
-                    f"{str(option.get('description') or 'فتح تذكرة')[:100]}"
-                )
-        simple_default = "\n".join(option_lines)
-        config_kwargs = {"default": simple_default} if len(simple_default) <= 4000 else {}
-        self.config_input = discord.ui.TextInput(
-            label="أنواع التذاكر: كل نوع في سطر",
-            placeholder="الدعم العام | 🎫 | مساعدة واستفسارات\nالشكايات | 📩 | تقديم شكوى\nالتقديم للإدارة | 🛡️ | طلب الانضمام للفريق",
-            style=discord.TextStyle.paragraph,
-            required=False,
-            max_length=4000,
-            **config_kwargs,
+        self.title_input = discord.ui.TextInput(
+            label="عنوان لوحة التذاكر",
+            default=str(panel.get("title") or "🎫 الدعم الفني")[:256],
+            max_length=256,
         )
-        for item in (self.title_input, self.description_input, self.image_input, self.ticket_description_input, self.config_input):
+        self.description_input = discord.ui.TextInput(
+            label="وصف اللوحة",
+            default=str(panel.get("description") or "اختر نوع الطلب لفتح تذكرة.")[:1000],
+            style=discord.TextStyle.paragraph,
+            max_length=1000,
+        )
+        self.image_input = discord.ui.TextInput(
+            label="رابط صورة اللوحة (اختياري)",
+            default=str(panel.get("image_url") or "")[:1000],
+            required=False,
+            max_length=1000,
+        )
+        self.ticket_description_input = discord.ui.TextInput(
+            label="الوصف داخل التذكرة",
+            default=str(panel.get("ticket_description") or "يرجى شرح المشكلة بالتفصيل.")[:1000],
+            style=discord.TextStyle.paragraph,
+            max_length=1000,
+        )
+        self.footer_input = discord.ui.TextInput(
+            label="تذييل اللوحة",
+            default=str((panel.get("settings") or {}).get("footer") or "ANO BOT Support")[:100],
+            required=False,
+            max_length=100,
+        )
+        for item in (
+            self.title_input,
+            self.description_input,
+            self.image_input,
+            self.ticket_description_input,
+            self.footer_input,
+        ):
             self.add_item(item)
 
     async def on_submit(self, interaction: discord.Interaction):
         builder = self.builder
         if not _can_manage(interaction, builder.owner_id):
-            return await interaction.response.send_message("ليست لديك صلاحية حفظ لوحة التذاكر.", ephemeral=True)
-
+            return await interaction.response.send_message(
+                "ليست لديك صلاحية حفظ لوحة التذاكر.", ephemeral=True
+            )
         guild = interaction.guild
         if guild is None:
-            return await interaction.response.send_message("لا يمكن إنشاء لوحة خارج السيرفر.", ephemeral=True)
-        current = builder.panel
-        settings = _settings(await builder.cog.db.get_ticket_settings(guild.id))
-        channel_id = builder.channel_id or _as_id(current.get("channel_id"))
-        category_id = builder.category_id or _as_id(current.get("category_id")) or _as_id(settings.get("default_category_id"))
-        role_id = builder.support_role_id or _as_id(current.get("support_role_id")) or _as_id(settings.get("default_support_role_id"))
-        channel = guild.get_channel(channel_id or 0)
-        category = guild.get_channel(category_id or 0)
-        role = guild.get_role(role_id or 0) if role_id else None
-        if not isinstance(channel, discord.TextChannel):
-            return await interaction.response.send_message("اختر قناة نصية صالحة لنشر اللوحة.", ephemeral=True)
-        if not isinstance(category, discord.CategoryChannel):
-            return await interaction.response.send_message("اختر فئة صالحة لقنوات التذاكر أو اضبط الفئة الافتراضية من الإعدادات.", ephemeral=True)
-        if role_id and role is None:
-            return await interaction.response.send_message("رتبة الدعم المحددة لم تعد موجودة.", ephemeral=True)
+            return await interaction.response.send_message(
+                "لا يمكن إنشاء لوحة خارج السيرفر.", ephemeral=True
+            )
 
-        raw_config_text = str(self.config_input.value or "").strip()
-        if raw_config_text.startswith("{") or raw_config_text.startswith("["):
-            try:
-                raw_config = json.loads(raw_config_text)
-            except json.JSONDecodeError as exc:
-                return await interaction.response.send_message(f"صيغة JSON غير صحيحة قرب الحرف {exc.pos}.", ephemeral=True)
-            if isinstance(raw_config, list):
-                raw_options, raw_panel_settings = raw_config, current.get("settings") or {}
-            elif isinstance(raw_config, dict):
-                raw_options = raw_config.get("options", current.get("options") or [])
-                raw_panel_settings = raw_config.get("settings", current.get("settings") or {})
-            else:
-                return await interaction.response.send_message("يجب أن تكون بيانات التخصيص قائمة أو كائناً بصيغة JSON.", ephemeral=True)
-        elif raw_config_text:
-            raw_options = []
-            for line_number, line in enumerate(raw_config_text.splitlines(), start=1):
-                line = line.strip()
-                if not line:
-                    continue
-                parts = [part.strip() for part in line.split("|", 2)]
-                if not parts[0]:
-                    return await interaction.response.send_message(f"اسم نوع التذكرة فارغ في السطر {line_number}.", ephemeral=True)
-                raw_options.append({
-                    "name": parts[0],
-                    "emoji": parts[1] if len(parts) > 1 and parts[1] else "🎫",
-                    "description": parts[2] if len(parts) > 2 and parts[2] else "فتح تذكرة",
-                })
-            raw_panel_settings = current.get("settings") or {}
-        else:
-            raw_options = current.get("options") or []
-            raw_panel_settings = current.get("settings") or {}
-        if not isinstance(raw_options, list):
-            return await interaction.response.send_message("يجب أن تكون options قائمة.", ephemeral=True)
-        if not isinstance(raw_panel_settings, dict):
-            raw_panel_settings = {}
+        # Acknowledge the modal immediately. Database access happens afterwards.
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            current = builder.panel
+            settings = _settings(await builder.cog.db.get_ticket_settings(guild.id))
+            channel_id = builder.channel_id or _as_id(current.get("channel_id"))
+            category_id = (
+                builder.category_id
+                or _as_id(current.get("category_id"))
+                or _as_id(settings.get("default_category_id"))
+            )
+            role_id = (
+                builder.support_role_id
+                or _as_id(current.get("support_role_id"))
+                or _as_id(settings.get("default_support_role_id"))
+            )
+            channel = guild.get_channel(channel_id or 0)
+            category = guild.get_channel(category_id or 0)
+            role = guild.get_role(role_id) if role_id else None
 
-        options = []
-        for raw in raw_options[:25]:
-            if not isinstance(raw, dict):
-                continue
-            option_category = _as_id(raw.get("category_id")) or category_id
-            option_role = _as_id(raw.get("support_role_id")) or role_id
-            if option_category and not isinstance(guild.get_channel(option_category), discord.CategoryChannel):
-                option_category = category_id
-            if option_role and guild.get_role(option_role) is None:
-                option_role = role_id
-            try:
-                max_open = max(1, min(10, int(raw.get("max_open", 1) or 1)))
-            except (TypeError, ValueError):
-                max_open = 1
-            style = str(raw.get("button_style") or "primary").lower()
-            if style not in {"primary", "secondary", "success", "danger"}:
-                style = "primary"
-            color = _safe_color(raw.get("color"), "#5865F2")
-            options.append({
-                "name": str(raw.get("name") or "فتح تذكرة").strip()[:80],
-                "emoji": str(raw.get("emoji") or "🎫").strip()[:20],
-                "description": str(raw.get("description") or "فتح تذكرة").strip()[:100],
-                "ticket_name": str(raw.get("ticket_name") or "ticket-{number}-{user}").strip()[:90],
-                "category_id": option_category,
-                "support_role_id": option_role,
-                "color": color,
-                "image_url": _safe_url(raw.get("image_url")),
-                "footer": str(raw.get("footer") or "ANO BOT Support").strip()[:100],
-                "priority": str(raw.get("priority") or "normal").strip()[:20],
-                "max_open": max_open,
-                "button_style": style,
-                "enabled": _as_bool(raw.get("enabled"), True),
+            if not isinstance(channel, discord.TextChannel):
+                return await interaction.followup.send(
+                    "اختر قناة نصية صالحة لنشر اللوحة.", ephemeral=True
+                )
+            if not isinstance(category, discord.CategoryChannel):
+                return await interaction.followup.send(
+                    "اختر فئة صالحة لقنوات التذاكر أو اضبط الفئة الافتراضية من الإعدادات.",
+                    ephemeral=True,
+                )
+            if role_id and role is None:
+                return await interaction.followup.send(
+                    "رتبة الدعم المحددة لم تعد موجودة.", ephemeral=True
+                )
+
+            builder.panel.update({
+                "channel_id": channel.id,
+                "category_id": category.id,
+                "support_role_id": role.id if role else None,
+                "title": str(self.title_input.value or "🎫 الدعم الفني").strip()[:256],
+                "description": str(self.description_input.value or "اختر نوع الطلب لفتح تذكرة.").strip()[:4096],
+                "image_url": _safe_url(self.image_input.value),
+                "ticket_description": str(self.ticket_description_input.value or "يرجى شرح المشكلة بالتفصيل.").strip()[:2000],
             })
-        if not options:
-            options = [{
+            panel_settings = dict(current.get("settings") or {})
+            panel_settings["color"] = _safe_color(panel_settings.get("color"), "#5865F2")
+            panel_settings["footer"] = str(self.footer_input.value or "ANO BOT Support").strip()[:100]
+            panel_settings.setdefault("thumbnail_url", None)
+            panel_settings.setdefault("select_placeholder", "اختر نوع التذكرة")
+            panel_settings.setdefault("ticket_footer", "ANO BOT Support")
+            panel_settings.setdefault("ticket_image_url", None)
+            builder.panel["settings"] = panel_settings
+
+            if not builder.panel.get("options"):
+                builder.panel["options"] = [{
+                    "name": "الدعم العام",
+                    "emoji": "🎫",
+                    "description": "فتح تذكرة دعم",
+                    "ticket_name": "ticket-{number}-{user}",
+                    "max_open": 1,
+                    "enabled": True,
+                }]
+
+            await interaction.followup.send(
+                content=TicketOptionManagerView(builder).summary(),
+                view=TicketOptionManagerView(builder),
+                ephemeral=True,
+            )
+        except Exception as exc:
+            await interaction.followup.send(
+                f"تعذر تجهيز خيارات التذاكر: {str(exc)[:250]}",
+                ephemeral=True,
+            )
+
+
+class TicketOptionManagerView(discord.ui.View):
+    """Button-based manager for adding, editing and deleting ticket types."""
+
+    def __init__(self, builder: TicketPanelBuilderView):
+        super().__init__(timeout=900)
+        self.builder = builder
+        self.owner_id = builder.owner_id
+        self.options = builder.panel.setdefault("options", [])
+        if not self.options:
+            self.options.append({
                 "name": "الدعم العام",
                 "emoji": "🎫",
                 "description": "فتح تذكرة دعم",
                 "ticket_name": "ticket-{number}-{user}",
-                "category_id": category_id,
-                "support_role_id": role_id,
-                "color": "#5865F2",
-                "image_url": None,
-                "footer": "ANO BOT Support",
-                "priority": "normal",
                 "max_open": 1,
-                "button_style": "primary",
                 "enabled": True,
-            }]
-        if not any(option.get("enabled", True) for option in options):
-            return await interaction.response.send_message("فعّل نوعاً واحداً على الأقل من أنواع التذاكر.", ephemeral=True)
-        if any(option.get("enabled", True) and not option.get("category_id") for option in options):
-            return await interaction.response.send_message("كل نوع مفعّل يحتاج إلى فئة تذاكر صالحة.", ephemeral=True)
+            })
+        self.selected_index = 0
+        self.add_item(TicketOptionSelect(self))
+        self.edit_option.disabled = not bool(self.options)
+        self.delete_option.disabled = not bool(self.options)
+        self.add_option.disabled = len(self.options) >= 25
 
-        panel_settings = {
-            "color": _safe_color(raw_panel_settings.get("color"), "#5865F2"),
-            "thumbnail_url": _safe_url(raw_panel_settings.get("thumbnail_url")),
-            "footer": str(raw_panel_settings.get("footer") or "ANO BOT Support").strip()[:100],
-            "select_placeholder": str(raw_panel_settings.get("select_placeholder") or "اختر نوع التذكرة").strip()[:100],
-            "ticket_footer": str(raw_panel_settings.get("ticket_footer") or "ANO BOT Support").strip()[:100],
-            "ticket_image_url": _safe_url(raw_panel_settings.get("ticket_image_url")),
-        }
-        payload = {
-            "channel_id": channel.id,
-            "message_id": _as_id(current.get("message_id")),
-            "title": str(self.title_input.value or "🎫 الدعم الفني").strip()[:256],
-            "description": str(self.description_input.value or "اختر القسم المناسب لفتح تذكرة.").strip()[:4096],
-            "image_url": _safe_url(self.image_input.value),
-            "mode": builder.mode if builder.mode in {"buttons", "select"} else "select",
-            "button_label": "فتح تذكرة",
-            "button_emoji": "🎫",
-            "category_id": category.id,
-            "support_role_id": role.id if role else None,
-            "ticket_description": str(self.ticket_description_input.value or "يرجى شرح المشكلة بالتفصيل.").strip()[:2000],
-            "options": options,
-            "settings": panel_settings,
-        }
+    def summary(self) -> str:
+        lines = [
+            "**إدارة أنواع التذاكر**",
+            "استعمل الأزرار لإضافة نوع أو تعديل النوع المحدد أو حذفه.",
+            "",
+        ]
+        for index, option in enumerate(self.options, start=1):
+            selected = "  ← محدد" if index - 1 == self.selected_index else ""
+            status = "مفعّل" if option.get("enabled", True) else "معطّل"
+            lines.append(
+                f"**{index}.** {option.get('emoji') or '🎫'} "
+                f"**{option.get('name') or 'نوع بلا اسم'}** "
+                f"· {status}{selected}\n"
+                f"<text>{str(option.get('description') or 'بلا وصف')[:100]}</text>"
+            )
+        lines.extend(["", f"عدد الأنواع: **{len(self.options)}/25**", "بعد الانتهاء اضغط **حفظ ونشر اللوحة**."])
+        return "\n".join(lines)
 
-        panel_id = _as_id(current.get("id"))
-        old_channel_id = _as_id(current.get("channel_id"))
-        if panel_id:
-            if old_channel_id and old_channel_id != channel.id and current.get("message_id"):
-                old_channel = guild.get_channel(old_channel_id)
-                if isinstance(old_channel, discord.TextChannel):
-                    try:
-                        old_message = await old_channel.fetch_message(int(current["message_id"]))
-                        await old_message.delete()
-                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                        pass
-                payload["message_id"] = None
-            await builder.cog.db.update_ticket_panel(panel_id, payload)
-        else:
-            payload["guild_id"] = guild.id
-            panel_id = await builder.cog.db.create_ticket_panel(payload)
+    async def _check(self, interaction: discord.Interaction) -> bool:
+        if not _can_manage(interaction, self.owner_id):
+            await interaction.response.send_message(
+                "هذه القائمة مخصصة لمنشئها وإدارة السيرفر فقط.", ephemeral=True
+            )
+            return False
+        return True
 
-        try:
-            saved = await builder.cog.publish_panel(panel_id)
-        except Exception as exc:
+    @discord.ui.button(label="إضافة نوع", emoji="➕", style=discord.ButtonStyle.success, row=1)
+    async def add_option(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._check(interaction):
+            return
+        if len(self.options) >= 25:
             return await interaction.response.send_message(
-                f"تم حفظ إعدادات اللوحة، لكن تعذر نشرها: {str(exc)[:250]}",
+                "وصلت إلى الحد الأقصى وهو 25 نوعاً.", ephemeral=True
+            )
+        await interaction.response.send_modal(TicketOptionModal(self.builder))
+
+    @discord.ui.button(label="تعديل المحدد", emoji="✏️", style=discord.ButtonStyle.primary, row=1)
+    async def edit_option(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._check(interaction):
+            return
+        if not self.options:
+            return await interaction.response.send_message(
+                "لا توجد أنواع لتعديلها.", ephemeral=True
+            )
+        await interaction.response.send_modal(
+            TicketOptionModal(self.builder, self.selected_index)
+        )
+
+    @discord.ui.button(label="حذف المحدد", emoji="🗑️", style=discord.ButtonStyle.danger, row=1)
+    async def delete_option(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._check(interaction):
+            return
+        if not self.options:
+            return await interaction.response.send_message(
+                "لا توجد أنواع لحذفها.", ephemeral=True
+            )
+        removed = self.options.pop(self.selected_index)
+        self.selected_index = min(self.selected_index, max(0, len(self.options) - 1))
+        self.edit_option.disabled = not bool(self.options)
+        self.delete_option.disabled = not bool(self.options)
+        self.add_option.disabled = len(self.options) >= 25
+        await interaction.response.edit_message(
+            content=f"تم حذف نوع **{removed.get('name') or 'التذكرة'}**.\n\n{self.summary()}",
+            view=self,
+        )
+
+    @discord.ui.button(label="حفظ ونشر اللوحة", emoji="💾", style=discord.ButtonStyle.success, row=2)
+    async def save_panel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._check(interaction):
+            return
+        guild = interaction.guild
+        if guild is None:
+            return await interaction.response.send_message(
+                "لا يمكن حفظ لوحة خارج السيرفر.", ephemeral=True
+            )
+        if not self.options:
+            return await interaction.response.send_message(
+                "أضف نوع تذكرة واحداً على الأقل قبل الحفظ.", ephemeral=True
+            )
+
+        # Defer before database calls and Discord message publication.
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            panel = self.builder.panel
+            channel = guild.get_channel(_as_id(panel.get("channel_id")) or 0)
+            category = guild.get_channel(_as_id(panel.get("category_id")) or 0)
+            role_id = _as_id(panel.get("support_role_id"))
+            role = guild.get_role(role_id) if role_id else None
+            if not isinstance(channel, discord.TextChannel):
+                return await interaction.followup.send(
+                    "قناة نشر اللوحة غير صالحة. أعد اختيارها.", ephemeral=True
+                )
+            if not isinstance(category, discord.CategoryChannel):
+                return await interaction.followup.send(
+                    "فئة قنوات التذاكر غير صالحة. أعد اختيارها.", ephemeral=True
+                )
+            if role_id and role is None:
+                return await interaction.followup.send(
+                    "رتبة الدعم لم تعد موجودة. أعد اختيارها.", ephemeral=True
+                )
+
+            options = []
+            for raw in self.options[:25]:
+                option_category_id = _as_id(raw.get("category_id")) or category.id
+                option_category = guild.get_channel(option_category_id)
+                if not isinstance(option_category, discord.CategoryChannel):
+                    option_category_id = category.id
+                option_role_id = _as_id(raw.get("support_role_id")) or (role.id if role else None)
+                if option_role_id and guild.get_role(option_role_id) is None:
+                    option_role_id = role.id if role else None
+                try:
+                    max_open = max(1, min(10, int(raw.get("max_open", 1) or 1)))
+                except (TypeError, ValueError):
+                    max_open = 1
+                options.append({
+                    "name": str(raw.get("name") or "فتح تذكرة").strip()[:80],
+                    "emoji": str(raw.get("emoji") or "🎫").strip()[:20],
+                    "description": str(raw.get("description") or "فتح تذكرة").strip()[:100],
+                    "ticket_name": str(raw.get("ticket_name") or "ticket-{number}-{user}").strip()[:90],
+                    "category_id": option_category_id,
+                    "support_role_id": option_role_id,
+                    "color": _safe_color(raw.get("color"), "#5865F2"),
+                    "image_url": _safe_url(raw.get("image_url")),
+                    "footer": str(raw.get("footer") or "ANO BOT Support").strip()[:100],
+                    "priority": str(raw.get("priority") or "normal").strip()[:20],
+                    "max_open": max_open,
+                    "button_style": str(raw.get("button_style") or "primary").lower()
+                    if str(raw.get("button_style") or "primary").lower() in {"primary", "secondary", "success", "danger"}
+                    else "primary",
+                    "enabled": bool(raw.get("enabled", True)),
+                })
+            if not any(item["enabled"] for item in options):
+                return await interaction.followup.send(
+                    "فعّل نوع تذكرة واحداً على الأقل قبل النشر.", ephemeral=True
+                )
+
+            settings = dict(panel.get("settings") or {})
+            settings["color"] = _safe_color(settings.get("color"), "#5865F2")
+            payload = {
+                "channel_id": channel.id,
+                "message_id": _as_id(panel.get("message_id")),
+                "title": str(panel.get("title") or "🎫 الدعم الفني").strip()[:256],
+                "description": str(panel.get("description") or "اختر نوع الطلب لفتح تذكرة.").strip()[:4096],
+                "image_url": _safe_url(panel.get("image_url")),
+                "mode": self.builder.mode if self.builder.mode in {"buttons", "select"} else "select",
+                "button_label": "فتح تذكرة",
+                "button_emoji": "🎫",
+                "category_id": category.id,
+                "support_role_id": role.id if role else None,
+                "ticket_description": str(panel.get("ticket_description") or "يرجى شرح المشكلة بالتفصيل.")[:2000],
+                "options": options,
+                "settings": settings,
+            }
+
+            panel_id = _as_id(panel.get("id"))
+            old_channel_id = _as_id(panel.get("channel_id"))
+            if panel_id:
+                if old_channel_id and old_channel_id != channel.id and panel.get("message_id"):
+                    old_channel = guild.get_channel(old_channel_id)
+                    if isinstance(old_channel, discord.TextChannel):
+                        try:
+                            old_message = await old_channel.fetch_message(int(panel["message_id"]))
+                            await old_message.delete()
+                        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                            pass
+                    payload["message_id"] = None
+                updated = await self.builder.cog.db.update_ticket_panel(panel_id, payload)
+                if updated is False:
+                    return await interaction.followup.send(
+                        "تعذر تحديث اللوحة في قاعدة البيانات.", ephemeral=True
+                    )
+            else:
+                payload["guild_id"] = guild.id
+                panel_id = await self.builder.cog.db.create_ticket_panel(payload)
+                panel["id"] = panel_id
+
+            try:
+                saved = await self.builder.cog.publish_panel(panel_id)
+            except Exception as exc:
+                return await interaction.followup.send(
+                    f"تم حفظ الإعدادات، لكن تعذر نشر اللوحة: {str(exc)[:250]}",
+                    ephemeral=True,
+                )
+
+            published_channel = guild.get_channel(int(saved.get("channel_id") or 0))
+            message_id = saved.get("message_id")
+            link = (
+                f"https://discord.com/channels/{guild.id}/{published_channel.id}/{message_id}"
+                if published_channel and message_id else ""
+            )
+            await interaction.followup.send(
+                f"تم حفظ لوحة التذاكر ونشرها بنجاح. {link}",
                 ephemeral=True,
             )
-        published_channel = guild.get_channel(int(saved.get("channel_id") or 0))
-        message_id = saved.get("message_id")
-        link = f"https://discord.com/channels/{guild.id}/{published_channel.id}/{message_id}" if published_channel and message_id else ""
-        return await interaction.response.send_message(f"تم حفظ اللوحة ونشرها بنجاح. {link}", ephemeral=True)
+            self.stop()
+        except Exception as exc:
+            await interaction.followup.send(
+                f"وقع خطأ أثناء حفظ اللوحة: {str(exc)[:250]}",
+                ephemeral=True,
+            )
+
+
+class TicketOptionSelect(discord.ui.Select):
+    def __init__(self, manager: TicketOptionManagerView):
+        options = [
+            discord.SelectOption(
+                label=str(option.get("name") or f"نوع #{index + 1}")[:100],
+                description=str(option.get("description") or "نوع تذكرة")[:100],
+                value=str(index),
+                emoji=str(option.get("emoji") or "🎫")[:20],
+                default=index == manager.selected_index,
+            )
+            for index, option in enumerate(manager.options[:25])
+        ]
+        super().__init__(
+            placeholder="اختر نوع التذكرة الذي تريد تعديله",
+            min_values=1,
+            max_values=1,
+            options=options,
+            row=0,
+        )
+        self.manager = manager
+
+    async def callback(self, interaction: discord.Interaction):
+        if not _can_manage(interaction, self.manager.owner_id):
+            return await interaction.response.send_message(
+                "ليست لديك صلاحية استخدام هذه القائمة.", ephemeral=True
+            )
+        self.manager.selected_index = int(self.values[0])
+        await interaction.response.edit_message(
+            content=self.manager.summary(),
+            view=self.manager,
+        )
+
+
+class TicketOptionModal(discord.ui.Modal, title="إعدادات نوع التذكرة"):
+    def __init__(self, builder: TicketPanelBuilderView, option_index: int | None = None):
+        super().__init__()
+        self.builder = builder
+        self.option_index = option_index
+        options = builder.panel.get("options") or []
+        current = options[option_index] if option_index is not None and option_index < len(options) else {}
+        self.name_input = discord.ui.TextInput(
+            label="اسم نوع التذكرة",
+            default=str(current.get("name") or "")[:80] if current else "",
+            placeholder="مثال: الدعم الفني",
+            max_length=80,
+        )
+        self.emoji_input = discord.ui.TextInput(
+            label="الإيموجي",
+            default=str(current.get("emoji") or "🎫")[:20],
+            max_length=20,
+        )
+        self.description_input = discord.ui.TextInput(
+            label="وصف الخيار",
+            default=str(current.get("description") or "")[:100],
+            style=discord.TextStyle.paragraph,
+            max_length=100,
+        )
+        self.channel_name_input = discord.ui.TextInput(
+            label="قالب اسم القناة",
+            default=str(current.get("ticket_name") or "ticket-{number}-{user}")[:90],
+            max_length=90,
+        )
+        self.max_open_input = discord.ui.TextInput(
+            label="أقصى تذاكر مفتوحة من هذا النوع",
+            default=str(current.get("max_open", 1)),
+            max_length=2,
+        )
+        for item in (
+            self.name_input,
+            self.emoji_input,
+            self.description_input,
+            self.channel_name_input,
+            self.max_open_input,
+        ):
+            self.add_item(item)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not _can_manage(interaction, self.builder.owner_id):
+            return await interaction.response.send_message(
+                "ليست لديك صلاحية حفظ نوع التذكرة.", ephemeral=True
+            )
+        name = str(self.name_input.value or "").strip()
+        if not name:
+            return await interaction.response.send_message(
+                "اسم نوع التذكرة مطلوب.", ephemeral=True
+            )
+        try:
+            max_open = max(1, min(10, int(str(self.max_open_input.value).strip())))
+        except (TypeError, ValueError):
+            return await interaction.response.send_message(
+                "أدخل رقماً صحيحاً للحد الأقصى من 1 إلى 10.", ephemeral=True
+            )
+
+        options = self.builder.panel.setdefault("options", [])
+        item = dict(options[self.option_index]) if (
+            self.option_index is not None and self.option_index < len(options)
+        ) else {}
+        item.update({
+            "name": name[:80],
+            "emoji": str(self.emoji_input.value or "🎫").strip()[:20] or "🎫",
+            "description": str(self.description_input.value or "فتح تذكرة").strip()[:100],
+            "ticket_name": str(self.channel_name_input.value or "ticket-{number}-{user}").strip()[:90],
+            "max_open": max_open,
+            "enabled": True,
+        })
+        if self.option_index is None:
+            if len(options) >= 25:
+                return await interaction.response.send_message(
+                    "وصلت إلى الحد الأقصى وهو 25 نوعاً.", ephemeral=True
+                )
+            options.append(item)
+            selected_index = len(options) - 1
+        else:
+            options[self.option_index] = item
+            selected_index = self.option_index
+
+        view = TicketOptionManagerView(self.builder)
+        view.selected_index = selected_index
+        # Rebuild the select menu so the new label and options are visible immediately.
+        for child in list(view.children):
+            if isinstance(child, TicketOptionSelect):
+                view.remove_item(child)
+        view.add_item(TicketOptionSelect(view))
+        view.edit_option.disabled = not bool(view.options)
+        view.delete_option.disabled = not bool(view.options)
+        view.add_option.disabled = len(view.options) >= 25
+        await interaction.response.edit_message(
+            content=view.summary(),
+            view=view,
+        )
