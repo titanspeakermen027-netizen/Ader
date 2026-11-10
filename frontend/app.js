@@ -91,6 +91,7 @@ async function pick(id){
   const selected=s.guilds.find(g=>String(g.id)===String(id));
   if(!selected)return;
   s.guild=selected;
+  ticketEditor={guildId:String(selected.id),panelId:null,panels:[],settings:{},options:[]};
   s.overview={};
   s.resources={roles:[],channels:[]};
   $("#guildSelect").value=String(selected.id);
@@ -207,7 +208,7 @@ async function economy(){const d=await api("/api/guilds/"+s.guild.id+"/economy")
   }catch(e){warn("تعذر حفظ إعدادات الاقتصاد: "+e.message)}
   }}
 async function levels(){const d=await api("/api/guilds/"+s.guild.id+"/levels");$("#root").innerHTML=head("Levels",desc.levels)+card("XP Leaderboard",'<div class="list">'+(d.users||[]).map((x,i)=>'<div><b>#'+(i+1)+' · User '+x.user_id+'</b><small>Level '+x.level+' · '+Number(x.xp||0).toLocaleString()+' XP</small></div>').join("")+'</div>')}
-let ticketEditor={panelId:null,panels:[],settings:{},options:[]};
+let ticketEditor={guildId:null,panelId:null,panels:[],settings:{},options:[]};
 
 function resourceOptions(items, value, empty){
   return '<option value="">'+esc(empty)+'</option>'+(items||[]).map(x=>'<option value="'+x.id+'" '+(String(value||'')===String(x.id)?'selected':'')+'>'+esc(x.name)+'</option>').join('');
@@ -306,7 +307,13 @@ function ticketForm(panel){
   '</div>';
 }
 async function tickets(){
-  const d=await api("/api/guilds/"+s.guild.id+"/tickets");
+  const guildId=String(s.guild.id);
+  if(ticketEditor.guildId!==guildId){
+    ticketEditor={guildId,panelId:null,panels:[],settings:{},options:[]};
+  }
+  const d=await api("/api/guilds/"+guildId+"/tickets");
+  if(String(s.guild?.id)!==guildId)return;
+  ticketEditor.guildId=guildId;
   ticketEditor.panels=d.panels||[];ticketEditor.settings=d.settings||{};
   const selected=ticketEditor.panels.find(p=>Number(p.id)===Number(ticketEditor.panelId))||ticketEditor.panels[0]||null;
   ticketEditor.panelId=selected?Number(selected.id):null;
@@ -349,6 +356,7 @@ function bindTicketEditor(){
       channel_name_template:val("ts-template"),delete_after_close_seconds:Number(val("ts-delete")||0)
     };
     await api("/api/guilds/"+gid+"/tickets/settings",{method:"PUT",body:JSON.stringify(settings)});
+    if(String(s.guild?.id)!==String(gid))return;
     const payload={title:val("tp-title"),description:val("tp-description"),channel_id:val("tp-channel")||null,category_id:val("tp-category")||null,
       support_role_id:val("ts-role")||null,image_url:val("tp-image")||null,mode:val("tp-mode"),ticket_description:val("tp-ticket-desc"),
       options:ticketEditor.options,settings:{color:val("tp-color"),thumbnail_url:val("tp-thumb")||null,footer:val("tp-footer"),select_placeholder:"اختر نوع التذكرة",ticket_footer:"دعم Ader"}
