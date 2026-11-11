@@ -1,6 +1,6 @@
 (()=>{"use strict";
 const API=String((window.ADER_CONFIG||{}).API_BASE||"").replace(/\/$/,"");
-const s={user:null,guilds:[],guild:null,overview:{},health:{},resources:{roles:[],channels:[]},page:"overview"};
+const s={user:null,guilds:[],guild:null,overview:{},health:{},resources:{roles:[],channels:[]},guildLoadError:null,page:"overview"};
 const appEditor={panelNumber:1,draft:null,panels:[],applications:[]};
 const $=x=>document.querySelector(x),esc=x=>String(x??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 async function api(p,o={}){
@@ -10,11 +10,12 @@ async function api(p,o={}){
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),18000);
     try{
+      const {headers:customHeaders,...requestOptions}=o;
       const r=await fetch(API+p,{
+        ...requestOptions,
         credentials:"include",
         cache:"no-store",
-        headers:{"Content-Type":"application/json",...(o.headers||{})},
-        ...o,
+        headers:{"Content-Type":"application/json",...(customHeaders||{})},
         signal:controller.signal
       });
       const t=await r.text();
@@ -63,6 +64,7 @@ function selectChannels(id,value){return '<select id="'+id+'"><option value="">�
 async function loadGuild(){
   if(!s.guild?.id)return;
   const guildId=String(s.guild.id);
+  s.guildLoadError=null;
   const healthTask=api("/healthz").then(data=>{
     s.health=data||{};
   }).catch(error=>{
@@ -73,7 +75,6 @@ async function loadGuild(){
       api("/api/guilds/"+guildId+"/overview"),
       api("/api/guilds/"+guildId+"/resources")
     ]);
-    clearWarn();
     localStorage.setItem("ader_selected_guild_id",guildId);
   }catch(e){
     const reason=e.status===403
@@ -81,7 +82,7 @@ async function loadGuild(){
       : e.status===404
         ? "البوت غير متصل بهذا السيرفر حالياً. تأكد من إضافته للسيرفر ثم حدّث الصفحة."
         : e.message;
-    warn("تعذر تحميل بيانات السيرفر: "+reason);
+    s.guildLoadError="تعذر تحميل بيانات السيرفر: "+reason;
   }
   await healthTask;
   $("#guildName").textContent=s.guild.name;
@@ -92,6 +93,7 @@ async function pick(id){
   if(!selected)return;
   s.guild=selected;
   s.overview={};
+  s.guildLoadError=null;
   s.resources={roles:[],channels:[]};
   $("#guildSelect").value=String(selected.id);
   localStorage.setItem("ader_selected_guild_id",String(selected.id));
@@ -111,10 +113,11 @@ function showSectionError(error){
 }
 async function render(){
   const p=s.page;
+  clearWarn();
   $("#title").textContent=titles[p]||p;
   document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===p));
   try{
-    if(p==="overview")overview();
+    if(p==="overview")await overview();
     else if(p==="servers")servers();
     else if(p==="resources")resources();
     else if(p==="analytics")await analytics();
@@ -132,7 +135,6 @@ async function render(){
     else if(p==="premium")await premium();
     else if(p==="settings")await settings();
     else showSectionError(new Error("هذا القسم غير متاح حالياً."));
-    clearWarn();
   }catch(e){
     if(e.message==="AUTH"){
       showLogin();
@@ -165,9 +167,10 @@ async function render(){
       showSectionError(e);
     }
   }
+  if(s.guildLoadError)warn(s.guildLoadError);
   bindCommon();
 }
-function overview(){
+async function overview(){
   const o=s.overview||{},u=s.user||{},g=s.guild||{},h=s.health||{};
   const display=esc(u.global_name||u.username||"Discord User");
   const backendOk=h.backend_ok===true;
@@ -176,16 +179,110 @@ function overview(){
   const botLabel=botReady?"Online":backendOk?"Starting":"Offline";
   const apiLabel=backendOk?"Connected":"Unavailable";
   const dbLabel=databaseReady?"Connected":backendOk?"Disconnected":"Unknown";
-  $("#root").innerHTML=
-    '<section class="hero-card dashboard-hero"><div><div class="page-kicker">LIVE SERVER OVERVIEW</div><h2>مرحباً، '+display+'</h2><p>إدارة ANO BOT ومراقبة أنظمة السيرفر من لوحة واحدة، مع بيانات مباشرة من الخادم.</p></div><div class="dashboard-hero-status"><span class="status-dot '+(botReady?"":"status-off")+'"></span><div><b>'+esc(g.name||"Your server")+'</b><small>ANO BOT · '+botLabel+'</small></div></div></section>'+
-    '<div class="stats">'+stat("الأعضاء",Number(o.members||0).toLocaleString(),"♙")+stat("القنوات",Number(o.channels||0).toLocaleString(),"#")+stat("الرتب",Number(o.roles||0).toLocaleString(),"◆")+stat("التذاكر المفتوحة",Number(o.open_tickets||0).toLocaleString(),"🎫")+'</div>'+
-    '<div class="cards overview-cards">'+
-      card("حالة النظام المباشرة",'<div class="health"><div><span>ANO BOT Runtime</span><b class="'+(botReady?"on":"off")+'">● '+botLabel+'</b></div><div><span>Backend API</span><b class="'+(backendOk?"on":"off")+'">● '+apiLabel+'</b></div><div><span>Database</span><b class="'+(databaseReady?"on":"off")+'">● '+dbLabel+'</b></div><div><span>Commands</span><b>'+Number(o.commands||0).toLocaleString()+' registered</b></div><div><span>Guild Access</span><b>'+s.guilds.length+' manageable</b></div><div><span>Worker</span><b class="'+(h.worker==="ok"?"on":"off")+'">● '+(h.worker==="ok"?"Online":"Unknown")+'</b></div></div>')+
-      card("إجراءات سريعة",'<p class="card-note">انتقل مباشرة إلى إعدادات النظام المطلوبة.</p><div class="quick"><button class="action" data-go="moderation">🛡 Moderation</button><button class="action" data-go="automod">🤖 AutoMod</button><button class="action" data-go="economy">🪙 ANORIS</button><button class="action" data-go="tickets">🎫 Tickets</button><button class="action" data-go="settings">⚙ Settings</button></div>')+
-    '</div>'+
-    '<div class="cards overview-cards secondary-overview">'+
-      card("ملخص السيرفر",'<div class="snapshot"><div><span>Members</span><b>'+Number(o.members||0).toLocaleString()+'</b></div><div><span>Channels</span><b>'+Number(o.channels||0).toLocaleString()+'</b></div><div><span>Roles</span><b>'+Number(o.roles||0).toLocaleString()+'</b></div><div><span>Open Tickets</span><b>'+Number(o.open_tickets||0).toLocaleString()+'</b></div></div>')+
-      card("حالة ANO BOT",'<div class="status-summary"><div><span class="status-dot '+(botReady?"":"status-off")+'"></span><b>'+ (botReady?"البوت متصل وجاهز":backendOk?"الخادم الخلفي متصل والبوت غير جاهز":"تعذر الوصول إلى الخادم الخلفي")+'</b></div><p>حالة الاتصال و قاعدة البيانات هنا كتجي من فحص Backend الحقيقي، ماشي حالة ثابتة فالتصميم.</p></div>')+
+
+  const [logsResult,settingsResult]=await Promise.allSettled([
+    api("/api/guilds/"+g.id+"/logs"),
+    api("/api/guilds/"+g.id+"/settings")
+  ]);
+  const logsReady=logsResult.status==="fulfilled";
+  const recentLogs=logsReady&&Array.isArray(logsResult.value.logs)?logsResult.value.logs.slice(0,6):[];
+  const moduleSettings=settingsResult.status==="fulfilled"&&settingsResult.value.modules&&typeof settingsResult.value.modules==="object"
+    ?settingsResult.value.modules:{};
+
+  const features=[
+    {page:"moderation",icon:"🛡",title:"Moderation",description:"التحذيرات وإعدادات الإشراف"},
+    {page:"automod",icon:"🤖",title:"AutoMod",description:"السبام والروابط والإعدادات التلقائية"},
+    {page:"tickets",icon:"🎫",title:"Tickets",description:"لوحات الدعم وأنواع التذاكر"},
+    {page:"levels",icon:"📈",title:"Levels",description:"المستويات وترتيب XP"},
+    {page:"economy",icon:"🪙",title:"ANORIS Economy",description:"العملة وإعدادات الاقتصاد"},
+    {page:"welcome",icon:"👋",title:"Welcome & Verify",description:"رسائل الترحيب والتحقق"},
+    {page:"analytics",icon:"📊",title:"Analytics",description:"نشاط الأعضاء والرسائل"},
+    {page:"teams",icon:"👥",title:"Teams",description:"الفرق والإعدادات"},
+    {page:"applications",icon:"📝",title:"Applications",description:"لوحات التقديم ومراجعة الطلبات"},
+    {page:"logs",icon:"📜",title:"Audit Logs",description:"الأحداث المسجلة وإعداداتها"},
+    {page:"commands",icon:"⌘",title:"Commands",description:"تفعيل أو تعطيل أوامر البوت"},
+    {page:"shortcuts",icon:"↯",title:"Shortcuts",description:"الأسماء البديلة للاختصارات"},
+    {page:"resources",icon:"◫",title:"Roles & Channels",description:"معاينة الرتب والقنوات"},
+    {page:"premium",icon:"✦",title:"Ader Premium",description:"الاشتراك وإعدادات Linked Bot"},
+    {page:"settings",icon:"⚙",title:"Core Settings",description:"إعدادات الأنظمة الأساسية"},
+    {page:"security",icon:"🔐",title:"Security",description:"الجلسة وصلاحيات الإدارة"}
+  ];
+  const featureHtml=features.map(item=>{
+    const linkedName={levels:"leveling",welcome:"verification"}[item.page]||item.page;
+    const module=moduleSettings[linkedName];
+    const state=module&&typeof module.enabled==="boolean"
+      ?(module.enabled?"مفعّل":"متوقف")
+      :"إعدادات";
+    const stateClass=module&&module.enabled===false?"is-disabled":"";
+    return '<button type="button" class="plugin-card" data-go="'+item.page+'">'+
+      '<span class="plugin-icon" aria-hidden="true">'+item.icon+'</span>'+
+      '<span class="plugin-copy"><b>'+item.title+'</b><small>'+item.description+'</small></span>'+
+      '<span class="plugin-meta '+stateClass+'">'+state+'</span>'+
+      '<span class="plugin-arrow" aria-hidden="true">←</span>'+
+    '</button>';
+  }).join("");
+
+  const eventLabels={
+    "audit.message_deleted":"حذف رسالة",
+    "audit.message_edited":"تعديل رسالة",
+    "audit.member_joined":"انضمام عضو",
+    "audit.member_left":"مغادرة عضو",
+    "audit.member_banned":"إجراء إشراف",
+    "audit.channel_created":"إنشاء قناة",
+    "audit.channel_deleted":"حذف قناة",
+    "audit.role_created":"إنشاء رتبة",
+    "audit.role_deleted":"حذف رتبة",
+    "ticket.created":"إنشاء تذكرة",
+    "ticket.closed":"إغلاق تذكرة",
+    "ticket.reopened":"إعادة فتح تذكرة",
+    "ticket.claim":"استلام تذكرة",
+    "application.submitted":"إرسال طلب تقديم",
+    "application.reviewed":"مراجعة طلب تقديم"
+  };
+  const activityHtml=logsReady
+    ?(recentLogs.length?recentLogs.map(item=>{
+      const type=String(item.type||"حدث");
+      const body=item.data&&typeof item.data==="object"?item.data:{};
+      const actor=body.user_id||body.member_id||body.moderator_id||"";
+      const stamp=Number(item.timestamp||0);
+      const date=stamp>0?new Date(stamp*1000).toLocaleString("ar-MA",{dateStyle:"medium",timeStyle:"short"}):"";
+      return '<article class="activity-item"><span class="activity-mark">•</span><span class="activity-copy"><b>'+esc(eventLabels[type]||type.replace(/[._:]/g," "))+'</b><small>'+(actor?'ID: '+esc(actor):esc(type))+'</small></span><time>'+esc(date)+'</time></article>';
+    }).join("")
+    :'<div class="empty small">لا توجد أحداث مسجلة لهذا السيرفر بعد.</div>')
+    :'<div class="empty small">تعذر تحميل سجل النشاط حالياً. صفحة السجلات ما زالت متاحة بشكل مستقل.</div>';
+
+  const latency=Number(o.bot_latency_ms||0);
+  const latencyLabel=Number.isFinite(latency)&&latency>0?Math.round(latency)+" ms":"غير متاح";
+  $("#root").innerHTML=head("لوحة التحكم", "نظرة واحدة على سيرفرك، حالة البوت، وكل الأنظمة الموجودة في ANO BOT.")+
+    '<div class="dashboard-home">'+
+      '<section class="hero-card dashboard-hero home-hero">'+
+        '<div class="home-hero-copy"><div class="page-kicker">YOUR SERVER · YOUR CONTROL</div><h2>مرحباً، '+display+'</h2><p>كل أدوات ANO BOT في مكان واحد. اختر نظاماً للانتقال مباشرة إلى إعداداته.</p>'+
+          '<div class="home-hero-actions"><button type="button" class="primary" data-go="servers">إدارة السيرفرات</button><button type="button" class="action" data-go="tickets">فتح نظام التذاكر</button></div></div>'+
+        '<div class="home-server-card"><span class="home-server-icon">'+icon(g)+'</span><span><small>السيرفر الحالي</small><b>'+esc(g.name||"Discord Server")+'</b><em class="'+(botReady?"is-online":"is-offline")+'"><i></i>'+botLabel+'</em></span></div>'+
+      '</section>'+
+      '<div class="stats home-stats">'+
+        stat("الأعضاء",Number(o.members||0).toLocaleString("en-US"),"♙")+
+        stat("القنوات",Number(o.channels||0).toLocaleString("en-US"),"#")+
+        stat("الرتب",Number(o.roles||0).toLocaleString("en-US"),"◆")+
+        stat("التذاكر المفتوحة",Number(o.open_tickets||0).toLocaleString("en-US"),"🎫")+
+      '</div>'+
+      '<div class="home-main-grid">'+
+        '<section class="home-panel feature-panel"><div class="home-section-head"><div><span>ANO BOT MODULES</span><h3>إضافات وميزات البوت</h3><p>انتقل إلى أي نظام موجود في لوحة التحكم الحالية.</p></div><span class="home-section-count">'+features.length+' نظام</span></div>'+
+          '<div class="plugin-grid">'+featureHtml+'</div></section>'+
+        '<aside class="home-side-column">'+
+          '<section class="home-panel system-panel"><div class="home-section-head"><div><span>SERVICE HEALTH</span><h3>حالة الاتصال</h3></div><span class="health-live"><i></i> LIVE</span></div>'+
+            '<div class="system-status-list">'+
+              '<div><span>ANO BOT Runtime</span><b class="'+(botReady?"on":"off")+'">'+botLabel+'</b></div>'+
+              '<div><span>Backend API</span><b class="'+(backendOk?"on":"off")+'">'+apiLabel+'</b></div>'+
+              '<div><span>Database</span><b class="'+(databaseReady?"on":"off")+'">'+dbLabel+'</b></div>'+
+              '<div><span>Cloudflare Worker</span><b class="'+(h.worker==="ok"?"on":"off")+'">'+(h.worker==="ok"?"Online":"Unknown")+'</b></div>'+
+              '<div><span>Slash Commands</span><b>'+Number(o.commands||0).toLocaleString("en-US")+'</b></div>'+
+              '<div><span>Bot Latency</span><b>'+esc(latencyLabel)+'</b></div>'+
+            '</div></section>'+
+          '<section class="home-panel activity-panel"><div class="home-section-head"><div><span>RECENT EVENTS</span><h3>آخر النشاطات</h3></div><button type="button" class="link" data-go="logs">عرض الكل ←</button></div>'+
+            '<div class="activity-list">'+activityHtml+'</div></section>'+
+        '</aside>'+
+      '</div>'+
     '</div>';
 }
 function servers(){$("#root").innerHTML=head("السيرفرات","اختار السيرفر للإدارة.")+'<div class="server-grid">'+s.guilds.map(g=>'<button class="server" data-guild="'+g.id+'"><div class="avatar">'+icon(g)+'</div><b>'+esc(g.name)+'</b><small>'+(g.administrator?"Administrator":"Manage Server")+'</small></button>').join("")+'</div>'}

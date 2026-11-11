@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=ano-nova-ui-20261019">
-<link rel="stylesheet" href="ano-theme.css?v=ano-control-center-20261103">
+<link rel="stylesheet" href="styles.css?v=ano-nova-ui-20261107">
+<link rel="stylesheet" href="ano-theme.css?v=ano-control-center-20261107">
 </head>
 <body>
 <div id="loading" class="loading">
@@ -108,11 +108,36 @@
       <div id="guildIcon" class="avatar">A</div>
       <div><b id="guildName">Ader</b><small>Server Control Center</small></div>
     </div>
-    <nav>
-<label>الرئيسية</label><button data-page="overview" class="active">⌂ Overview</button><button data-page="servers">▦ السيرفرات</button><button data-page="analytics">◔ Analytics</button>
-<label>BOT SYSTEMS</label><button data-page="moderation">🛡 Moderation</button><button data-page="automod">🤖 AutoMod</button><button data-page="economy">🪙 Economy</button><button data-page="tickets">🎫 التذاكر</button><button data-page="levels">📈 Levels</button>
-<label>COMMUNITY</label><button data-page="welcome">👋 Welcome</button><button data-page="commands">⌘ Commands</button><button data-page="shortcuts">↯ Shortcuts</button><button data-page="resources">◫ القنوات والرتب</button>
-<label>MANAGEMENT</label><button data-page="teams">👥 Teams</button><button data-page="applications">📝 تقديم الإدارة</button><button data-page="logs">📜 السجلات</button><button data-page="security">🔐 Security</button><button data-page="premium">⭐ Premium</button><label>النظام</label><button data-page="settings">⚙ Settings</button>
+    <nav aria-label="أقسام لوحة التحكم">
+<label>الرئيسية</label>
+<button data-page="overview" class="active">⌂ Overview</button>
+<button data-page="servers">▦ السيرفرات</button>
+<button data-page="analytics">◔ Analytics</button>
+
+<label>المجتمع والأعضاء</label>
+<button data-page="welcome">👋 Welcome & Verify</button>
+<button data-page="levels">📈 Levels</button>
+<button data-page="tickets">🎫 التذاكر</button>
+<button data-page="teams">👥 Teams</button>
+<button data-page="applications">📝 تقديم الإدارة</button>
+
+<label>الإشراف والحماية</label>
+<button data-page="moderation">🛡 Moderation</button>
+<button data-page="automod">🤖 AutoMod</button>
+<button data-page="logs">📜 السجلات</button>
+<button data-page="security">🔐 Security</button>
+
+<label>الأدوات والأوامر</label>
+<button data-page="resources">◫ القنوات والرتب</button>
+<button data-page="commands">⌘ Commands</button>
+<button data-page="shortcuts">↯ Shortcuts</button>
+
+<label>الاقتصاد والاشتراك</label>
+<button data-page="economy">🪙 ANORIS Economy</button>
+<button data-page="premium">⭐ Ader Premium</button>
+
+<label>إعدادات النظام</label>
+<button data-page="settings">⚙ Settings</button>
 </nav>
     <div class="side-bottom">🟢 ANO BOT Online <button id="logoutBtn">تسجيل الخروج</button></div>
   </aside>
@@ -129,6 +154,6 @@
     </header>
 <div class="content"><div id="apiWarning" class="warning hidden"></div><div id="root"></div></div></main></div>
 <script src="config.js?v=20261012-access-fix"></script>
-<script src="app.js?v=ano-applications-logs-20261103"></script>
+<script src="app.js?v=ano-dashboard-fix-20261107"></script>
 </body>
 </html>
